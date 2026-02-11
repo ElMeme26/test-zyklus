@@ -1,11 +1,13 @@
 export type AssetState = 
   | 'Operativa' | 'En mantenimiento' | 'Fuera de servicio' | 'Calibración' 
-  | 'Prestada' | 'Dada de baja' | 'En tránsito' | 'En aduana' 
-  | 'En evaluación' | 'canibaizada' | 'impairment';
+  | 'Prestada' | 'Dada de baja' | 'En tránsito';
 
-// Coincide con las columnas de tu tabla 'assets'
+export type RequestStatus = 
+  | 'PENDING' | 'ACTION_REQUIRED' | 'APPROVED' | 'ACTIVE' 
+  | 'OVERDUE' | 'RETURNED' | 'MAINTENANCE' | 'REJECTED' | 'CANCELLED';
+
 export interface Asset {
-  id: string;
+  id: string; // UUID
   tag: string;
   name: string;
   description: string;
@@ -13,35 +15,62 @@ export interface Asset {
   brand: string;
   model: string;
   serial: string;
+  part_number: string;
   project: string;
-  commercial_value: number; // snake_case como en la BD
+  commercial_value: number;
   invoice: string;
   import_type: string;
   status: AssetState;
   image: string;
   location: string;
+  maintenance_period_days: number;
+  next_maintenance_date: string;
 }
 
-// Coincide con tu tabla 'users'
 export interface User {
-  id: string;
+  id: string; // UUID
   name: string;
   email: string;
   role: 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO';
   dept: string;
   avatar: string;
+  phone: string;
+  manager_id?: string;
 }
 
-// Coincide con tu tabla 'requests'
 export interface Request {
   id: number;
   asset_id: string;
-  user_email: string;
-  user_name: string;
-  user_dept: string;
-  days: number;
+  user_id?: string;
+  institution_id?: number;
+  
+  // Datos congelados
+  requester_name: string;
+  requester_dept: string;
+  
+  days_requested: number;
   motive: string;
-  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'RETURNED' | 'RETURNED_WITH_OBSERVATIONS';
+  status: RequestStatus;
+  
+  // Fechas (Strings porque vienen de JSON/DB)
   created_at: string;
-  assets?: Asset; // Para cuando hagamos el join
+  approved_at?: string;
+  checkout_at?: string;
+  expected_return_date?: string;
+  returned_at?: string;
+  
+  return_condition?: string;
+  feedback_log?: string;
+
+  // Relaciones (Opcionales para el join)
+  assets?: Asset;
+  users?: User;
+}
+
+export interface Institution {
+  id: number;
+  name: string;
+  contact_name: string;
+  contact_email: string;
+  active_loans_count: number;
 }

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { supabase } from '../supabaseClient';
 import type { User } from '../types';
 import { toast } from 'sonner';
 
@@ -14,7 +15,6 @@ const AuthContext = createContext<AuthContextType | null>(null);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
 
-  // Al cargar, revisar si hay sesión guardada
   useEffect(() => {
     const storedUser = localStorage.getItem('zf_user');
     if (storedUser) {
@@ -24,24 +24,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string) => {
     try {
-      // Petición a TU backend local
-      const res = await fetch('http://localhost:3000/api/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email }) // Enviamos solo el email
-      });
+      // Buscar usuario en la tabla pública 'users' de Supabase
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('email', email)
+        .single();
 
-      if (!res.ok) throw new Error('Usuario no encontrado en MySQL');
+      if (error || !data) throw new Error('Usuario no encontrado en Supabase');
 
-      const userData = await res.json();
-      
-      // Guardamos el usuario REAL de MySQL
-      setUser(userData);
-      localStorage.setItem('zf_user', JSON.stringify(userData));
-      toast.success(`Bienvenido, ${userData.name}`);
+      setUser(data);
+      localStorage.setItem('zf_user', JSON.stringify(data));
+      toast.success(`Bienvenido, ${data.name}`);
 
     } catch (error: any) {
-      toast.error(error.message);
+      toast.error(error.message || "Error al iniciar sesión");
     }
   };
 

@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-// ELIMINAMOS SUPABASE
-// import { supabase } from '../supabaseClient'; 
+import { supabase } from '../supabaseClient'; 
 import type { Asset, Request, User } from '../types';
 import { toast } from 'sonner';
 
@@ -13,9 +12,6 @@ interface DataContextType {
 }
 
 const DataContext = createContext<DataContextType | null>(null);
-
-// URL de tu backend local
-const API_URL = 'http://localhost:3000/api';
 
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -30,35 +26,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       setIsLoading(true);
       
-      // 1. Traer Activos desde MySQL
-      const resAssets = await fetch(`${API_URL}/assets`);
-      if (!resAssets.ok) throw new Error('Error cargando activos');
-      const assetsData = await resAssets.json();
-      setAssets(assetsData);
+      // 1. Traer Activos desde Supabase
+      const { data: assetsData, error: assetsError } = await supabase
+        .from('assets')
+        .select('*')
+        .order('name', { ascending: true });
 
-      // 2. Traer Solicitudes desde MySQL
-      const resReq = await fetch(`${API_URL}/requests`);
-      if (!resReq.ok) throw new Error('Error cargando solicitudes');
-      const reqData = await resReq.json();
+      if (assetsError) throw assetsError;
+      setAssets(assetsData || []);
 
-      // TRANSFORMACIÓN DE DATOS (IMPORTANTE)
-      // Tu backend devuelve los datos "planos" (ej. asset_name), 
-      // pero tu UI espera un objeto anidado 'assets: { name: ... }'
-      // Aquí hacemos esa conversión manual para que no se rompa nada visual.
-      const formattedRequests = reqData.map((r: any) => ({
-        ...r,
-        assets: {
-          name: r.asset_name,
-          image: r.asset_image,
-          tag: r.asset_tag || 'N/A' // Por si el backend no lo trajo aún
-        }
-      }));
+      // 2. Traer Solicitudes desde Supabase (con Relaciones)
+      // OJO: La sintaxis assets:asset_id(...) es para hacer JOIN en Supabase
+      const { data: reqData, error: reqError } = await supabase
+        .from('requests')
+        .select(`
+          *,
+          assets:asset_id (*),
+          users:user_id (*)
+        `)
+        .order('created_at', { ascending: false });
 
-      setRequests(formattedRequests);
+      if (reqError) throw reqError;
+      setRequests(reqData || []);
 
     } catch (error: any) {
       console.error('Error:', error.message);
-      toast.error("Error conectando con el servidor");
+      toast.error("Error cargando datos de la nube");
     } finally {
       setIsLoading(false);
     }
@@ -71,23 +64,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
 
     try {
-      const response = await fetch(`${API_URL}/requests`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { error } = await supabase
+        .from('requests')
+        .insert({
           asset_id: asset.id,
-          user_id: user.id, // Enviamos el ID del usuario
-          days: days,
-          motive: motive
-        }),
-      });
+          user_id: user.id,
+          requester_name: user.name,
+          requester_dept: user.dept,
+          days_requested: days,
+          motive: motive,
+          status: 'PENDING'
+        });
 
-      if (!response.ok) throw new Error('Error al crear solicitud');
+      if (error) throw error;
 
       toast.success("Solicitud enviada exitosamente 🚀");
-      fetchData(); // Recargar datos para ver el cambio
+      fetchData(); // Recargar datos
 
     } catch (error: any) {
       toast.error("Error al guardar: " + error.message);
