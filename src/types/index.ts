@@ -38,6 +38,7 @@ export interface User {
   manager_id?: string;
 }
 
+// AQUÍ ESTÁ EL CAMBIO CLAVE 👇
 export interface Request {
   id: number;
   asset_id: string;
@@ -52,7 +53,7 @@ export interface Request {
   motive: string;
   status: RequestStatus;
   
-  // Fechas (Strings porque vienen de JSON/DB)
+  // Fechas
   created_at: string;
   approved_at?: string;
   checkout_at?: string;
@@ -62,7 +63,7 @@ export interface Request {
   return_condition?: string;
   feedback_log?: string;
 
-  // Relaciones (Opcionales para el join)
+  // RELACIONES (Esto es lo que te falta para que no de error)
   assets?: Asset;
   users?: User;
 }

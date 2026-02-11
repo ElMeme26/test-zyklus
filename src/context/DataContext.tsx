@@ -25,6 +25,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchData = async () => {
     try {
       setIsLoading(true);
+      console.log("🔄 Iniciando carga de datos...");
       
       // 1. Traer Activos desde Supabase
       const { data: assetsData, error: assetsError } = await supabase
@@ -33,10 +34,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('name', { ascending: true });
 
       if (assetsError) throw assetsError;
+      
+      console.log(`✅ Activos cargados: ${assetsData?.length || 0}`, assetsData);
       setAssets(assetsData || []);
 
-      // 2. Traer Solicitudes desde Supabase (con Relaciones)
-      // OJO: La sintaxis assets:asset_id(...) es para hacer JOIN en Supabase
+      // 2. Traer Solicitudes desde Supabase
       const { data: reqData, error: reqError } = await supabase
         .from('requests')
         .select(`
@@ -47,11 +49,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .order('created_at', { ascending: false });
 
       if (reqError) throw reqError;
+      
+      console.log(`✅ Solicitudes cargadas: ${reqData?.length || 0}`, reqData);
       setRequests(reqData || []);
 
     } catch (error: any) {
-      console.error('Error:', error.message);
-      toast.error("Error cargando datos de la nube");
+      console.error('❌ Error DataContext:', error.message);
+      toast.error("Error conectando a la base de datos");
     } finally {
       setIsLoading(false);
     }
@@ -79,9 +83,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error) throw error;
 
       toast.success("Solicitud enviada exitosamente 🚀");
-      fetchData(); // Recargar datos
+      fetchData(); 
 
     } catch (error: any) {
+      console.error("Error al crear solicitud:", error);
       toast.error("Error al guardar: " + error.message);
     }
   };

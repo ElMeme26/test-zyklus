@@ -20,21 +20,25 @@ export function UserHome() {
   const [motive, setMotive] = useState('');
   const [zyklaTip, setZyklaTip] = useState<string | null>(null);
 
+  // DEBUG: Ver qué categorías existen realmente en tus datos
+  console.log("Categorías disponibles:", [...new Set(assets.map(a => a.category))]);
+
   const filteredAssets = assets.filter(a => 
     a.name.toLowerCase().includes(search.toLowerCase()) && 
     (cat === 'Todos' || a.category === cat)
   );
 
-  const myRequests = requests.filter(r => r.user_email === user?.email);
+  // CORRECCIÓN 1: Acceder a user.email a través de la relación, no directo
+  const myRequests = requests.filter(r => r.users?.email === user?.email);
 
   const handleOpenRequest = (asset: Asset) => {
     setSelectedAsset(asset);
     setDays(7);
     setMotive('');
 
-    // Zykla Tip Simple
-    if (asset.category.includes('IT')) setZyklaTip("💡 Zykla: ¿Necesitas accesorios periféricos?");
-    else if (asset.category.includes('HIL')) setZyklaTip("💡 Zykla: Verifica los cables de conexión.");
+    // Tips basados en categorías reales del seeder
+    if (asset.category === 'Laptop') setZyklaTip("💡 Zykla: ¿Necesitas un mouse o monitor extra?");
+    else if (asset.category === 'Osciloscopio') setZyklaTip("💡 Zykla: Verifica que las sondas estén calibradas.");
     else setZyklaTip(null);
   };
 
@@ -44,6 +48,9 @@ export function UserHome() {
       setSelectedAsset(null);
     }
   };
+
+  // CORRECCIÓN 2: Categorías que coinciden con tu Base de Datos (Seeder)
+  const categories = ['Todos', 'Laptop', 'Osciloscopio', 'Multímetro', 'Estación de Soldadura', 'Kit de Desarrollo'];
 
   return (
     <div className="min-h-screen pb-24 bg-slate-950 font-sans relative">
@@ -74,12 +81,16 @@ export function UserHome() {
             <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar equipo..." className="bg-slate-900 border-slate-800" />
             
             <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {['Todos', 'Línea de producción', 'Refacciones', 'IT', 'Lab Radar', 'Validación HIL'].map(c => (
+              {categories.map(c => (
                 <button key={c} onClick={() => setCat(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${cat === c ? 'bg-cyan-500 text-slate-950 border-cyan-500' : 'text-slate-400 border-slate-800 bg-slate-900'}`}>{c}</button>
               ))}
             </div>
 
             <div className="grid gap-4">
+              {filteredAssets.length === 0 && !isLoading && (
+                 <p className="text-slate-500 text-center text-sm py-10">No se encontraron activos en esta categoría.</p>
+              )}
+              
               {filteredAssets.map((asset, i) => (
                 <motion.div key={asset.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
                   <Card className="p-0 overflow-hidden flex h-32 border-slate-800 bg-slate-900/40 relative">
@@ -95,7 +106,7 @@ export function UserHome() {
                       </div>
                       <div className="flex justify-end mt-2">
                         {asset.status === 'Operativa' ? (
-                          <Button size="sm" onClick={() => handleOpenRequest(asset)} className="h-8 px-4 rounded-full bg-slate-800 hover:bg-cyan-500 text-white hover:text-black flex items-center gap-2 text-xs font-bold"><Zap className="w-3 h-3" /> Solicitar</Button>
+                          <Button onClick={() => handleOpenRequest(asset)} className="h-8 px-4 rounded-full bg-slate-800 hover:bg-cyan-500 text-white hover:text-black flex items-center gap-2 text-xs font-bold"><Zap className="w-3 h-3" /> Solicitar</Button>
                         ) : (
                           <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1 bg-rose-500/10 px-2 py-1 rounded"><AlertCircle size={10}/> No disp.</span>
                         )}
@@ -108,11 +119,13 @@ export function UserHome() {
           </motion.div>
         ) : (
           <div className="space-y-4">
+             {myRequests.length === 0 && <p className="text-slate-500 text-center text-sm">No tienes solicitudes activas.</p>}
              {myRequests.map((req) => (
                 <Card key={req.id} className="p-4 border-slate-800 bg-slate-900/50 flex items-center justify-between">
                   <div>
-                    <h3 className="font-bold text-white text-sm">{(req as any).assets?.name || 'Activo'}</h3>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{new Date(req.created_at).toLocaleDateString()} • {req.days} días</p>
+                    {/* CORRECCIÓN 3: Acceso seguro a la propiedad assets */}
+                    <h3 className="font-bold text-white text-sm">{req.assets?.name || 'Activo Desconocido'}</h3>
+                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{new Date(req.created_at).toLocaleDateString()} • {req.days_requested} días</p>
                   </div>
                   <div className={`px-3 py-1 rounded-full text-[10px] font-bold border ${req.status === 'PENDING' ? 'text-yellow-500 border-yellow-500/30 bg-yellow-500/10' : 'text-slate-400'}`}>
                     {req.status}
