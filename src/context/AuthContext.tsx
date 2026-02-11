@@ -1,50 +1,47 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import type { User } from '../types'; 
+import type { User } from '../types';
 import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
   login: (email: string) => Promise<void>;
   logout: () => void;
-  isLoading: boolean;
+  isAuthenticated: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 
+  // Al cargar, revisar si hay sesión guardada
   useEffect(() => {
     const storedUser = localStorage.getItem('zf_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
   }, []);
 
   const login = async (email: string) => {
-    setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      // Petición a TU backend local
+      const res = await fetch('http://localhost:3000/api/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }) // Enviamos solo el email
+      });
 
-      if (error || !data) {
-        toast.error("Usuario no encontrado. Prueba con: alex.user@zf.com");
-        return;
-      }
+      if (!res.ok) throw new Error('Usuario no encontrado en MySQL');
 
-      const userData = data as User;
+      const userData = await res.json();
+      
+      // Guardamos el usuario REAL de MySQL
       setUser(userData);
       localStorage.setItem('zf_user', JSON.stringify(userData));
       toast.success(`Bienvenido, ${userData.name}`);
-      
-    } catch (err) {
-      console.error(err);
-      toast.error("Error de conexión");
-    } finally {
-      setIsLoading(false);
+
+    } catch (error: any) {
+      toast.error(error.message);
     }
   };
 
@@ -55,7 +52,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user }}>
       {children}
     </AuthContext.Provider>
   );
