@@ -1,51 +1,56 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import type { User } from '../types';
+import type { User } from '../types'; 
 import { toast } from 'sonner';
 
-// 1. Agregamos isLoading a la interfaz
+// URL de tu backend
+const API_URL = 'http://localhost:3000/api';
+
 interface AuthContextType {
   user: User | null;
   login: (email: string) => Promise<void>;
   logout: () => void;
-  isAuthenticated: boolean;
-  isLoading: boolean; // <--- ¡Esto faltaba!
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false); // <--- Estado para el spinner
+  const [isLoading, setIsLoading] = useState(false);
 
+  // Cargar usuario del almacenamiento local al iniciar
   useEffect(() => {
     const storedUser = localStorage.getItem('zf_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    if (storedUser) setUser(JSON.parse(storedUser));
   }, []);
 
   const login = async (email: string) => {
+    setIsLoading(true);
     try {
-      setIsLoading(true); // Empieza a cargar
+      // Petición al Backend Local
+      const response = await fetch(`${API_URL}/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email })
+      });
 
-      // Buscar usuario en la tabla pública 'users' de Supabase
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
+      if (!response.ok) {
+        toast.error("Usuario no encontrado. Intenta: user@zf.com");
+        return;
+      }
 
-      if (error || !data) throw new Error('Usuario no encontrado en Supabase');
-
-      setUser(data);
-      localStorage.setItem('zf_user', JSON.stringify(data));
-      toast.success(`Bienvenido, ${data.name}`);
-
-    } catch (error: any) {
-      toast.error(error.message || "Error al iniciar sesión");
+      const userData = await response.json();
+      
+      // Guardar sesión
+      setUser(userData);
+      localStorage.setItem('zf_user', JSON.stringify(userData));
+      toast.success(`Bienvenido, ${userData.name}`);
+      
+    } catch (err) {
+      console.error(err);
+      toast.error("Error de conexión con el servidor");
     } finally {
-      setIsLoading(false); // Termina de cargar (sea éxito o error)
+      setIsLoading(false);
     }
   };
 
@@ -56,7 +61,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated: !!user, isLoading }}>
+    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
       {children}
     </AuthContext.Provider>
   );

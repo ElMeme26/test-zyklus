@@ -1,18 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
 import type { Asset, Request, User } from '../types';
 import { toast } from 'sonner';
+
+// Definimos la URL de tu backend local
+const API_URL = 'http://localhost:3000/api';
 
 interface DataContextType {
   assets: Asset[];
   requests: Request[];
   isLoading: boolean;
   createRequest: (asset: Asset, user: User, days: number, motive?: string) => Promise<void>;
-  processRequest: (reqId: number, status: 'APPROVED' | 'REJECTED', assetId: string) => Promise<void>;
-  returnAsset: (reqId: number, assetId: string) => Promise<void>;
-  addAsset: (asset: Partial<Asset>) => Promise<void>;
-  updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
-  deleteAsset: (id: string) => Promise<void>;
   fetchData: () => Promise<void>;
 }
 
@@ -23,26 +20,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [requests, setRequests] = useState<Request[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
     try {
       setIsLoading(true);
+      console.log("🔄 Conectando al Backend Local...");
       
-      const { data: assetsData } = await supabase
-        .from('assets')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setAssets(assetsData || []);
+      // 1. Traer Activos desde Express (MySQL)
+      const resAssets = await fetch(`${API_URL}/assets`);
+      if (!resAssets.ok) throw new Error('Error cargando activos');
+      const assetsData = await resAssets.json();
+      
+      console.log(`✅ Activos cargados: ${assetsData.length}`);
+      setAssets(assetsData);
 
-      const { data: reqData } = await supabase
-        .from('requests')
-        .select(`*, assets:asset_id (*), users:user_id (*)`)
-        .order('created_at', { ascending: false });
-      setRequests(reqData || []);
+      // 2. Traer Solicitudes desde Express (MySQL)
+      const resReq = await fetch(`${API_URL}/requests`);
+      if (!resReq.ok) throw new Error('Error cargando solicitudes');
+      const reqData = await resReq.json();
+      
+      console.log(`✅ Solicitudes cargadas: ${reqData.length}`);
+      setRequests(reqData);
 
     } catch (error: any) {
-      console.error('Error fetching data:', error.message);
+      console.error('❌ Error DataContext:', error.message);
+      toast.error("Error conectando con el servidor local (Revisa que 'node server.js' esté corriendo)");
     } finally {
       setIsLoading(false);
     }
@@ -53,72 +58,32 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.error("Este activo no está disponible");
       return;
     }
+
     try {
-      const { error } = await supabase.from('requests').insert({
-        asset_id: asset.id,
-        user_id: user.id,
-        requester_name: user.name,
-        requester_dept: user.dept,
-        days_requested: days,
-        motive: motive,
-        status: 'PENDING'
+      const response = await fetch(`${API_URL}/requests`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          asset_id: asset.id,
+          user_id: user.id,
+          days: days,
+          motive: motive
+        })
       });
-      if (error) throw error;
-      toast.success("Solicitud enviada 🚀");
-      fetchData(); 
-    } catch (e: any) { toast.error("Error: " + e.message); }
-  };
 
-  const processRequest = async (reqId: number, status: 'APPROVED' | 'REJECTED', assetId: string) => {
-    try {
-      await supabase.from('requests').update({ status }).eq('id', reqId);
-      if (status === 'APPROVED') {
-        await supabase.from('assets').update({ status: 'Prestada' }).eq('id', assetId);
-      }
-      toast.success(status === 'APPROVED' ? "Aprobado" : "Rechazado");
-      fetchData();
-    } catch (e: any) { toast.error("Error: " + e.message); }
-  };
+      if (!response.ok) throw new Error('Error al guardar en BD');
 
-  const returnAsset = async (reqId: number, assetId: string) => {
-    try {
-      await supabase.from('requests').update({ status: 'RETURNED', returned_at: new Date().toISOString() }).eq('id', reqId);
-      await supabase.from('assets').update({ status: 'Operativa' }).eq('id', assetId);
-      toast.success("Activo devuelto 🔄");
-      fetchData();
-    } catch (e: any) { toast.error("Error: " + e.message); }
-  };
+      toast.success("Solicitud enviada exitosamente 🚀");
+      fetchData(); // Recargar datos
 
-  const addAsset = async (asset: Partial<Asset>) => {
-    try {
-      const { id, ...newAsset } = asset; // Excluir ID para que DB lo genere
-      const { error } = await supabase.from('assets').insert([newAsset]);
-      if (error) throw error;
-      toast.success("Activo creado ✨");
-      fetchData();
-    } catch (e: any) { toast.error("Error al crear: " + e.message); }
-  };
-
-  const updateAsset = async (id: string, updates: Partial<Asset>) => {
-    try {
-      const { error } = await supabase.from('assets').update(updates).eq('id', id);
-      if (error) throw error;
-      toast.success("Actualizado 💾");
-      fetchData();
-    } catch (e: any) { toast.error("Error al actualizar: " + e.message); }
-  };
-
-  const deleteAsset = async (id: string) => {
-    try {
-      const { error } = await supabase.from('assets').update({ status: 'Dada de baja' }).eq('id', id);
-      if (error) throw error;
-      toast.success("Dado de baja 🗑️");
-      fetchData();
-    } catch (e: any) { toast.error("Error al borrar: " + e.message); }
+    } catch (error: any) {
+      console.error("Error al crear solicitud:", error);
+      toast.error("Error al guardar: " + error.message);
+    }
   };
 
   return (
-    <DataContext.Provider value={{ assets, requests, isLoading, createRequest, processRequest, returnAsset, addAsset, updateAsset, deleteAsset, fetchData }}>
+    <DataContext.Provider value={{ assets, requests, isLoading, createRequest, fetchData }}>
       {children}
     </DataContext.Provider>
   );

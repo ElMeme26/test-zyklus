@@ -1,195 +1,83 @@
-import { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import type { Asset } from '../../types';
-import { Button, Input } from '../ui/core';
-import { LogOut, Database, Plus, Search, Bot, Edit, Trash2, X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Asset } from '../../types';
+import { Card, Button, Input } from '../ui/core';
+import { LogOut, Database, Plus, Search, Bot, Edit, Trash2, X, ChevronLeft, ChevronRight, Upload, Layers, CheckSquare, Square, LayoutGrid, Building2, ScanLine } from 'lucide-react';
+import { ChatAssistant } from '../ui/ChatAssistant'; 
+import { InstitutionsManager } from './InstitutionsManager';
 
-// --- ZYKLA WIDGET ---
-function ZyklaWidget({ assets }: { assets: Asset[] }) {
-  const totalValue = assets.reduce((sum, a) => sum + (Number(a.commercial_value) || 0), 0);
-  const maintenanceCount = assets.filter(a => a.status === 'En mantenimiento').length;
-  const criticalStock = assets.filter(a => a.status === 'Operativa' && a.category === 'IT').length;
+function InventoryView() {
+  const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBatchRequest } = useData();
+  const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('Todas');
+  const [page, setPage] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const ITEMS_PER_PAGE = 8;
 
-  const insight = useMemo(() => {
-    if (maintenanceCount > 5) return {
-      text: `⚠️ Alerta: Tienes ${maintenanceCount} equipos en mantenimiento. Contacta a soporte.`,
-      color: "text-yellow-400"
-    };
-    if (criticalStock < 3) return {
-      text: `📉 Stock Bajo en IT: Solo quedan ${criticalStock} disponibles.`,
-      color: "text-rose-400"
-    };
-    return {
-      text: `✅ Todo en orden. Valor del inventario: $${(totalValue/1000).toFixed(1)}k USD.`,
-      color: "text-emerald-400"
-    };
-  }, [maintenanceCount, criticalStock, totalValue]);
+  const filteredAssets = assets.filter(a => (a.name?.toLowerCase() || '').includes(search.toLowerCase()) && (catFilter === 'Todas' || a.category === catFilter));
+  const paginatedAssets = filteredAssets.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
+  const totalPages = Math.ceil(filteredAssets.length / ITEMS_PER_PAGE);
+
+  const toggleSelection = (id: string) => { const n = new Set(selectedIds); n.has(id) ? n.delete(id) : n.add(id); setSelectedIds(n); };
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => importAssets(ev.target?.result as string); r.readAsText(f); }};
+  const handleSave = async () => { if(isEditing && currentAsset.id) await updateAsset(currentAsset.id, currentAsset); else await addAsset(currentAsset); setShowModal(false); };
 
   return (
-    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 mb-6 flex items-start gap-4">
-      <div className={`bg-slate-800 p-3 rounded-xl ${insight.color}`}><Bot size={24}/></div>
-      <div>
-        <h3 className="text-cyan-400 font-bold text-sm uppercase tracking-wider mb-1">Zykla Intelligence</h3>
-        <p className="text-slate-300 text-sm">{insight.text}</p>
+    <div className="animate-in fade-in">
+      <div className="flex gap-4 mb-6">
+        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4"/><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-slate-900 border-slate-800"/></div>
+        <div className="flex gap-2"><input type="file" ref={fileInputRef} hidden accept=".csv" onChange={handleFileUpload} /><Button variant="outline" onClick={() => fileInputRef.current?.click()}><Upload size={14} className="mr-2"/> Importar</Button></div>
       </div>
+
+      {selectedIds.size > 0 && <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-30 bg-cyan-600 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-4"><span className="text-sm font-bold">{selectedIds.size} seleccionados</span><Button size="sm" variant="secondary" onClick={() => createBatchRequest(assets.filter(a => selectedIds.has(a.id)), {id:'admin', name:'Admin', email:'admin@zf.com', role:'ADMIN_PATRIMONIAL', dept:'IT', avatar:''}, 7, "Combo Admin")} className="h-7 text-cyan-700 bg-white">Crear Combo</Button><button onClick={() => setSelectedIds(new Set())}><X size={16}/></button></div>}
+
+      <div className="hidden md:block bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-4">
+        <table className="w-full text-left text-sm text-slate-400">
+          <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4 w-10"></th><th className="p-4">Activo</th><th className="p-4 text-center">Estado</th><th className="p-4 text-right">Acciones</th></tr></thead>
+          <tbody className="divide-y divide-slate-800">{paginatedAssets.map(a => <tr key={a.id} className="hover:bg-slate-800/50"><td className="p-4"><button onClick={() => toggleSelection(a.id)}>{selectedIds.has(a.id) ? <CheckSquare className="text-cyan-500"/> : <Square/>}</button></td><td className="p-4 text-white font-bold">{a.name} <span className="text-slate-500 font-normal">({a.tag})</span></td><td className="p-4 text-center"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{a.status}</span></td><td className="p-4 text-right flex justify-end gap-2"><button onClick={() => { setIsEditing(true); setCurrentAsset(a); setShowModal(true); }}><Edit size={16}/></button><button onClick={() => deleteAsset(a.id)} className="text-rose-500"><Trash2 size={16}/></button></td></tr>)}</tbody>
+        </table>
+      </div>
+
+      <div className="md:hidden grid gap-4 mb-20">{paginatedAssets.map(a => <Card key={a.id} className="p-4 flex gap-4"><button onClick={() => toggleSelection(a.id)}>{selectedIds.has(a.id) ? <CheckSquare className="text-cyan-500"/> : <Square className="text-slate-500"/>}</button><div><h3 className="text-white font-bold">{a.name}</h3><p className="text-xs text-slate-500">{a.tag}</p></div></Card>)}</div>
+
+      <button onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Operativa', category: 'IT' }); setShowModal(true); }} className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg text-black z-30"><Plus size={24}/></button>
+
+      {showModal && <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"><div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-4"><h3 className="text-white font-bold">{isEditing?'Editar':'Nuevo'}</h3><Input placeholder="Nombre" value={currentAsset.name||''} onChange={e=>setCurrentAsset({...currentAsset,name:e.target.value})}/><div className="flex gap-2"><Input placeholder="Tag" value={currentAsset.tag||''} onChange={e=>setCurrentAsset({...currentAsset,tag:e.target.value})}/><Input placeholder="Serie" value={currentAsset.serial||''} onChange={e=>setCurrentAsset({...currentAsset,serial:e.target.value})}/></div><div className="flex justify-end gap-2 pt-4"><Button variant="secondary" onClick={()=>setShowModal(false)}>Cancelar</Button><Button onClick={handleSave}>Guardar</Button></div></div></div>}
     </div>
   );
 }
 
 export function AdminDashboard() {
-  const { logout } = useAuth();
-  const { assets, addAsset, updateAsset, deleteAsset } = useData();
-  
-  const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('Todas');
-  const [statusFilter] = useState('Todos');
-  const [page, setPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  const { logout, processQRScan } = useAuth(); // Nota: processQRScan está en DataContext, asegúrate de importarlo bien o pasarlo.
+  const { processQRScan: scanQR } = useData(); // Corrección: lo sacamos del DataContext
+  const [currentView, setCurrentView] = useState<'inventory' | 'external'>('inventory');
 
-  // Modal State
-  const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
-  const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
-
-  const filteredAssets = assets.filter(a => {
-    const matchesSearch = (a.name?.toLowerCase() || '').includes(search.toLowerCase()) || 
-                          (a.tag?.toLowerCase() || '').includes(search.toLowerCase());
-    const matchesCat = catFilter === 'Todas' || a.category === catFilter;
-    const matchesStatus = statusFilter === 'Todos' || a.status === statusFilter;
-    return matchesSearch && matchesCat && matchesStatus;
-  });
-
-  const totalPages = Math.ceil(filteredAssets.length / ITEMS_PER_PAGE);
-  const paginatedAssets = filteredAssets.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
-
-  const openCreateModal = () => {
-    setIsEditing(false);
-    setCurrentAsset({ status: 'Operativa', category: 'IT', image: 'https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=400' });
-    setShowModal(true);
-  };
-
-  const openEditModal = (asset: Asset) => {
-    setIsEditing(true);
-    setCurrentAsset(asset);
-    setShowModal(true);
-  };
-
-  const handleSave = async () => {
-    if (!currentAsset.name || !currentAsset.tag) return;
-    if (isEditing && currentAsset.id) {
-      await updateAsset(currentAsset.id, currentAsset);
-    } else {
-      await addAsset(currentAsset);
-    }
-    setShowModal(false);
-  };
+  const handleScan = async () => { const qr = prompt("QR JSON:"); if(qr) await scanQR(qr); };
 
   return (
-    <div className="min-h-screen bg-slate-950 p-6 font-sans pb-24 relative">
-      <header className="flex justify-between items-center mb-6 pt-4 border-b border-slate-800 pb-4">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
-            <Database className="text-cyan-500"/> Panel Patrimonial
-          </h1>
-          <p className="text-xs text-slate-500 mt-1">Control Maestro</p>
+    <div className="min-h-screen bg-slate-950 font-sans pb-24 relative">
+      <ChatAssistant />
+      <header className="flex justify-between items-center p-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-30">
+        <div className="flex items-center gap-4">
+           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Database className="text-cyan-500"/> Panel Maestro</h1>
+           <div className="hidden md:flex bg-slate-800/50 p-1 rounded-lg border border-slate-700">
+              <button onClick={() => setCurrentView('inventory')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${currentView === 'inventory' ? 'bg-slate-700 text-white' : 'text-slate-400'}`}><LayoutGrid size={14}/> Inventario</button>
+              <button onClick={() => setCurrentView('external')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${currentView === 'external' ? 'bg-slate-700 text-white' : 'text-slate-400'}`}><Building2 size={14}/> Externos</button>
+           </div>
         </div>
-        <Button variant="ghost" onClick={logout}><LogOut size={18}/></Button>
+        <div className="flex gap-2"><Button variant="outline" size="sm" onClick={handleScan} className="border-cyan-500/30 text-cyan-400"><ScanLine size={16} className="mr-2"/> Escanear</Button><Button variant="ghost" onClick={logout}><LogOut size={18}/></Button></div>
       </header>
-
-      <ZyklaWidget assets={assets} />
-
-      <div className="flex gap-4 mb-6">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
-          <Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-slate-900 border-slate-800"/>
-        </div>
-        <select className="bg-slate-900 border border-slate-800 rounded-lg text-white text-xs px-3" value={catFilter} onChange={e => setCatFilter(e.target.value)}>
-          <option value="Todas">Todas las Categorías</option>
-          <option value="IT">IT</option>
-          <option value="Lab Radar">Lab Radar</option>
-          <option value="Validación HIL">Validación HIL</option>
-          <option value="Vehículos">Vehículos</option>
-        </select>
+      <main className="p-6">{currentView === 'inventory' ? <InventoryView /> : <InstitutionsManager />}</main>
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 p-2 flex justify-around z-50">
+          <button onClick={() => setCurrentView('inventory')} className={`flex flex-col items-center p-2 ${currentView === 'inventory' ? 'text-cyan-500' : 'text-slate-500'}`}><LayoutGrid size={20}/><span className="text-[10px] font-bold">Interno</span></button>
+          <button onClick={handleScan} className="flex flex-col items-center p-2 text-white bg-cyan-600 rounded-full -mt-6 shadow-lg border-4 border-slate-950"><ScanLine size={24}/></button>
+          <button onClick={() => setCurrentView('external')} className={`flex flex-col items-center p-2 ${currentView === 'external' ? 'text-cyan-500' : 'text-slate-500'}`}><Building2 size={20}/><span className="text-[10px] font-bold">Externo</span></button>
       </div>
-
-      <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-4">
-        <table className="w-full text-left text-sm text-slate-400">
-          <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500">
-            <tr>
-              <th className="p-4">Activo</th>
-              <th className="p-4">Ubicación</th>
-              <th className="p-4 text-right">Valor</th>
-              <th className="p-4 text-center">Estado</th>
-              <th className="p-4 text-right">Acciones</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800">
-            {paginatedAssets.map(asset => (
-              <tr key={asset.id} className="hover:bg-slate-800/50">
-                <td className="p-4 flex items-center gap-3">
-                  <img src={asset.image} className="w-8 h-8 rounded bg-slate-800 object-cover" />
-                  <div>
-                    <div className="font-bold text-white">{asset.name}</div>
-                    <div className="text-xs font-mono">{asset.tag}</div>
-                  </div>
-                </td>
-                <td className="p-4 text-xs">{asset.location}</td>
-                <td className="p-4 text-right text-emerald-400">${Number(asset.commercial_value).toLocaleString()}</td>
-                <td className="p-4 text-center">
-                  <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase ${asset.status === 'Operativa' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-slate-700'}`}>{asset.status}</span>
-                </td>
-                <td className="p-4 text-right flex justify-end gap-2">
-                  <button onClick={() => openEditModal(asset)} className="text-cyan-400 p-1 hover:bg-cyan-900/20 rounded"><Edit size={16}/></button>
-                  <button onClick={() => deleteAsset(asset.id)} className="text-rose-400 p-1 hover:bg-rose-900/20 rounded"><Trash2 size={16}/></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        
-        <div className="p-4 flex justify-between items-center border-t border-slate-800">
-          <span className="text-xs text-slate-500">Pág {page} de {totalPages}</span>
-          <div className="flex gap-2">
-            <Button size="sm" variant="secondary" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}><ChevronLeft size={14}/></Button>
-            <Button size="sm" variant="secondary" onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}><ChevronRight size={14}/></Button>
-          </div>
-        </div>
-      </div>
-
-      <button onClick={openCreateModal} className="fixed bottom-6 right-6 w-14 h-14 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg text-black z-20 hover:scale-105 transition-transform"><Plus size={24} /></button>
-
-      {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-4">
-            <div className="flex justify-between">
-              <h3 className="text-white font-bold">{isEditing ? 'Editar' : 'Nuevo'} Activo</h3>
-              <button onClick={() => setShowModal(false)}><X className="text-slate-400" /></button>
-            </div>
-            <Input placeholder="Nombre" value={currentAsset.name || ''} onChange={e => setCurrentAsset({...currentAsset, name: e.target.value})} />
-            <div className="flex gap-2">
-              <Input placeholder="Tag" value={currentAsset.tag || ''} onChange={e => setCurrentAsset({...currentAsset, tag: e.target.value})} />
-              <Input placeholder="Serie" value={currentAsset.serial || ''} onChange={e => setCurrentAsset({...currentAsset, serial: e.target.value})} />
-            </div>
-            <Input type="number" placeholder="Valor Comercial" value={currentAsset.commercial_value || ''} onChange={e => setCurrentAsset({...currentAsset, commercial_value: Number(e.target.value)})} />
-            <Input placeholder="Ubicación" value={currentAsset.location || ''} onChange={e => setCurrentAsset({...currentAsset, location: e.target.value})} />
-            
-            <div className="grid grid-cols-2 gap-2">
-              <select className="bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={currentAsset.category} onChange={e => setCurrentAsset({...currentAsset, category: e.target.value})}>
-                <option value="IT">IT</option><option value="Lab Radar">Lab Radar</option><option value="Vehículos">Vehículos</option><option value="Validación HIL">HIL</option>
-              </select>
-              <select className="bg-slate-950 border border-slate-800 rounded p-2 text-white text-sm" value={currentAsset.status} onChange={e => setCurrentAsset({...currentAsset, status: e.target.value as any})}>
-                <option value="Operativa">Operativa</option><option value="En mantenimiento">Mantenimiento</option><option value="Dada de baja">Baja</option>
-              </select>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-4">
-              <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
-              <Button onClick={handleSave}>Guardar</Button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

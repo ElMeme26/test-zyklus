@@ -6,6 +6,7 @@ export type RequestStatus =
   | 'PENDING' | 'ACTION_REQUIRED' | 'APPROVED' | 'ACTIVE' 
   | 'OVERDUE' | 'RETURNED' | 'MAINTENANCE' | 'REJECTED' | 'CANCELLED';
 
+// Tabla assets
 export interface Asset {
   id: string;
   tag: string;
@@ -23,11 +24,10 @@ export interface Asset {
   status: AssetState;
   image: string;
   location: string;
-  maintenance_period_days: number;
-  next_maintenance_date: string;
   created_at: string;
 }
 
+// Tabla users
 export interface User {
   id: string;
   name: string;
@@ -35,27 +35,45 @@ export interface User {
   role: 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO';
   dept: string;
   avatar: string;
-  phone: string;
-  manager_id?: string;
 }
 
+// Tabla requests (Internas)
 export interface Request {
   id: number;
   asset_id: string;
-  user_id?: string;
-  institution_id?: number;
+  user_id: string;
   requester_name: string;
   requester_dept: string;
   days_requested: number;
   motive: string;
   status: RequestStatus;
   created_at: string;
-  approved_at?: string;
-  checkout_at?: string;
-  expected_return_date?: string;
-  returned_at?: string;
-  return_condition?: string;
-  feedback_log?: string;
   assets?: Asset;
   users?: User;
+}
+
+// --- MÓDULO EXTERNO ---
+
+// Tabla institutions
+export interface Institution {
+  id: number;
+  name: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  address: string;
+}
+
+// Tabla external_loans
+export interface ExternalLoan {
+  id: string;
+  institution_id: number;
+  status: 'PENDING' | 'ACTIVE' | 'RETURNED' | 'OVERDUE';
+  loan_duration_days: number;
+  created_at: string;
+  checkout_at?: string;
+  checkin_at?: string;
+  qr_code?: string;
+  institutions?: Institution;
+  items?: { asset_id: string, assets: Asset }[];
 }
