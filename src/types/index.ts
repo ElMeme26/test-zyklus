@@ -7,7 +7,7 @@ export type RequestStatus =
   | 'OVERDUE' | 'RETURNED' | 'MAINTENANCE' | 'REJECTED' | 'CANCELLED';
 
 export interface Asset {
-  id: string; // UUID
+  id: string;
   tag: string;
   name: string;
   description: string;
@@ -25,10 +25,11 @@ export interface Asset {
   location: string;
   maintenance_period_days: number;
   next_maintenance_date: string;
+  created_at: string;
 }
 
 export interface User {
-  id: string; // UUID
+  id: string;
   name: string;
   email: string;
   role: 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO';
@@ -38,40 +39,23 @@ export interface User {
   manager_id?: string;
 }
 
-// AQUÍ ESTÁ EL CAMBIO CLAVE 👇
 export interface Request {
   id: number;
   asset_id: string;
   user_id?: string;
   institution_id?: number;
-  
-  // Datos congelados
   requester_name: string;
   requester_dept: string;
-  
   days_requested: number;
   motive: string;
   status: RequestStatus;
-  
-  // Fechas
   created_at: string;
   approved_at?: string;
   checkout_at?: string;
   expected_return_date?: string;
   returned_at?: string;
-  
   return_condition?: string;
   feedback_log?: string;
-
-  // RELACIONES (Esto es lo que te falta para que no de error)
   assets?: Asset;
   users?: User;
-}
-
-export interface Institution {
-  id: number;
-  name: string;
-  contact_name: string;
-  contact_email: string;
-  active_loans_count: number;
 }
