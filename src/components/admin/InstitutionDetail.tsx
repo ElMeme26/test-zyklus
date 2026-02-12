@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Institution, Asset } from '../../types';
+import type { Institution, Asset } from '../../types'; // <--- CORREGIDO AQUÍ
 import { Button, Card, Input } from '../ui/core';
 import { ChevronLeft, ShoppingCart, Clock, QrCode, Trash2, Search, X, Plus, CheckCircle } from 'lucide-react';
 import QRCode from "react-qr-code"; 

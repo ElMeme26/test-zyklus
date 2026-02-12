@@ -140,3 +140,4 @@ export const useData = () => {
   if (!context) throw new Error("useData error");
   return context;
 };
+export default DataContext;

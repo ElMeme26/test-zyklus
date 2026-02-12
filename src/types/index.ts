@@ -6,7 +6,6 @@ export type RequestStatus =
   | 'PENDING' | 'ACTION_REQUIRED' | 'APPROVED' | 'ACTIVE' 
   | 'OVERDUE' | 'RETURNED' | 'MAINTENANCE' | 'REJECTED' | 'CANCELLED';
 
-// Activos (Inventario Interno)
 export interface Asset {
   id: string;
   tag: string;
@@ -27,7 +26,6 @@ export interface Asset {
   created_at: string;
 }
 
-// Usuarios
 export interface User {
   id: string;
   name: string;
@@ -37,7 +35,6 @@ export interface User {
   avatar: string;
 }
 
-// Solicitudes Internas
 export interface Request {
   id: number;
   asset_id: string;
@@ -53,8 +50,6 @@ export interface Request {
 }
 
 // --- MÓDULO EXTERNO ---
-
-// Instituciones (Clientes Externos)
 export interface Institution {
   id: number;
   name: string;
@@ -64,7 +59,6 @@ export interface Institution {
   address: string;
 }
 
-// Préstamos Externos
 export interface ExternalLoan {
   id: string;
   institution_id: number;

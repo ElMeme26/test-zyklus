@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
-import { Asset } from '../../types';
+import type { Asset } from '../../types'; // <--- CORREGIDO AQUÍ
 import { Card, Button, Input } from '../ui/core';
 import { LogOut, Database, Plus, Search, Bot, Edit, Trash2, X, ChevronLeft, ChevronRight, Upload, Layers, CheckSquare, Square, LayoutGrid, Building2, ScanLine } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant'; 
