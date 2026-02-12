@@ -53,8 +53,8 @@ function InventoryView() {
 }
 
 export function AdminDashboard() {
-  const { logout, processQRScan } = useAuth(); // Nota: processQRScan está en DataContext, asegúrate de importarlo bien o pasarlo.
-  const { processQRScan: scanQR } = useData(); // Corrección: lo sacamos del DataContext
+  const { logout } = useAuth();
+  const { processQRScan: scanQR } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'external'>('inventory');
 
   const handleScan = async () => { const qr = prompt("QR JSON:"); if(qr) await scanQR(qr); };
