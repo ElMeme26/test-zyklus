@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
 import type { Institution, Asset } from '../../types'; // <--- CORREGIDO AQUÍ
 import { Button, Card, Input } from '../ui/core';
-import { ChevronLeft, ShoppingCart, Clock, QrCode, Trash2, Search, X, Plus, CheckCircle } from 'lucide-react';
+import { ChevronLeft, ShoppingCart, Clock, QrCode, Trash2, X, Plus, CheckCircle } from 'lucide-react';
 import QRCode from "react-qr-code"; 
 import { toast } from 'sonner';
 
@@ -12,7 +12,7 @@ export function InstitutionDetail({ institution, onBack }: { institution: Instit
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [availableAssets, setAvailableAssets] = useState<Asset[]>([]);
   const [cart, setCart] = useState<Asset[]>([]);
-  const [duration, setDuration] = useState(7);
+  const [duration] = useState(7);
   const [assetSearch, setAssetSearch] = useState('');
   const [lastLoanId, setLastLoanId] = useState<string | null>(null);
 

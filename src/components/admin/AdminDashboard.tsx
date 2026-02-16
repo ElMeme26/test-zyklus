@@ -11,7 +11,7 @@ function InventoryView() {
   const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBatchRequest } = useData();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState('Todas');
-  const [page, setPage] = useState(1);
+  const [page] = useState(1);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
