@@ -2,18 +2,39 @@ export type UserRole = 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUAR
 
 export type AssetStatus = 'Operativa' | 'En mantenimiento' | 'Prestada' | 'Dada de baja' | 'Fuera de servicio';
 
+// Tipos de estado para las solicitudes
+export type RequestStatus = 
+  | 'PENDING' 
+  | 'ACTION_REQUIRED' 
+  | 'APPROVED' 
+  | 'ACTIVE' 
+  | 'OVERDUE' 
+  | 'RETURNED' 
+  | 'MAINTENANCE' 
+  | 'REJECTED' 
+  | 'CANCELLED';
+
 export interface User {
-  id: string;
+  id: string; // UUID
   name: string;
   email: string;
   role: UserRole;
   dept?: string;
   avatar?: string;
+  phone?: string;
   manager_id?: string;
 }
 
+export interface Bundle {
+  id: string; // UUID
+  name: string;
+  description?: string;
+  image_url?: string;
+  created_at?: string;
+}
+
 export interface Asset {
-  id: string;
+  id: string; // UUID
   tag?: string;
   name: string;
   description?: string;
@@ -21,10 +42,10 @@ export interface Asset {
   brand?: string;
   model?: string;
   serial?: string;
-  status: string; // O AssetStatus
+  status: string; 
   image?: string;
   location?: string;
-  bundle_id?: string;
+  bundle_id?: string; 
 }
 
 export interface Institution {
@@ -36,15 +57,32 @@ export interface Institution {
   contact_phone?: string;
 }
 
-// Context Type Definition
-export interface DataContextType {
-  assets: Asset[];
-  loading: boolean;
-  addAsset: (asset: Asset) => Promise<void>;
-  updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
-  deleteAsset: (id: string) => Promise<void>;
-  importAssets: (csvContent: string) => Promise<void>;
-  getNextTag: () => string;
-  processQRScan: (qrData: string) => Promise<void>;
-  createBatchRequest: (assets: Asset[], user: User, days: number, motive: string) => Promise<void>;
+// --- ESTA ES LA INTERFAZ QUE FALTABA O ESTABA INCOMPLETA ---
+export interface Request {
+  id: number; // BigInt
+  asset_id: string;
+  user_id: string;
+  institution_id?: number;
+  requester_name: string;
+  requester_dept: string;
+  days_requested: number;
+  motive: string;
+  status: RequestStatus;
+  
+  // Fechas
+  created_at: string;
+  approved_at?: string;
+  checkout_at?: string;
+  expected_return_date?: string;
+  returned_at?: string;
+
+  // Seguridad y Feedback
+  security_check_step: number; // 0, 1, 2
+  security_notes?: string;
+  rejection_feedback?: string;
+
+  // Relaciones (Joins)
+  assets?: Asset;
+  users?: User;
+  institutions?: Institution;
 }

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import type { Institution, Request } from '../../types';
+import type { Institution, Request } from '../../types'; 
 import { ArrowLeft, Clock, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -9,6 +9,8 @@ interface Props {
 }
 
 export const InstitutionDetail = ({ institution, onBack }: Props) => {
+  // ... resto del componente igual ...
+  // Solo asegúrate de que el resto del código coincida con lo que tenías
   const [loans, setLoans] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -29,10 +31,7 @@ export const InstitutionDetail = ({ institution, onBack }: Props) => {
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      <button 
-        onClick={onBack} 
-        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
-      >
+      <button onClick={onBack} className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors">
         <ArrowLeft size={18} /> Volver al directorio
       </button>
 
