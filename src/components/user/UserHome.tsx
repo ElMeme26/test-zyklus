@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { supabase } from '../../supabaseClient';
-import { Asset, Institution } from '../../types';
+// CORRECCIÓN CLAVE: Agregar "type" para evitar que el navegador busque código JS que no existe
+import type { Asset, Institution } from '../../types';
 import { LogOut, Search, Calendar, Building as BuildingIcon } from 'lucide-react';
 
 export const UserHome = () => {
@@ -68,63 +69,80 @@ export const UserHome = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 font-sans text-slate-800">
       <nav className="bg-white shadow p-4 flex justify-between items-center sticky top-0 z-10">
-        <h1 className="font-bold text-xl text-blue-600">ZF Halo <span className="text-gray-400 text-sm">| Catálogo</span></h1>
+        <h1 className="font-bold text-xl text-blue-600 tracking-tight">ZF Halo <span className="text-gray-400 text-sm font-normal">| Catálogo</span></h1>
         <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">{user?.name}</span>
-            <button onClick={signOut} className="p-2 text-gray-500 hover:text-red-600"><LogOut size={18}/></button>
+            <span className="text-sm font-medium hidden sm:block">{user?.name}</span>
+            <button onClick={signOut} className="p-2 text-gray-500 hover:text-red-600 transition-colors"><LogOut size={18}/></button>
         </div>
       </nav>
 
       <main className="max-w-6xl mx-auto p-6">
+        <div className="mb-6">
+            <h2 className="text-2xl font-bold mb-2">Activos Disponibles</h2>
+            <p className="text-gray-500">Selecciona un equipo para iniciar una solicitud de préstamo.</p>
+        </div>
+
         {/* Catálogo Grid */}
         <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {assets.map(asset => (
-            <div key={asset.id} className="bg-white rounded-lg shadow overflow-hidden group hover:ring-2 ring-blue-500 transition-all cursor-pointer"
+            <div key={asset.id} className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden group hover:ring-2 ring-blue-500 transition-all cursor-pointer hover:shadow-md"
                  onClick={() => setSelectedAsset(asset)}>
-              <div className="h-40 bg-gray-200 relative">
-                <img src={asset.image || '/placeholder.png'} className="w-full h-full object-cover"/>
+              <div className="h-40 bg-gray-100 relative flex items-center justify-center">
+                {asset.image ? (
+                    <img src={asset.image} className="w-full h-full object-cover"/>
+                ) : (
+                    <div className="text-gray-300 font-bold text-4xl select-none">ZF</div>
+                )}
+                
                 {asset.bundle_id && (
-                   <span className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-full">Bundle</span>
+                   <span className="absolute top-2 right-2 bg-purple-600 text-white text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider">Bundle</span>
                 )}
               </div>
               <div className="p-4">
-                <h3 className="font-bold text-gray-800 truncate">{asset.name}</h3>
-                <p className="text-sm text-gray-500">{asset.category || 'General'}</p>
-                <div className="mt-3 flex justify-between items-center">
-                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Disponible</span>
-                  <span className="text-xs text-gray-400">{asset.model}</span>
+                <h3 className="font-bold text-gray-800 truncate" title={asset.name}>{asset.name}</h3>
+                <p className="text-xs text-gray-500 uppercase font-bold mt-1 tracking-wide">{asset.category || 'General'}</p>
+                <div className="mt-4 flex justify-between items-end">
+                  <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-1 rounded font-bold">DISPONIBLE</span>
+                  <span className="text-xs text-gray-400 font-mono">{asset.model || 'S/M'}</span>
                 </div>
               </div>
             </div>
           ))}
+          {assets.length === 0 && (
+             <div className="col-span-full py-12 text-center text-gray-400 border-2 border-dashed rounded-xl">
+                No hay activos operativos disponibles en este momento.
+             </div>
+          )}
         </div>
       </main>
 
       {/* Modal de Solicitud */}
       {selectedAsset && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
                <h3 className="font-bold text-lg">Solicitar Préstamo</h3>
-               <button onClick={() => setSelectedAsset(null)} className="text-white/80 hover:text-white">✕</button>
+               <button onClick={() => setSelectedAsset(null)} className="text-white/70 hover:text-white transition-colors">✕</button>
             </div>
             
-            <form onSubmit={handleRequest} className="p-6 space-y-4">
-              <div className="flex gap-4 items-center bg-blue-50 p-3 rounded-lg">
-                <img src={selectedAsset.image || '/placeholder.png'} className="w-16 h-16 rounded object-cover bg-white"/>
+            <form onSubmit={handleRequest} className="p-6 space-y-5">
+              <div className="flex gap-4 items-center bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <div className="w-16 h-16 bg-white rounded-md border border-blue-200 flex items-center justify-center shrink-0">
+                    {selectedAsset.image ? <img src={selectedAsset.image} className="w-full h-full object-cover rounded-md"/> : <span className="text-blue-200 font-bold">IMG</span>}
+                </div>
                 <div>
-                    <p className="font-bold text-blue-900">{selectedAsset.name}</p>
-                    <p className="text-xs text-blue-700">{selectedAsset.serial}</p>
+                    <p className="font-bold text-blue-900 leading-tight">{selectedAsset.name}</p>
+                    <p className="text-xs text-blue-600 mt-1 font-mono">{selectedAsset.serial || 'Sin Serie'}</p>
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-1">Motivo del préstamo</label>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5">Motivo del préstamo</label>
                 <textarea 
                   required
-                  className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  className="w-full border border-gray-300 p-3 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                   rows={2}
                   value={requestData.motive}
                   onChange={e => setRequestData({...requestData, motive: e.target.value})}
@@ -132,36 +150,36 @@ export const UserHome = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-6">
                 <div>
-                    <label className="block text-sm font-medium mb-1"><Calendar size={14} className="inline"/> Días requeridos</label>
+                    <label className="block text-xs font-bold text-gray-500 uppercase mb-1.5 flex items-center gap-1"><Calendar size={12}/> Días requeridos</label>
                     <input 
                       type="number" min="1" max="30" required
-                      className="w-full border p-2 rounded"
+                      className="w-full border border-gray-300 p-2.5 rounded-lg text-sm"
                       value={requestData.days}
                       onChange={e => setRequestData({...requestData, days: parseInt(e.target.value)})}
                     />
                 </div>
                 <div className="flex items-center pt-6">
-                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                    <label className="flex items-center gap-3 cursor-pointer select-none group">
                         <input 
                           type="checkbox" 
                           checked={isExternal}
                           onChange={e => setIsExternal(e.target.checked)}
-                          className="w-4 h-4 text-blue-600 rounded"
+                          className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
                         />
-                        <span className="text-sm font-medium text-gray-700">¿Préstamo Externo?</span>
+                        <span className="text-sm font-medium text-gray-700 group-hover:text-blue-600 transition-colors">¿Préstamo Externo?</span>
                     </label>
                 </div>
               </div>
 
               {/* Selector de Instituciones (Solo si es externo) */}
               {isExternal && (
-                <div className="animate-in slide-in-from-top-2">
-                    <label className="block text-sm font-medium mb-1 text-purple-700"><BuildingIcon size={14} className="inline"/> Institución Destino</label>
+                <div className="animate-in slide-in-from-top-2 border-t pt-4 mt-2">
+                    <label className="block text-xs font-bold text-purple-700 uppercase mb-1.5 flex items-center gap-1"><BuildingIcon size={12}/> Institución Destino</label>
                     <select 
                       required={isExternal}
-                      className="w-full border border-purple-300 bg-purple-50 p-2 rounded focus:ring-2 focus:ring-purple-500"
+                      className="w-full border border-purple-200 bg-purple-50 p-2.5 rounded-lg focus:ring-2 focus:ring-purple-500 text-sm text-purple-900"
                       value={requestData.institution_id}
                       onChange={e => setRequestData({...requestData, institution_id: e.target.value})}
                     >
@@ -170,12 +188,12 @@ export const UserHome = () => {
                             <option key={inst.id} value={inst.id}>{inst.name}</option>
                         ))}
                     </select>
-                    <p className="text-xs text-gray-500 mt-1">* Requiere aprobación especial de seguridad.</p>
+                    <p className="text-[10px] text-gray-400 mt-2 text-right">* Requiere aprobación especial de seguridad.</p>
                 </div>
               )}
 
-              <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">
-                Confirmar Solicitud
+              <button type="submit" className="w-full bg-blue-600 text-white py-3.5 rounded-lg font-bold hover:bg-blue-700 transition-transform active:scale-[0.98] shadow-lg shadow-blue-900/20">
+                CONFIRMAR SOLICITUD
               </button>
             </form>
           </div>

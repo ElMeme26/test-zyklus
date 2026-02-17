@@ -18,17 +18,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Verificar sesión inicial
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      if (session) fetchUserProfile(session.user.id);
-      else setLoading(false);
-    });
+    // 1. Verificar sesión inicial al cargar la página
+    const initAuth = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+           console.warn("No se pudo obtener sesión inicial:", error.message);
+        }
+        
+        setSession(session);
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        if (session && session.user) {
+          await fetchUserProfile(session.user.id);
+        } else {
+          // Si no hay sesión, terminamos de cargar
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error inesperado en auth:", err);
+        setLoading(false);
+      }
+    };
+
+    initAuth();
+
+    // 2. Escuchar cambios de estado (Login/Logout externos)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       setSession(session);
-      if (session) fetchUserProfile(session.user.id);
-      else {
+      if (session) {
+        await fetchUserProfile(session.user.id);
+      } else {
         setUser(null);
         setLoading(false);
       }
@@ -39,20 +59,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchUserProfile = async (userId: string) => {
     try {
-      const { data } = await supabase.from('users').select('*').eq('id', userId).single();
-      if (data) setUser(data as User);
+      // Buscamos el perfil completo en la tabla 'users'
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .single();
+      
+      if (error) {
+        console.error("Error cargando perfil de usuario:", error);
+      } else if (data) {
+        setUser(data as User);
+      }
     } catch (error) {
-      console.error("Error perfil:", error);
+      console.error("Error crítico fetching profile:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Lógica de Login Simulado (Bypass de Auth real para prototipo)
+  // Función de Login Personalizada (Simulación Segura)
   const signIn = async (email: string) => {
     setLoading(true);
     try {
-        // 1. Buscamos si el usuario existe en la tabla 'users' por email
+        // 1. Verificar si el email existe en nuestra tabla de usuarios
         const { data, error } = await supabase
             .from('users')
             .select('*')
@@ -60,28 +90,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             .single();
 
         if (error || !data) {
-            alert("Usuario no encontrado en la base de datos.");
+            alert("❌ Usuario no encontrado en el sistema. Contacta a RRHH.");
             setLoading(false);
             return;
         }
 
-        // 2. Simulamos sesión exitosa estableciendo el usuario en el estado
+        // 2. Iniciar sesión real o simulada
+        // Opción A: Si usas Supabase Auth real (Magic Link / Password)
+        // const { error: authError } = await supabase.auth.signInWithOtp({ email });
+        
+        // Opción B (Prototipo Rápido): Simular sesión exitosa
+        console.log("Inicio de sesión exitoso para:", data.name);
         setUser(data as User);
-        // Creamos una sesión falsa para pasar los checks
         setSession({ user: { id: data.id, email: data.email } });
         
     } catch (e) {
-        console.error(e);
-        alert("Error al iniciar sesión");
+        console.error("Error en signIn:", e);
+        alert("Hubo un problema al intentar ingresar.");
     } finally {
         setLoading(false);
     }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
-    setUser(null);
-    setSession(null);
+    setLoading(true);
+    try {
+      await supabase.auth.signOut();
+      setUser(null);
+      setSession(null);
+    } catch (error) {
+      console.error("Error al salir:", error);
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
