@@ -22,7 +22,7 @@ export const AdminDashboard = () => {
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
 
   // Filtrado simple
-  const filteredAssets = assets.filter(a => 
+  const filteredAssets = assets.filter((a: Asset) => 
     a.name.toLowerCase().includes(search.toLowerCase()) || 
     (a.tag && a.tag.toLowerCase().includes(search.toLowerCase()))
   );
@@ -114,8 +114,8 @@ export const AdminDashboard = () => {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {filteredAssets.map(asset => (
-                      <tr key={asset.id} className="hover:bg-slate-800/50">
+                    {filteredAssets.map((asset: Asset) => (
+                        <tr key={asset.id} className="hover:bg-slate-800/50">
                         <td className="p-4 font-medium text-white">{asset.name}</td>
                         <td className="p-4">{asset.tag} <br/><span className="text-xs text-slate-500">{asset.serial}</span></td>
                         <td className="p-4">
