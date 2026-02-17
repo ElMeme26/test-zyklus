@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { supabase } from '../../supabaseClient';
-import { Request } from '../../types';
-import { X, CheckCircle, AlertTriangle, Package, User as UserIcon } from 'lucide-react';
+// CORRECCIÓN AQUÍ: Usar 'import type' para interfaces
+import type { Request } from '../../types'; 
+import { X, CheckCircle, AlertTriangle, User as UserIcon } from 'lucide-react';
 
 export const GuardScanner = () => {
   const [scannedData, setScannedData] = useState<Request | null>(null);
@@ -11,7 +12,11 @@ export const GuardScanner = () => {
   const [statusMsg, setStatusMsg] = useState<{ type: 'error' | 'success', text: string } | null>(null);
 
   const handleScan = async (rawValue: string) => {
-    if (loading || scannedData) return;
+    if (loading || scannedData) return; // Evitar múltiples lecturas
+    
+    // Validar que el valor no esté vacío
+    if (!rawValue) return;
+
     setLoading(true);
     setStatusMsg(null);
 
@@ -20,7 +25,7 @@ export const GuardScanner = () => {
       let requestId = rawValue;
       try {
         const parsed = JSON.parse(rawValue);
-        requestId = parsed.id;
+        if (parsed.id) requestId = parsed.id;
       } catch (e) {
         // Asumimos que es el ID directo si falla el parse
       }
@@ -63,7 +68,6 @@ export const GuardScanner = () => {
     } else if (currentStep === 1) {
       // Intento de RETORNO
       if (scannedData.status !== 'ACTIVE' && scannedData.status !== 'OVERDUE') {
-         // Permitimos retorno aunque esté vencido
          setStatusMsg({ type: 'error', text: "El activo no consta como entregado actualmente." });
          return;
       }
@@ -116,7 +120,12 @@ export const GuardScanner = () => {
 
         {!scannedData ? (
           <div className="bg-black rounded-2xl overflow-hidden border-2 border-slate-700 shadow-2xl relative">
-            <Scanner onScan={(res) => res && handleScan(res[0].rawValue)} />
+            <Scanner 
+                onScan={(res) => {
+                    // Manejo robusto dependiendo de la versión de la librería
+                    if (res && res.length > 0) handleScan(res[0].rawValue);
+                }} 
+            />
             <div className="absolute bottom-0 w-full bg-black/60 p-4 text-center text-sm text-gray-300 backdrop-blur-sm">
               Enfoque el código QR del pase de salida
             </div>
@@ -124,7 +133,6 @@ export const GuardScanner = () => {
           </div>
         ) : (
           <div className="bg-white text-slate-900 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-bottom-8">
-            {/* Header Modal */}
             <div className={`p-4 flex justify-between items-center ${scannedData.security_check_step === 0 ? 'bg-emerald-600' : 'bg-blue-600'} text-white`}>
               <h2 className="font-bold text-lg flex items-center gap-2">
                 {scannedData.security_check_step === 0 ? 'Validar SALIDA' : 'Validar RETORNO'}
@@ -133,7 +141,6 @@ export const GuardScanner = () => {
             </div>
 
             <div className="p-5 space-y-4">
-              {/* Asset Info */}
               <div className="flex gap-4">
                 <div className="w-20 h-20 bg-gray-200 rounded-lg overflow-hidden shrink-0 border border-gray-300">
                   <img src={scannedData.assets?.image || '/placeholder-asset.png'} className="w-full h-full object-cover" />
@@ -149,7 +156,6 @@ export const GuardScanner = () => {
 
               <hr className="border-gray-100"/>
 
-              {/* User Info */}
               <div className="bg-slate-50 p-3 rounded-lg border border-slate-100">
                 <div className="flex items-center gap-2 mb-1">
                   <UserIcon size={16} className="text-blue-600"/>
@@ -161,7 +167,6 @@ export const GuardScanner = () => {
                 </div>
               </div>
 
-              {/* Checkin Logic */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Observaciones / Daños</label>
                 <textarea 

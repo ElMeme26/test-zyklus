@@ -24,6 +24,14 @@ export interface User {
   manager_id?: string;
 }
 
+export interface Bundle {
+  id: string; // UUID
+  name: string;
+  description?: string;
+  image_url?: string;
+  created_at?: string;
+}
+
 export interface Asset {
   id: string; // UUID
   tag?: string;
@@ -33,22 +41,22 @@ export interface Asset {
   brand?: string;
   model?: string;
   serial?: string;
-  status: string; // Usamos string genérico o AssetStatus
+  status: string; 
   image?: string;
   location?: string;
-  bundle_id?: string; // Nuevo campo
+  bundle_id?: string; 
 }
 
-export interface Bundle {
-  id: string; // UUID
+export interface Institution {
+  id: number;
   name: string;
-  description?: string;
-  image_url?: string;
-  created_at?: string;
+  contact_name?: string;
+  contact_email?: string;
+  address?: string;
 }
 
 export interface Request {
-  id: number; // BigInt (identity)
+  id: number; // BigInt
   asset_id: string;
   user_id: string;
   institution_id?: number;
@@ -74,12 +82,4 @@ export interface Request {
   assets?: Asset;
   users?: User;
   institutions?: Institution;
-}
-
-export interface Institution {
-  id: number;
-  name: string;
-  contact_name?: string;
-  contact_email?: string;
-  address?: string;
 }
