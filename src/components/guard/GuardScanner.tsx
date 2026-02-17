@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Input } from '../ui/core';
 import {
   ScanLine, LogOut, LogIn, AlertTriangle, CheckCircle,
-  X, PenLine, Trash2, User, Box, Clock, Camera, CameraOff
+  X, PenLine, Trash2, User, Box, Clock, Camera
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Scanner } from '@yudiel/react-qr-scanner';
@@ -186,10 +186,10 @@ export function GuardScanner() {
   const { processGuardScan } = useData();
   const { logout } = useAuth();
   const [mode, setMode] = useState<'CHECKOUT' | 'CHECKIN'>('CHECKOUT');
-  const [step, setStep] = useState<1 | 2>(1); // Paso 1: QR Solicitud, Paso 2: QR Activo
+  const [step, setStep] = useState<1 | 2>(1);
   const [qrInput, setQrInput] = useState('');
-  const [requestQR, setRequestQR] = useState(''); // QR de la solicitud (paso 1)
-  const [assetQR, setAssetQR] = useState('');    // QR del activo físico (paso 2)
+  const [requestQR, setRequestQR] = useState('');
+  const [assetQR, setAssetQR] = useState('');
   const [signature, setSignature] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<{ success: boolean; message: string; data?: Request } | null>(null);
@@ -214,7 +214,6 @@ export function GuardScanner() {
         toast.success('✓ Activo escaneado. Listo para procesar.');
       }
     } else {
-      // CHECKIN solo requiere un escaneo
       setQrInput(code);
       setUseCamera(false);
       toast.success('✓ QR escaneado');
@@ -239,13 +238,11 @@ export function GuardScanner() {
 
   const handleScan = async () => {
     if (mode === 'CHECKOUT') {
-      // Validar que tengamos ambos QR
       if (!requestQR || !assetQR) {
         toast.error('Faltan escaneos. Completa ambos pasos.');
         return;
       }
 
-      // Validar que coincidan
       try {
         const reqData = JSON.parse(requestQR);
         const assetData = JSON.parse(assetQR);
@@ -270,7 +267,6 @@ export function GuardScanner() {
       }
       setIsProcessing(false);
     } else {
-      // CHECKIN
       if (!qrInput.trim()) { toast.warning('Ingresa o escanea un QR'); return; }
       setPendingQr(qrInput);
       setShowDamageModal(true);
@@ -298,13 +294,10 @@ export function GuardScanner() {
 
   return (
     <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-start pt-8 relative overflow-hidden">
-      {/* Background glow */}
       <div className={`absolute top-0 left-0 w-full h-64 opacity-10 blur-[100px] pointer-events-none ${mode === 'CHECKOUT' ? 'bg-cyan-500' : 'bg-emerald-500'}`} />
 
-      {/* Damage Modal */}
       {showDamageModal && <DamageModal onConfirm={handleDamageConfirm} />}
 
-      {/* Camera Scanner Modal */}
       {useCamera && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm">
           <Card className="w-full max-w-md">
@@ -337,7 +330,7 @@ export function GuardScanner() {
       )}
 
       <div className="w-full max-w-md space-y-5 z-10">
-        {/* Header */}
+        {/* Header Corregido */}
         <div className="flex justify-between items-center">
           <div className="text-center flex-1">
             <div className={`inline-flex p-3 rounded-full border mb-2 ${mode === 'CHECKOUT' ? 'bg-cyan-500/10 border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.3)]'}`}>
@@ -346,18 +339,16 @@ export function GuardScanner() {
             <h1 className="text-2xl font-black text-white tracking-wider">GUARD SCAN</h1>
             <p className="text-[11px] text-slate-500">Control de Acceso Digital</p>
           </div>
-          <</div>
-            <div className="flex items-center gap-2">
-              <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
-              <button onClick={logout} className="text-slate-500 hover:text-white p-2">
-                <LogOut size={18} />
-              </button>
-            </div>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <button onClick={logout} className="text-slate-500 hover:text-white p-2">
+              <LogOut size={18} />
+            </button>
+          </div>
         </div>
 
         {!result ? (
           <>
-            {/* Mode Switcher */}
             <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
               <button
                 onClick={() => { setMode('CHECKOUT'); setStep(1); setRequestQR(''); setAssetQR(''); setQrInput(''); }}
@@ -373,7 +364,6 @@ export function GuardScanner() {
               </button>
             </div>
 
-            {/* QR Input */}
             <Card className={`border ${mode === 'CHECKOUT' ? 'border-primary/20' : 'border-emerald-500/20'}`}>
               <div className="space-y-4">
                 {mode === 'CHECKOUT' && (
@@ -418,12 +408,10 @@ export function GuardScanner() {
                   </Button>
                 )}
 
-                {/* Firma Digital (Solo en CHECKOUT, paso 2) */}
                 {mode === 'CHECKOUT' && step === 2 && (
                   <SignaturePad onSign={setSignature} />
                 )}
 
-                {/* Botón Final */}
                 {((mode === 'CHECKOUT' && step === 2 && requestQR && assetQR) || mode === 'CHECKIN') && (
                   <Button
                     onClick={() => handleScan()}

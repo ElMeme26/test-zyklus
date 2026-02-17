@@ -177,7 +177,7 @@ export function ManagerInbox() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
-            <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
+            <ThemeToggle /> 
             <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
           </div>
         </div>
