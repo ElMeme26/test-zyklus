@@ -41,13 +41,13 @@ export function LoginScreen() {
            <p className="text-[10px] text-slate-600 uppercase mb-3 font-bold text-center">Fases de Prueba (Roles)</p>
            <div className="grid grid-cols-2 gap-2 text-[10px]">
               <button 
-                onClick={() => setEmail('alvaro.anda_23@zf.com')} 
+                onClick={() => setEmail('sara.gómez_18@zf.com')} 
                 className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
               >
                 👷‍♂️ Usuario
               </button>
               <button 
-                onClick={() => setEmail('alta.ulloa_72@zf.com')} 
+                onClick={() => setEmail('lic..echeverría_39@zf.com')} 
                 className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
               >
                 👔 Líder
@@ -66,7 +66,7 @@ export function LoginScreen() {
               </button>
               {/* Botón de Guardia Agregado */}
               <button 
-                onClick={() => setEmail('guardia@zf.com')} 
+                onClick={() => setEmail('carlos.mendoza@zf.com')} 
                 className="col-span-2 p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2 font-bold"
               >
                 🛡️ Guardia de Seguridad
