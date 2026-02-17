@@ -1,8 +1,7 @@
-import React from 'react';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
-import { RoleRouter } from './components/RoleRouter';
+import RoleRouter from './components/RoleRouter'; 
 import './index.css';
 
 function App() {
