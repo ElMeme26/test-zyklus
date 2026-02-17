@@ -4,12 +4,12 @@ import { Button, Input, Card } from './ui/core';
 import { Zap, Loader2 } from 'lucide-react';
 
 export function LoginScreen() {
-  // Usamos los nombres estándar del AuthContext
-  const { login, isLoading } = useAuth(); 
+  const { login, isLoading } = useAuth(); // Usamos 'login' estándar
   const [email, setEmail] = useState('');
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center p-6 relative overflow-hidden">
+      {/* Fondo ambiental */}
       <div className="absolute top-0 left-0 w-full h-full bg-cyan-500/5 blur-[100px] pointer-events-none" />
       
       <Card className="w-full max-w-sm bg-slate-900/90 border-slate-800 relative z-10 backdrop-blur-2xl">
@@ -28,12 +28,50 @@ export function LoginScreen() {
               placeholder="nombre@zf.com" 
               value={email} 
               onChange={e => setEmail(e.target.value)} 
-              className="bg-slate-950 border-slate-800 focus:border-cyan-500"
+              className="bg-slate-950 border-slate-800 focus:border-cyan-500 text-white"
             />
           </div>
           <Button onClick={() => login(email)} className="w-full h-11 btn-neon text-xs" disabled={isLoading}>
             {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : 'ACCEDER AL SISTEMA'}
           </Button>
+        </div>
+
+        {/* --- BOTONES DE ACCESO RÁPIDO PARA FASES DE PRUEBA --- */}
+        <div className="mt-8 pt-6 border-t border-white/5">
+           <p className="text-[10px] text-slate-600 uppercase mb-3 font-bold text-center">Fases de Prueba (Roles)</p>
+           <div className="grid grid-cols-2 gap-2 text-[10px]">
+              <button 
+                onClick={() => setEmail('alvaro.anda_23@zf.com')} 
+                className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
+              >
+                👷‍♂️ Usuario
+              </button>
+              <button 
+                onClick={() => setEmail('alta.ulloa_72@zf.com')} 
+                className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
+              >
+                👔 Líder
+              </button>
+              <button 
+                onClick={() => setEmail('juana.pichardo_25@zf.com')} 
+                className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
+              >
+                ⚡ Admin
+              </button>
+              <button 
+                onClick={() => setEmail('isabela.gálvez_98@zf.com')} 
+                className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2"
+              >
+                📋 Auditor
+              </button>
+              {/* Botón de Guardia Agregado */}
+              <button 
+                onClick={() => setEmail('guardia@zf.com')} 
+                className="col-span-2 p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-300 transition-colors flex items-center justify-center gap-2 font-bold"
+              >
+                🛡️ Guardia de Seguridad
+              </button>
+           </div>
         </div>
       </Card>
     </div>

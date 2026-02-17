@@ -8,15 +8,22 @@ export function ManagerInbox() {
   const { requests, approveRequest, rejectRequest, returnRequestWithFeedback } = useData();
   const { logout, user } = useAuth();
   
-  // Filtramos solo las pendientes
-  const pendingRequests = requests.filter(r => r.status === 'PENDING');
+  // LÓGICA CORREGIDA: 
+  // 1. Solo solicitudes PENDIENTES
+  // 2. Solo de usuarios cuyo 'manager_id' coincida con mi ID ('user.id')
+  const pendingRequests = requests.filter(r => 
+    r.status === 'PENDING' && 
+    r.users?.manager_id === user?.id
+  );
 
   return (
     <div className="min-h-screen bg-background p-6 font-sans pb-20">
       <header className="flex justify-between items-center mb-8 border-b border-slate-800 pb-6">
         <div>
           <h1 className="text-2xl font-bold text-white">Hola, {user?.name} 👋</h1>
-          <p className="text-secondary text-sm">Tienes <span className="text-primary font-bold">{pendingRequests.length}</span> solicitudes pendientes.</p>
+          <p className="text-secondary text-sm">
+            Tienes <span className="text-primary font-bold">{pendingRequests.length}</span> solicitudes de tu equipo.
+          </p>
         </div>
         <Button variant="ghost" onClick={logout}><LogOut size={18}/></Button>
       </header>
@@ -25,7 +32,7 @@ export function ManagerInbox() {
         {pendingRequests.length === 0 && (
           <div className="text-center py-20 opacity-50">
             <Box size={48} className="mx-auto mb-4 text-slate-600"/>
-            <p className="text-slate-400">Todo al día. No hay solicitudes pendientes.</p>
+            <p className="text-slate-400">Todo al día. No hay solicitudes de tu equipo.</p>
           </div>
         )}
 
@@ -34,7 +41,11 @@ export function ManagerInbox() {
             <div className="flex flex-col md:flex-row justify-between gap-4">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 shrink-0">
-                  <UserIcon size={24}/>
+                  {req.users?.avatar ? (
+                    <img src={req.users.avatar} className="w-full h-full rounded-full object-cover"/>
+                  ) : (
+                    <UserIcon size={24}/>
+                  )}
                 </div>
                 <div>
                   <h3 className="font-bold text-white text-lg">{req.requester_name}</h3>
