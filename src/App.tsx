@@ -1,22 +1,21 @@
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { DataProvider } from './context/DataContext'; // <--- IMPORTANTE
-import { LoginScreen } from './components/LoginScreen';
+import React from 'react';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
 import { RoleRouter } from './components/RoleRouter';
-import { Toaster } from 'sonner';
+import { DataProvider } from './context/DataContext'; // Si usas contexto de datos
+import './index.css';
 
-function Content() {
-  const { user } = useAuth();
-  // Si hay usuario mostramos el Router, si no el Login
-  return user ? <RoleRouter /> : <LoginScreen />;
-}
-
-export default function App() {
+function App() {
   return (
-    <AuthProvider>
-      <DataProvider> {/* <--- AGREGAMOS ESTO */}
-        <Content />
-        <Toaster position="top-center" theme="dark" />
-      </DataProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <DataProvider>
+          {/* RoleRouter decide qué mostrar: Login o el Dashboard del rol específico */}
+          <RoleRouter />
+        </DataProvider>
+      </AuthProvider>
+    </BrowserRouter>
   );
 }
+
+export default App;

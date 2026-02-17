@@ -1,67 +1,73 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../supabaseClient';
-import type { User } from '../types'; 
-import { toast } from 'sonner';
+import { User } from '../types'; // Importante usar los tipos nuevos
 
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => Promise<void>;
-  logout: () => void;
-  isLoading: boolean;
+  session: any | null;
+  signIn: (email: string) => Promise<void>; // O tu lógica de login real
+  signOut: () => Promise<void>;
+  loading: boolean;
 }
 
-const AuthContext = createContext<AuthContextType | null>(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [session, setSession] = useState<any | null>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Cargar sesión persistente al iniciar
   useEffect(() => {
-    const storedUser = localStorage.getItem('zf_user');
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    // 1. Verificar sesión actual de Supabase
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else setLoading(false);
+    });
+
+    // 2. Escuchar cambios de estado (Login/Logout)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchUserProfile(session.user.id);
+      else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const login = async (email: string) => {
-    setIsLoading(true);
+  const fetchUserProfile = async (userId: string) => {
     try {
-      // 1. Buscamos el usuario en la tabla 'users' de Supabase
+      // Busca el perfil en tu tabla 'users' para saber el ROL
       const { data, error } = await supabase
         .from('users')
         .select('*')
-        .eq('email', email)
+        .eq('id', userId)
         .single();
-
-      if (error || !data) {
-        toast.error("Usuario no encontrado. Verifica el correo.");
-        console.error("Login error:", error);
-        return;
-      }
-
-      // 2. Guardamos la sesión
-      const userData = data as User;
-      setUser(userData);
-      localStorage.setItem('zf_user', JSON.stringify(userData));
-      toast.success(`Bienvenido, ${userData.name}`);
       
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Error de conexión al intentar ingresar.");
+      if (data) setUser(data as User);
+    } catch (error) {
+      console.error("Error cargando perfil:", error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const logout = () => {
+  const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
-    localStorage.removeItem('zf_user');
-    window.location.href = '/';
+    setSession(null);
+  };
+  
+  // Función placeholder para login (si usas Magic Link o Password)
+  const signIn = async (email: string) => {
+      // Implementa tu lógica aquí o usa el componente LoginScreen
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ user, session, signIn, signOut, loading }}>
       {children}
     </AuthContext.Provider>
   );
@@ -69,6 +75,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth debe usarse dentro de AuthProvider");
+  if (context === undefined) {
+    throw new Error('useAuth debe usarse dentro de un AuthProvider');
+  }
   return context;
 };
