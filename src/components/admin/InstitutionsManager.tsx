@@ -1,71 +1,129 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Card, Button, Input } from '../ui/core';
-import { Building2, Mail, MapPin, Plus, ArrowRight, X } from 'lucide-react';
-import type { Institution } from '../../types'; // <--- CORREGIDO AQUÍ
-import { InstitutionDetail } from './InstitutionDetail'; 
+import type { Institution } from '../../types'; // Import type
+import { Building, Plus, Trash2, Phone, Mail, MapPin, ExternalLink } from 'lucide-react';
+import { InstitutionDetail } from './InstitutionDetail'; // Ahora sí coincidirá
 
-export function InstitutionsManager() {
+export const InstitutionsManager = () => {
   const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [view, setView] = useState<'list' | 'detail'>('list');
-  const [selectedInst, setSelectedInst] = useState<Institution | null>(null);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [newInst, setNewInst] = useState({ name: '', contact_name: '', contact_email: '', contact_phone: '', address: '' });
+  const [selectedInst, setSelectedInst] = useState<Institution | null>(null);
+  
+  // Estado del formulario
+  const [formData, setFormData] = useState({
+    name: '',
+    contact_name: '',
+    contact_email: '',
+    address: '',
+    contact_phone: ''
+  });
+
+  const fetchInstitutions = async () => {
+    setLoading(true);
+    const { data, error } = await supabase.from('institutions').select('*').order('id', { ascending: false });
+    if (!error && data) setInstitutions(data as Institution[]);
+    setLoading(false);
+  };
 
   useEffect(() => { fetchInstitutions(); }, []);
 
-  const fetchInstitutions = async () => {
-    const { data } = await supabase.from('institutions').select('*').order('created_at', { ascending: false });
-    if (data) setInstitutions(data);
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const { error } = await supabase.from('institutions').insert([formData]);
+    if (error) {
+      alert('Error al crear: ' + error.message);
+    } else {
+      setShowForm(false);
+      setFormData({ name: '', contact_name: '', contact_email: '', address: '', contact_phone: '' });
+      fetchInstitutions();
+    }
   };
 
-  const handleCreate = async () => {
-    if (!newInst.name) return;
-    await supabase.from('institutions').insert([newInst]);
-    setShowForm(false); setNewInst({ name: '', contact_name: '', contact_email: '', contact_phone: '', address: '' });
+  const handleDelete = async (id: number) => {
+    if (!confirm('¿Eliminar institución?')) return;
+    await supabase.from('institutions').delete().eq('id', id);
     fetchInstitutions();
   };
 
-  if (view === 'detail' && selectedInst) return <InstitutionDetail institution={selectedInst} onBack={() => setView('list')} />;
+  // Si hay una institución seleccionada, mostramos el detalle
+  if (selectedInst) {
+    return <InstitutionDetail institution={selectedInst} onBack={() => setSelectedInst(null)} />;
+  }
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-center gap-4">
-        <h2 className="text-2xl font-bold text-white flex items-center gap-2"><Building2 className="text-cyan-500"/> Directorio</h2>
-        <Button onClick={() => setShowForm(true)} className="bg-cyan-500 text-black font-bold"><Plus size={18} className="mr-2"/> Nueva</Button>
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+          <Building className="text-blue-500"/> Directorio de Instituciones
+        </h2>
+        <button 
+          onClick={() => setShowForm(!showForm)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2 transition-transform active:scale-95"
+        >
+          <Plus size={18} /> Nueva Institución
+        </button>
       </div>
 
+      {/* Formulario de creación */}
       {showForm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <Card className="bg-slate-900 border border-slate-700 w-full max-w-lg p-6 space-y-4">
-             <div className="flex justify-between"><h3 className="text-white font-bold">Registrar Institución</h3><button onClick={() => setShowForm(false)} className="text-slate-400"><X/></button></div>
-             <Input placeholder="Nombre" value={newInst.name} onChange={e => setNewInst({...newInst, name: e.target.value})} />
-             <div className="grid grid-cols-2 gap-4">
-                <Input placeholder="Contacto" value={newInst.contact_name} onChange={e => setNewInst({...newInst, contact_name: e.target.value})} />
-                <Input placeholder="Teléfono" value={newInst.contact_phone} onChange={e => setNewInst({...newInst, contact_phone: e.target.value})} />
-             </div>
-             <Input placeholder="Email" value={newInst.contact_email} onChange={e => setNewInst({...newInst, contact_email: e.target.value})} />
-             <Input placeholder="Dirección" value={newInst.address} onChange={e => setNewInst({...newInst, address: e.target.value})} />
-             <Button onClick={handleCreate} className="w-full bg-cyan-500 text-black font-bold">Guardar</Button>
-          </Card>
+        <div className="bg-slate-900 p-6 rounded-lg shadow-lg border border-slate-700 mb-6 animate-in slide-in-from-top-4">
+          <h3 className="font-bold mb-4 text-slate-200">Registrar Entidad Externa</h3>
+          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <input 
+              className="bg-slate-950 border border-slate-700 p-2 rounded text-white" placeholder="Nombre Institución (ej. Tecmilenio)" required
+              value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
+            />
+            <input 
+              className="bg-slate-950 border border-slate-700 p-2 rounded text-white" placeholder="Nombre de Contacto"
+              value={formData.contact_name} onChange={e => setFormData({...formData, contact_name: e.target.value})}
+            />
+            <input 
+              className="bg-slate-950 border border-slate-700 p-2 rounded text-white" placeholder="Email de Contacto" type="email"
+              value={formData.contact_email} onChange={e => setFormData({...formData, contact_email: e.target.value})}
+            />
+            <input 
+              className="bg-slate-950 border border-slate-700 p-2 rounded text-white" placeholder="Teléfono"
+              value={formData.contact_phone} onChange={e => setFormData({...formData, contact_phone: e.target.value})}
+            />
+            <input 
+              className="bg-slate-950 border border-slate-700 p-2 rounded md:col-span-2 text-white" placeholder="Dirección Física"
+              value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}
+            />
+            <div className="md:col-span-2 flex justify-end gap-2 mt-2">
+              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
+              <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded font-medium hover:bg-blue-500">Guardar</button>
+            </div>
+          </form>
         </div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {institutions.map(inst => (
-          <Card key={inst.id} className="p-5 hover:border-cyan-500/50 cursor-pointer bg-slate-900/40 border-slate-800 group" onClick={() => { setSelectedInst(inst); setView('detail'); }}>
-            <div className="flex justify-between items-start mb-4">
-              <div className="bg-slate-800 p-3 rounded-xl group-hover:bg-cyan-900/20"><Building2 className="text-slate-400 group-hover:text-cyan-400" size={24} /></div>
-              <ArrowRight className="text-slate-700 group-hover:text-cyan-500 -rotate-45 group-hover:rotate-0 transform duration-300"/>
+      {/* Lista de Cards */}
+      {loading ? <p className="text-slate-400">Cargando...</p> : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {institutions.map((inst) => (
+            <div key={inst.id} className="bg-slate-900 p-5 rounded-xl border border-slate-800 hover:border-blue-500/50 transition-all hover:shadow-lg group">
+              <div className="flex justify-between items-start mb-3">
+                <h3 className="font-bold text-lg text-white group-hover:text-blue-400 transition-colors">{inst.name}</h3>
+                <div className="flex gap-2">
+                    <button onClick={() => setSelectedInst(inst)} className="text-slate-500 hover:text-blue-400" title="Ver Detalle">
+                        <ExternalLink size={16} />
+                    </button>
+                    <button onClick={() => handleDelete(inst.id)} className="text-slate-500 hover:text-red-500" title="Eliminar">
+                        <Trash2 size={16} />
+                    </button>
+                </div>
+              </div>
+              <div className="space-y-2 text-sm text-slate-400">
+                <p className="flex items-center gap-2"><MapPin size={14}/> {inst.address || 'Sin dirección'}</p>
+                <p className="flex items-center gap-2"><Phone size={14}/> {inst.contact_phone || 'Sin contacto'}</p>
+                <p className="flex items-center gap-2"><Mail size={14}/> {inst.contact_email || '-'}</p>
+              </div>
             </div>
-            <h3 className="text-lg font-bold text-white mb-2">{inst.name}</h3>
-            <div className="space-y-2 text-xs text-slate-400">
-              <p className="flex gap-2"><MapPin size={12}/> {inst.address}</p>
-              <p className="flex gap-2"><Mail size={12}/> {inst.contact_email}</p>
-            </div>
-          </Card>
-        ))}
-      </div>
+          ))}
+          {institutions.length === 0 && <p className="text-slate-500 text-center py-10 col-span-3">No hay instituciones registradas.</p>}
+        </div>
+      )}
     </div>
   );
-}
+};

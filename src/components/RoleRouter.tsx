@@ -1,6 +1,7 @@
-import React from 'react'; // Importante añadir React
+import React from 'react';
 import { useAuth } from '../context/AuthContext';
-// Asegúrate de que estos archivos existan y exporten correctamente
+
+// Importaciones directas de tus componentes
 import { UserHome } from './user/UserHome';
 import { ManagerInbox } from './manager/ManagerInbox';
 import { AdminDashboard } from './admin/AdminDashboard';
@@ -11,7 +12,6 @@ import { LoginScreen } from './LoginScreen';
 export const RoleRouter = () => {
   const { user, session } = useAuth();
 
-  // Si no hay sesión o usuario cargado, mostrar Login
   if (!session || !user) {
     return <LoginScreen />;
   }
@@ -35,9 +35,9 @@ export const RoleRouter = () => {
       
     default:
       return (
-        <div className="h-screen flex items-center justify-center flex-col p-4 text-center">
-          <h1 className="text-2xl font-bold text-red-600">Acceso Denegado</h1>
-          <p className="mt-2 text-gray-600">Tu rol actual ({user.role}) no tiene una interfaz asignada.</p>
+        <div className="h-screen flex items-center justify-center flex-col p-4">
+          <h1 className="text-2xl font-bold text-red-600">Error: Rol Desconocido</h1>
+          <p>Tu usuario tiene el rol: <strong>{user.role}</strong>, el cual no está configurado.</p>
           <button 
              onClick={() => window.location.reload()}
              className="mt-4 px-4 py-2 bg-gray-800 text-white rounded"

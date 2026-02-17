@@ -1,115 +1,95 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../supabaseClient';
-import { Institution } from '../../types';
-import { Building, Plus, Trash2, Phone, Mail, MapPin } from 'lucide-react';
+import type { Institution, Request } from '../../types';
+import { ArrowLeft, Clock, CheckCircle } from 'lucide-react';
 
-export const InstitutionsManager = () => {
-  const [institutions, setInstitutions] = useState<Institution[]>([]);
+interface Props {
+  institution: Institution;
+  onBack: () => void;
+}
+
+export const InstitutionDetail = ({ institution, onBack }: Props) => {
+  const [loans, setLoans] = useState<Request[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  
-  // Estado del formulario
-  const [formData, setFormData] = useState({
-    name: '',
-    contact_name: '',
-    contact_email: '',
-    address: '',
-    contact_phone: '' // Asegúrate que tu DB tenga este campo o ajusta el nombre
-  });
 
-  const fetchInstitutions = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('institutions').select('*').order('id', { ascending: false });
-    if (!error && data) setInstitutions(data as Institution[]);
-    setLoading(false);
-  };
+  useEffect(() => {
+    const fetchLoans = async () => {
+      const { data } = await supabase
+        .from('requests')
+        .select(`*, assets(*), users(*)`)
+        .eq('institution_id', institution.id)
+        .order('created_at', { ascending: false });
 
-  useEffect(() => { fetchInstitutions(); }, []);
+      if (data) setLoans(data as Request[]);
+      setLoading(false);
+    };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const { error } = await supabase.from('institutions').insert([formData]);
-    if (error) {
-      alert('Error al crear: ' + error.message);
-    } else {
-      setShowForm(false);
-      setFormData({ name: '', contact_name: '', contact_email: '', address: '', contact_phone: '' });
-      fetchInstitutions();
-    }
-  };
-
-  const handleDelete = async (id: number) => {
-    if (!confirm('¿Eliminar institución?')) return;
-    await supabase.from('institutions').delete().eq('id', id);
-    fetchInstitutions();
-  };
+    fetchLoans();
+  }, [institution.id]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-          <Building className="text-blue-600"/> Directorio de Instituciones
-        </h2>
-        <button 
-          onClick={() => setShowForm(!showForm)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
-        >
-          <Plus size={18} /> Nueva Institución
-        </button>
+    <div className="space-y-6 animate-in fade-in">
+      <button 
+        onClick={onBack} 
+        className="flex items-center gap-2 text-slate-400 hover:text-white transition-colors"
+      >
+        <ArrowLeft size={18} /> Volver al directorio
+      </button>
+
+      <div className="bg-slate-900 p-6 rounded-lg border border-slate-700 shadow-lg">
+        <h2 className="text-2xl font-bold text-white mb-4">{institution.name}</h2>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm text-slate-300">
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold">Contacto</p>
+              <p>{institution.contact_name || 'No registrado'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold">Email</p>
+              <p>{institution.contact_email || 'No registrado'}</p>
+            </div>
+            <div>
+              <p className="text-xs text-slate-500 uppercase font-bold">Teléfono</p>
+              <p>{institution.contact_phone || 'No registrado'}</p>
+            </div>
+        </div>
       </div>
 
-      {/* Formulario de creación */}
-      {showForm && (
-        <div className="bg-white p-6 rounded-lg shadow-lg border border-blue-100 mb-6 animate-in fade-in slide-in-from-top-4">
-          <h3 className="font-bold mb-4 text-gray-700">Registrar Entidad Externa</h3>
-          <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <input 
-              className="border p-2 rounded" placeholder="Nombre Institución (ej. Tecmilenio)" required
-              value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})}
-            />
-            <input 
-              className="border p-2 rounded" placeholder="Nombre de Contacto"
-              value={formData.contact_name} onChange={e => setFormData({...formData, contact_name: e.target.value})}
-            />
-            <input 
-              className="border p-2 rounded" placeholder="Email de Contacto" type="email"
-              value={formData.contact_email} onChange={e => setFormData({...formData, contact_email: e.target.value})}
-            />
-            <input 
-              className="border p-2 rounded" placeholder="Teléfono"
-              value={formData.contact_phone} onChange={e => setFormData({...formData, contact_phone: e.target.value})}
-            />
-            <input 
-              className="border p-2 rounded md:col-span-2" placeholder="Dirección Física"
-              value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})}
-            />
-            <div className="md:col-span-2 flex justify-end gap-2 mt-2">
-              <button type="button" onClick={() => setShowForm(false)} className="px-4 py-2 text-gray-500">Cancelar</button>
-              <button type="submit" className="px-6 py-2 bg-blue-600 text-white rounded font-medium">Guardar</button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {/* Lista de Cards */}
-      {loading ? <p>Cargando...</p> : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {institutions.map((inst) => (
-            <div key={inst.id} className="bg-white p-5 rounded-xl shadow-sm border border-gray-200 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start mb-3">
-                <h3 className="font-bold text-lg text-gray-800">{inst.name}</h3>
-                <button onClick={() => handleDelete(inst.id)} className="text-gray-400 hover:text-red-500">
-                  <Trash2 size={16} />
-                </button>
-              </div>
-              <div className="space-y-2 text-sm text-gray-600">
-                <p className="flex items-center gap-2"><MapPin size={14}/> {inst.address || 'Sin dirección'}</p>
-                <p className="flex items-center gap-2"><Phone size={14}/> {inst.contact_name || 'Sin contacto'}</p>
-                <p className="flex items-center gap-2"><Mail size={14}/> {inst.contact_email || '-'}</p>
-              </div>
+      <h3 className="font-bold text-lg text-white mt-8 border-b border-slate-800 pb-2">
+        Historial de Préstamos
+      </h3>
+      
+      {loading ? <p className="text-slate-500">Cargando...</p> : (
+        <div className="space-y-3">
+          {loans.map(loan => (
+            <div key={loan.id} className="bg-slate-900 p-4 rounded border border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-slate-600 transition-colors">
+               <div className="flex gap-4 items-center w-full md:w-auto">
+                  <div className={`p-2 rounded-full shrink-0 ${loan.status === 'ACTIVE' ? 'bg-blue-900/50 text-blue-400' : 'bg-green-900/50 text-green-400'}`}>
+                    {loan.status === 'ACTIVE' ? <Clock size={20}/> : <CheckCircle size={20}/>}
+                  </div>
+                  <div>
+                    <p className="font-bold text-slate-200">{loan.assets?.name || 'Activo desconocido'}</p>
+                    <p className="text-xs text-slate-500">Solicitante: <span className="text-slate-400">{loan.requester_name}</span></p>
+                  </div>
+               </div>
+               
+               <div className="text-right text-sm w-full md:w-auto flex justify-between md:block items-center">
+                  <span className={`inline-block px-2 py-1 rounded text-xs font-bold ${
+                    loan.status === 'ACTIVE' ? 'bg-blue-900 text-blue-300' : 
+                    loan.status === 'OVERDUE' ? 'bg-red-900 text-red-300' : 'bg-slate-800 text-slate-400'
+                  }`}>
+                    {loan.status}
+                  </span>
+                  <p className="font-mono text-slate-600 text-xs mt-1">
+                    {new Date(loan.created_at).toLocaleDateString()}
+                  </p>
+               </div>
             </div>
           ))}
-          {institutions.length === 0 && <p className="text-gray-500">No hay instituciones registradas.</p>}
+          {loans.length === 0 && (
+            <div className="text-center py-8 text-slate-500 border border-dashed border-slate-800 rounded">
+              No hay préstamos registrados para esta institución.
+            </div>
+          )}
         </div>
       )}
     </div>
