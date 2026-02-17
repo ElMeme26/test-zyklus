@@ -1,135 +1,141 @@
 import React, { useState } from 'react';
-import { Scanner } from '@yudiel/react-qr-scanner';
-import { supabase } from '../../supabaseClient';
-import type { Request } from '../../types'; // Importación de TIPO segura
-import { X, CheckCircle, AlertTriangle, User as UserIcon } from 'lucide-react';
+import { useData } from '../../context/DataContext';
+import { Button, Card, Input } from '../ui/core';
+import { ScanLine, LogOut, LogIn, AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { toast } from 'sonner';
 
-export const GuardScanner = () => {
-  const [scannedData, setScannedData] = useState<Request | null>(null);
-  const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<{ type: 'error' | 'success', text: string } | null>(null);
+export function GuardScanner() {
+  const { processGuardScan } = useData();
+  const [mode, setMode] = useState<'CHECKOUT' | 'CHECKIN'>('CHECKOUT');
+  const [qrInput, setQrInput] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // Estado para reporte de daños (Solo entrada)
+  const [showDamageModal, setShowDamageModal] = useState(false);
+  const [isDamaged, setIsDamaged] = useState(false);
+  const [pendingQr, setPendingQr] = useState('');
 
-  const handleScan = async (rawValue: string) => {
-    if (loading || scannedData || !rawValue) return;
+  const handleScan = async (qrOverride?: string) => {
+    const qrToProcess = qrOverride || qrInput;
+    if (!qrToProcess) return;
 
-    setLoading(true);
-    setStatusMsg(null);
-
-    try {
-      // Intentar parsear si es JSON o usar rawValue como ID
-      let requestId = rawValue;
-      try {
-        const parsed = JSON.parse(rawValue);
-        if (parsed.id) requestId = parsed.id;
-      } catch {}
-
-      const { data, error } = await supabase
-        .from('requests')
-        .select(`*, assets(*), users(*)`)
-        .eq('id', requestId)
-        .single();
-
-      if (error || !data) throw new Error("Solicitud no encontrada.");
-
-      setScannedData(data as Request);
-
-    } catch (err: any) {
-      setStatusMsg({ type: 'error', text: err.message || "Error de lectura" });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const processTransaction = async () => {
-    if (!scannedData) return;
-
-    const currentStep = scannedData.security_check_step || 0;
-    let newStatus = scannedData.status;
-    let newStep = currentStep;
-    let actionType = '';
-
-    // LÓGICA ZF HALO
-    if (currentStep === 0) {
-      if (scannedData.status !== 'APPROVED') {
-        setStatusMsg({ type: 'error', text: `Estado inválido: ${scannedData.status}. Requiere APPROVED.` });
-        return;
-      }
-      newStep = 1;
-      newStatus = 'ACTIVE';
-      actionType = 'checkout';
-    } else if (currentStep === 1) {
-      newStep = 2;
-      newStatus = 'RETURNED';
-      actionType = 'checkin';
-    } else {
-      setStatusMsg({ type: 'error', text: "Ciclo completado anteriormente." });
+    if (mode === 'CHECKIN' && !qrOverride) {
+      // Si es entrada, primero preguntamos por daños
+      setPendingQr(qrToProcess);
+      setShowDamageModal(true);
       return;
     }
 
-    const updates: any = {
-      security_check_step: newStep,
-      status: newStatus,
-      security_notes: notes ? `${scannedData.security_notes || ''} | ${notes}` : scannedData.security_notes
-    };
-
-    if (actionType === 'checkout') updates.checkout_at = new Date().toISOString();
-    if (actionType === 'checkin') updates.returned_at = new Date().toISOString();
-
-    const { error } = await supabase.from('requests').update(updates).eq('id', scannedData.id);
-
-    if (error) {
-      setStatusMsg({ type: 'error', text: "Error al guardar." });
-    } else {
-      alert(actionType === 'checkout' ? "✅ SALIDA AUTORIZADA" : "✅ RETORNO REGISTRADO");
-      setScannedData(null);
-      setNotes('');
+    setIsProcessing(true);
+    // Firma digital simulada (en prod sería un canvas)
+    const signature = "sig_" + Math.random().toString(36).substring(7); 
+    
+    const result = await processGuardScan(qrToProcess, mode, signature, isDamaged);
+    
+    if (result.success) {
+      setQrInput('');
+      setIsDamaged(false);
     }
+    setIsProcessing(false);
+  };
+
+  const confirmCheckIn = async () => {
+    setShowDamageModal(false);
+    await handleScan(pendingQr);
+    setPendingQr('');
   };
 
   return (
-    <div className="flex flex-col items-center min-h-screen bg-slate-900 text-white p-4">
-      <h1 className="text-xl font-bold text-blue-400 mb-4">ZF HALO SECURITY</h1>
+    <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-center relative overflow-hidden">
+      {/* Fondo decorativo */}
+      <div className="absolute top-[-20%] left-[-20%] w-[500px] h-[500px] bg-primary/20 rounded-full blur-[120px] pointer-events-none" />
 
-      {statusMsg && (
-        <div className={`mb-4 p-3 rounded w-full max-w-md ${statusMsg.type === 'error' ? 'bg-red-900' : 'bg-green-900'}`}>
-          {statusMsg.text}
-        </div>
-      )}
-
-      {!scannedData ? (
-        <div className="w-full max-w-sm border-2 border-slate-600 rounded-lg overflow-hidden">
-          <Scanner onScan={(res) => res && res.length > 0 && handleScan(res[0].rawValue)} />
-          <p className="text-center p-2 text-sm text-gray-400">Escanea el QR del pase</p>
-        </div>
-      ) : (
-        <div className="bg-white text-slate-900 rounded-xl w-full max-w-md p-4 animate-in fade-in slide-in-from-bottom-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="font-bold text-lg">{scannedData.security_check_step === 0 ? 'SALIDA' : 'RETORNO'}</h2>
-            <button onClick={() => setScannedData(null)}><X /></button>
+      <div className="w-full max-w-md space-y-6 z-10">
+        <div className="text-center space-y-2">
+          <div className="inline-flex p-4 rounded-full bg-surface border border-primary/30 shadow-[0_0_30px_rgba(6,182,212,0.3)] mb-4">
+            <ScanLine size={48} className="text-primary animate-pulse-slow" />
           </div>
-          
-          <div className="space-y-2 mb-4">
-            <p><strong>Activo:</strong> {scannedData.assets?.name}</p>
-            <p><strong>Solicitante:</strong> {scannedData.requester_name}</p>
-            <p><strong>Depto:</strong> {scannedData.requester_dept}</p>
-          </div>
+          <h1 className="text-3xl font-bold text-white tracking-wider">GUARD SCAN</h1>
+          <p className="text-secondary text-sm">Punto de Control Digital</p>
+        </div>
 
-          <textarea 
-            className="w-full border p-2 rounded mb-4 text-black"
-            placeholder="Observaciones..."
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-          />
-
-          <button 
-            onClick={processTransaction}
-            className="w-full bg-blue-600 text-white py-3 rounded font-bold"
+        {/* Switcher de Modo */}
+        <div className="grid grid-cols-2 gap-4 bg-surface p-1 rounded-xl border border-slate-800">
+          <button
+            onClick={() => setMode('CHECKOUT')}
+            className={`flex flex-col items-center justify-center p-4 rounded-lg transition-all ${mode === 'CHECKOUT' ? 'bg-primary text-black font-bold shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'text-slate-400 hover:text-white'}`}
           >
-            CONFIRMAR
+            <LogOut size={24} className="mb-2"/> SALIDA
           </button>
+          <button
+            onClick={() => setMode('CHECKIN')}
+            className={`flex flex-col items-center justify-center p-4 rounded-lg transition-all ${mode === 'CHECKIN' ? 'bg-emerald-500 text-black font-bold shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-slate-400 hover:text-white'}`}
+          >
+            <LogIn size={24} className="mb-2"/> ENTRADA
+          </button>
+        </div>
+
+        {/* Área de Escaneo Simulado */}
+        <Card className="border-primary/20">
+          <div className="space-y-4">
+            <label className="text-xs uppercase font-bold text-secondary tracking-widest">
+              {mode === 'CHECKOUT' ? 'Escanear Pase de Salida' : 'Escanear Activo Retornante'}
+            </label>
+            <div className="flex gap-2">
+              <Input 
+                value={qrInput}
+                onChange={(e) => setQrInput(e.target.value)}
+                placeholder='Esperando lectura de QR...'
+                className="font-mono text-center tracking-widest text-lg h-12 bg-black/50 border-primary/30 focus:border-primary"
+              />
+            </div>
+            <Button 
+              onClick={() => handleScan()} 
+              disabled={isProcessing || !qrInput}
+              variant={mode === 'CHECKOUT' ? 'neon' : 'default'}
+              className={`w-full h-14 text-lg ${mode === 'CHECKIN' ? 'bg-emerald-500 hover:bg-emerald-400 text-black' : ''}`}
+            >
+              {isProcessing ? 'Procesando...' : mode === 'CHECKOUT' ? 'AUTORIZAR SALIDA' : 'REGISTRAR RETORNO'}
+            </Button>
+          </div>
+        </Card>
+
+        <p className="text-center text-xs text-slate-500 mt-8">
+          ID Guardia: <span className="text-slate-300 font-mono">G-092</span> • Zona: <span className="text-slate-300">Acceso Norte</span>
+        </p>
+      </div>
+
+      {/* Modal de Daños (Check-in) */}
+      {showDamageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-sm border-2 border-accent">
+            <div className="flex flex-col items-center text-center space-y-4">
+              <div className="p-3 bg-accent/10 rounded-full text-accent mb-2">
+                <AlertTriangle size={32} />
+              </div>
+              <h3 className="text-xl font-bold text-white">Inspección Física</h3>
+              <p className="text-slate-300">¿El activo presenta daños visibles o golpes?</p>
+              
+              <div className="grid grid-cols-2 gap-3 w-full mt-4">
+                <button 
+                  onClick={() => { setIsDamaged(false); confirmCheckIn(); }}
+                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 transition-colors"
+                >
+                  <CheckCircle size={20} className="text-emerald-500"/>
+                  Sin Daños
+                </button>
+                <button 
+                  onClick={() => { setIsDamaged(true); confirmCheckIn(); }}
+                  className="flex items-center justify-center gap-2 p-4 rounded-xl bg-accent/10 border border-accent/30 hover:bg-accent/20 text-accent transition-colors"
+                >
+                  <X size={20}/>
+                  Con Daños
+                </button>
+              </div>
+            </div>
+          </Card>
         </div>
       )}
     </div>
   );
-};
+}

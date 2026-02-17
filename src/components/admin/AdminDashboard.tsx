@@ -1,198 +1,120 @@
 import React, { useState, useRef } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext'; // Ahora esto funcionará
-import type { Asset } from '../../types';
+import { useData } from '../../context/DataContext';
+import type { Asset, AssetState } from '../../types'; // <--- Importamos AssetState
+import { Card, Button, Input } from '../ui/core';
+import { LogOut, Database, Plus, Search, Edit, Trash2, X, Upload, CheckSquare, Square, LayoutGrid, Building2, ScanLine } from 'lucide-react';
+import { ChatAssistant } from '../ui/ChatAssistant'; 
 import { InstitutionsManager } from './InstitutionsManager';
-import { BundleManager } from './BundleManager';
-// Asegúrate de tener instalado lucide-react: npm install lucide-react
-import { 
-  LogOut, Database, Plus, Search, Edit, Trash2, X, Upload, 
-  CheckSquare, Square, LayoutGrid, Building2, Package
-} from 'lucide-react';
 
-export const AdminDashboard = () => {
-  const { signOut, user } = useAuth();
-  
-  // Extraemos las funciones del contexto que acabamos de arreglar
-  const { assets, addAsset, updateAsset, deleteAsset, getNextTag } = useData();
-
-  const [activeTab, setActiveTab] = useState<'inventory' | 'bundles' | 'institutions'>('inventory');
+function InventoryView() {
+  const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBatchRequest } = useData();
   const [search, setSearch] = useState('');
+  const [catFilter, setCatFilter] = useState('Todas');
+  const [page] = useState(1);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const ITEMS_PER_PAGE = 8;
 
-  // Filtrado simple
-  const filteredAssets = assets.filter((a: Asset) => 
-    a.name.toLowerCase().includes(search.toLowerCase()) || 
-    (a.tag && a.tag.toLowerCase().includes(search.toLowerCase()))
-  );
+  const filteredAssets = assets.filter(a => (a.name?.toLowerCase() || '').includes(search.toLowerCase()) && (catFilter === 'Todas' || a.category === catFilter));
+  const paginatedAssets = filteredAssets.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE);
 
-  const handleSaveAsset = async () => {
-    if (currentAsset.id) {
-      await updateAsset(currentAsset.id, currentAsset);
-    } else {
-      await addAsset(currentAsset as Asset);
-    }
-    setShowModal(false);
-  };
-
-  const handleDelete = async (id: string) => {
-    if (confirm("¿Estás seguro de eliminar este activo?")) {
-      await deleteAsset(id);
-    }
-  };
-
-  const openNewAssetModal = () => {
-    setCurrentAsset({ 
-      tag: getNextTag(), 
-      status: 'Operativa', 
-      category: 'General',
-      name: ''
-    });
-    setShowModal(true);
+  const toggleSelection = (id: string) => { const n = new Set(selectedIds); n.has(id) ? n.delete(id) : n.add(id); setSelectedIds(n); };
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => { const f = e.target.files?.[0]; if(f) { const r = new FileReader(); r.onload = (ev) => importAssets(ev.target?.result as string); r.readAsText(f); }};
+  
+  const handleSave = async () => { 
+    if(isEditing && currentAsset.id) await updateAsset(currentAsset.id, currentAsset); 
+    else await addAsset(currentAsset); 
+    setShowModal(false); 
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-200 font-sans">
-      {/* Header */}
-      <header className="flex justify-between items-center p-4 border-b border-slate-800 bg-slate-900 sticky top-0 z-20">
-        <div className="flex items-center gap-3">
-           <div className="p-2 bg-blue-600 rounded-lg"><Database size={20} className="text-white"/></div>
-           <div>
-               <h1 className="font-bold text-white text-lg">ZF Halo Admin</h1>
-               <p className="text-xs text-slate-400">Bienvenido, {user?.name}</p>
-           </div>
-        </div>
-        <button onClick={signOut} className="text-slate-400 hover:text-red-400 p-2"><LogOut size={20}/></button>
-      </header>
-
-      <div className="flex h-[calc(100vh-80px)]">
-        {/* Sidebar */}
-        <aside className="w-64 border-r border-slate-800 p-4 hidden md:block">
-          <nav className="space-y-2">
-            <button onClick={() => setActiveTab('inventory')} className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${activeTab === 'inventory' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-              <LayoutGrid size={18}/> Inventario
-            </button>
-            <button onClick={() => setActiveTab('bundles')} className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${activeTab === 'bundles' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-              <Package size={18}/> Bundles (Kits)
-            </button>
-            <button onClick={() => setActiveTab('institutions')} className={`w-full flex items-center gap-3 p-3 rounded transition-colors ${activeTab === 'institutions' ? 'bg-blue-600 text-white' : 'hover:bg-slate-800 text-slate-400'}`}>
-              <Building2 size={18}/> Instituciones
-            </button>
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="flex-1 p-6 overflow-y-auto">
-          
-          {/* VISTA: INVENTARIO */}
-          {activeTab === 'inventory' && (
-            <div className="space-y-6">
-              <div className="flex justify-between gap-4">
-                <div className="relative flex-1 max-w-md">
-                  <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4"/>
-                  <input 
-                    className="w-full bg-slate-900 border border-slate-700 rounded pl-9 p-2 text-white focus:border-blue-500 outline-none"
-                    placeholder="Buscar activo..."
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                  />
-                </div>
-                <button onClick={openNewAssetModal} className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded flex items-center gap-2">
-                  <Plus size={16}/> Nuevo Activo
-                </button>
-              </div>
-
-              <div className="bg-slate-900 border border-slate-800 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-sm text-slate-400">
-                  <thead className="bg-slate-950 uppercase font-bold text-xs">
-                    <tr>
-                      <th className="p-4">Nombre</th>
-                      <th className="p-4">Tag / Serie</th>
-                      <th className="p-4">Estado</th>
-                      <th className="p-4 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-800">
-                    {filteredAssets.map((asset: Asset) => (
-                        <tr key={asset.id} className="hover:bg-slate-800/50">
-                        <td className="p-4 font-medium text-white">{asset.name}</td>
-                        <td className="p-4">{asset.tag} <br/><span className="text-xs text-slate-500">{asset.serial}</span></td>
-                        <td className="p-4">
-                          <span className={`px-2 py-1 rounded text-xs ${asset.status === 'Operativa' ? 'bg-green-900 text-green-300' : 'bg-yellow-900 text-yellow-300'}`}>
-                            {asset.status}
-                          </span>
-                        </td>
-                        <td className="p-4 text-right flex justify-end gap-2">
-                          <button onClick={() => { setCurrentAsset(asset); setShowModal(true); }} className="p-1 hover:text-blue-400"><Edit size={16}/></button>
-                          <button onClick={() => handleDelete(asset.id)} className="p-1 hover:text-red-400"><Trash2 size={16}/></button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {filteredAssets.length === 0 && <div className="p-8 text-center text-slate-500">No se encontraron activos.</div>}
-              </div>
-            </div>
-          )}
-
-          {/* VISTA: BUNDLES */}
-          {activeTab === 'bundles' && <BundleManager />}
-
-          {/* VISTA: INSTITUCIONES */}
-          {activeTab === 'institutions' && <InstitutionsManager />}
-
-        </main>
+    <div className="animate-in fade-in">
+      <div className="flex gap-4 mb-6">
+        <div className="relative flex-1"><Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4"/><Input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-slate-900 border-slate-800"/></div>
+        <div className="flex gap-2"><input type="file" ref={fileInputRef} hidden accept=".csv" onChange={handleFileUpload} /><Button variant="outline" onClick={() => fileInputRef.current?.click()}><Upload size={14} className="mr-2"/> Importar</Button></div>
       </div>
 
-      {/* MODAL CREAR/EDITAR */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md space-y-4">
-             <div className="flex justify-between items-center">
-                <h3 className="text-lg font-bold text-white">{currentAsset.id ? 'Editar Activo' : 'Nuevo Activo'}</h3>
-                <button onClick={() => setShowModal(false)}><X className="text-slate-500 hover:text-white"/></button>
-             </div>
-             
-             <div className="space-y-3">
-               <input 
-                 className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-white" 
-                 placeholder="Nombre del equipo"
-                 value={currentAsset.name} 
-                 onChange={e => setCurrentAsset({...currentAsset, name: e.target.value})}
-               />
-               <div className="grid grid-cols-2 gap-3">
-                 <input 
-                   className="bg-slate-950 border border-slate-800 p-2 rounded text-white" 
-                   placeholder="Tag (ZF-XXX)"
-                   value={currentAsset.tag} 
-                   onChange={e => setCurrentAsset({...currentAsset, tag: e.target.value})}
-                 />
-                 <input 
-                   className="bg-slate-950 border border-slate-800 p-2 rounded text-white" 
-                   placeholder="Serie (S/N)"
-                   value={currentAsset.serial} 
-                   onChange={e => setCurrentAsset({...currentAsset, serial: e.target.value})}
-                 />
-               </div>
-               <select 
-                 className="w-full bg-slate-950 border border-slate-800 p-2 rounded text-white"
-                 value={currentAsset.status}
-                 onChange={e => setCurrentAsset({...currentAsset, status: e.target.value})}
-               >
-                 <option value="Operativa">Operativa</option>
-                 <option value="En mantenimiento">En mantenimiento</option>
-                 <option value="Prestada">Prestada</option>
-               </select>
-             </div>
+      {selectedIds.size > 0 && <div className="fixed top-24 left-1/2 transform -translate-x-1/2 z-30 bg-cyan-600 text-white px-6 py-2 rounded-full shadow-lg flex items-center gap-4"><span className="text-sm font-bold">{selectedIds.size} seleccionados</span><Button size="sm" variant="secondary" onClick={() => createBatchRequest(assets.filter(a => selectedIds.has(a.id)), {id:'admin', name:'Admin', email:'admin@zf.com', role:'ADMIN_PATRIMONIAL', dept:'IT', avatar:''}, 7, "Combo Admin")} className="h-7 text-cyan-700 bg-white">Crear Combo</Button><button onClick={() => setSelectedIds(new Set())}><X size={16}/></button></div>}
 
-             <div className="flex justify-end gap-2 mt-4">
-               <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white">Cancelar</button>
-               <button onClick={handleSaveAsset} className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-500">Guardar</button>
-             </div>
+      <div className="hidden md:block bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden mb-4">
+        <table className="w-full text-left text-sm text-slate-400">
+          <thead className="bg-slate-900 text-xs uppercase font-bold text-slate-500"><tr><th className="p-4 w-10"></th><th className="p-4">Activo</th><th className="p-4 text-center">Estado</th><th className="p-4 text-right">Acciones</th></tr></thead>
+          <tbody className="divide-y divide-slate-800">{paginatedAssets.map(a => <tr key={a.id} className="hover:bg-slate-800/50"><td className="p-4"><button onClick={() => toggleSelection(a.id)}>{selectedIds.has(a.id) ? <CheckSquare className="text-cyan-500"/> : <Square/>}</button></td><td className="p-4 text-white font-bold">{a.name} <span className="text-slate-500 font-normal">({a.tag})</span></td><td className="p-4 text-center"><span className="bg-slate-800 px-2 py-1 rounded text-xs">{a.status}</span></td><td className="p-4 text-right flex justify-end gap-2"><button onClick={() => { setIsEditing(true); setCurrentAsset(a); setShowModal(true); }}><Edit size={16}/></button><button onClick={() => deleteAsset(a.id)} className="text-rose-500"><Trash2 size={16}/></button></td></tr>)}</tbody>
+        </table>
+      </div>
+
+      <div className="md:hidden grid gap-4 mb-20">{paginatedAssets.map(a => <Card key={a.id} className="p-4 flex gap-4"><button onClick={() => toggleSelection(a.id)}>{selectedIds.has(a.id) ? <CheckSquare className="text-cyan-500"/> : <Square className="text-slate-500"/>}</button><div><h3 className="text-white font-bold">{a.name}</h3><p className="text-xs text-slate-500">{a.tag}</p></div></Card>)}</div>
+
+      <button onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Operativa', category: 'IT' }); setShowModal(true); }} className="fixed bottom-24 right-6 w-14 h-14 bg-cyan-500 rounded-full flex items-center justify-center shadow-lg text-black z-30"><Plus size={24}/></button>
+
+      {/* Modal Corregido */}
+      {showModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-4">
+            <h3 className="text-white font-bold">{isEditing ? 'Editar' : 'Nuevo'} Activo</h3>
+            <Input placeholder="Nombre" value={currentAsset.name || ''} onChange={e => setCurrentAsset({...currentAsset, name: e.target.value})} />
+            
+            <div className="flex gap-2">
+              <Input placeholder="Tag" value={currentAsset.tag || ''} onChange={e => setCurrentAsset({...currentAsset, tag: e.target.value})} />
+              <Input placeholder="Serie" value={currentAsset.serial || ''} onChange={e => setCurrentAsset({...currentAsset, serial: e.target.value})} />
+            </div>
+
+            {/* Selector de Estado con Casting Corregido */}
+            <select 
+              className="w-full h-10 bg-slate-950 border border-slate-700 text-white rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500"
+              value={currentAsset.status || 'Operativa'}
+              onChange={e => setCurrentAsset({...currentAsset, status: e.target.value as AssetState})} 
+            >
+              <option value="Operativa">Operativa</option>
+              <option value="En mantenimiento">En mantenimiento</option>
+              <option value="Prestada">Prestada</option>
+              <option value="Dada de baja">Dada de baja</option>
+              <option value="Fuera de servicio">Fuera de servicio</option>
+            </select>
+
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="secondary" onClick={() => setShowModal(false)}>Cancelar</Button>
+              <Button onClick={handleSave}>Guardar</Button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
-};
+}
+
+export function AdminDashboard() {
+  const { logout } = useAuth();
+  const { processQRScan: scanQR } = useData();
+  const [currentView, setCurrentView] = useState<'inventory' | 'external'>('inventory');
+
+  const handleScan = async () => { const qr = prompt("QR JSON:"); if(qr) await scanQR(qr); };
+
+  return (
+    <div className="min-h-screen bg-slate-950 font-sans pb-24 relative">
+      <ChatAssistant />
+      <header className="flex justify-between items-center p-6 border-b border-slate-800 bg-slate-900/50 backdrop-blur sticky top-0 z-30">
+        <div className="flex items-center gap-4">
+           <h1 className="text-xl font-bold text-white flex items-center gap-2"><Database className="text-cyan-500"/> Panel Maestro</h1>
+           <div className="hidden md:flex bg-slate-800/50 p-1 rounded-lg border border-slate-700">
+              <button onClick={() => setCurrentView('inventory')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${currentView === 'inventory' ? 'bg-slate-700 text-white' : 'text-slate-400'}`}><LayoutGrid size={14}/> Inventario</button>
+              <button onClick={() => setCurrentView('external')} className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all flex items-center gap-2 ${currentView === 'external' ? 'bg-slate-700 text-white' : 'text-slate-400'}`}><Building2 size={14}/> Externos</button>
+           </div>
+        </div>
+        <div className="flex gap-2"><Button variant="outline" size="sm" onClick={handleScan} className="border-cyan-500/30 text-cyan-400"><ScanLine size={16} className="mr-2"/> Escanear</Button><Button variant="ghost" onClick={logout}><LogOut size={18}/></Button></div>
+      </header>
+      <main className="p-6">{currentView === 'inventory' ? <InventoryView /> : <InstitutionsManager />}</main>
+      
+      {/* Navegación Móvil */}
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 p-2 flex justify-around z-50">
+          <button onClick={() => setCurrentView('inventory')} className={`flex flex-col items-center p-2 ${currentView === 'inventory' ? 'text-cyan-500' : 'text-slate-500'}`}><LayoutGrid size={20}/><span className="text-[10px] font-bold">Interno</span></button>
+          <button onClick={handleScan} className="flex flex-col items-center p-2 text-white bg-cyan-600 rounded-full -mt-6 shadow-lg border-4 border-slate-950"><ScanLine size={24}/></button>
+          <button onClick={() => setCurrentView('external')} className={`flex flex-col items-center p-2 ${currentView === 'external' ? 'text-cyan-500' : 'text-slate-500'}`}><Building2 size={20}/><span className="text-[10px] font-bold">Externo</span></button>
+      </div>
+    </div>
+  );
+}

@@ -1,88 +1,100 @@
 export type UserRole = 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO' | 'GUARDIA';
 
-export type AssetStatus = 'Operativa' | 'En mantenimiento' | 'Prestada' | 'Dada de baja' | 'Fuera de servicio';
+export type AssetState = 
+  | 'Operativa' 
+  | 'En mantenimiento' 
+  | 'Prestada' 
+  | 'Dada de baja' 
+  | 'Fuera de servicio' 
+  | 'En tránsito' 
+  | 'Requiere Calibración'; // Nuevo estado para mantenimiento preventivo
 
-// Tipos de estado para las solicitudes
 export type RequestStatus = 
-  | 'PENDING' 
-  | 'ACTION_REQUIRED' 
-  | 'APPROVED' 
-  | 'ACTIVE' 
-  | 'OVERDUE' 
-  | 'RETURNED' 
-  | 'MAINTENANCE' 
-  | 'REJECTED' 
-  | 'CANCELLED';
+  | 'PENDING'         // Esperando al Líder
+  | 'ACTION_REQUIRED' // Devuelta por el Líder (Feedback)
+  | 'APPROVED'        // Aprobada por Líder (Listo para salir)
+  | 'ACTIVE'          // En posesión del usuario (Check-out realizado)
+  | 'OVERDUE'         // Vencida
+  | 'RETURNED'        // Devuelta (Check-in realizado)
+  | 'MAINTENANCE'     // Devuelta con daños
+  | 'REJECTED'        // Rechazada
+  | 'CANCELLED';      // Cancelada por usuario
 
 export interface User {
   id: string; // UUID
   name: string;
   email: string;
   role: UserRole;
-  dept?: string;
+  dept: string;
   avatar?: string;
-  phone?: string;
-  manager_id?: string;
-}
-
-export interface Bundle {
-  id: string; // UUID
-  name: string;
-  description?: string;
-  image_url?: string;
-  created_at?: string;
+  manager_id?: string; // ID del Líder de Equipo
 }
 
 export interface Asset {
-  id: string; // UUID
-  tag?: string;
+  id: string; 
+  tag: string; // ZF-001
   name: string;
-  description?: string;
-  category?: string;
-  brand?: string;
-  model?: string;
-  serial?: string;
-  status: string; 
-  image?: string;
-  location?: string;
-  bundle_id?: string; 
+  description: string;
+  category: string;
+  brand: string;
+  model: string;
+  serial: string;
+  status: AssetState;
+  image: string;
+  location: string;
+  commercial_value: number;
+  maintenance_alert?: boolean; // Bandera para mantenimiento preventivo
+  usage_count?: number; // Contador para reglas de mantenimiento
+  created_at: string;
 }
 
 export interface Institution {
   id: number;
   name: string;
-  contact_name?: string;
-  contact_email?: string;
-  address?: string;
-  contact_phone?: string;
+  contact_name: string;
+  contact_email: string;
+  contact_phone: string;
+  address: string;
 }
 
-// --- ESTA ES LA INTERFAZ QUE FALTABA O ESTABA INCOMPLETA ---
 export interface Request {
-  id: number; // BigInt
+  id: number; // ID numérico para QRs más cortos
   asset_id: string;
   user_id: string;
-  institution_id?: number;
+  institution_id?: number; // Opcional, si es préstamo externo
   requester_name: string;
   requester_dept: string;
   days_requested: number;
   motive: string;
   status: RequestStatus;
   
-  // Fechas
+  // Trazabilidad de Tiempo
   created_at: string;
   approved_at?: string;
-  checkout_at?: string;
+  checkout_at?: string; // Fecha real de salida (Guardia)
+  checkin_at?: string;  // Fecha real de retorno (Guardia)
   expected_return_date?: string;
-  returned_at?: string;
 
-  // Seguridad y Feedback
-  security_check_step: number; // 0, 1, 2
-  security_notes?: string;
-  rejection_feedback?: string;
+  // Feedback y Seguridad
+  rejection_reason?: string; // Razón de devolución del líder
+  is_damaged?: boolean;      // Marcado por el guardia
+  damage_notes?: string;
+  
+  // Firma Digital
+  digital_signature?: string; // URL o Base64
 
-  // Relaciones (Joins)
+  // Relaciones
   assets?: Asset;
   users?: User;
   institutions?: Institution;
+}
+
+// Log de Auditoría
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  action: 'CREATE' | 'APPROVE' | 'REJECT' | 'CHECKOUT' | 'CHECKIN' | 'UPDATE' | 'ALERT';
+  actor_id: string; // Quién hizo la acción
+  target_id: string; // ID del activo o solicitud
+  details: string;
 }
