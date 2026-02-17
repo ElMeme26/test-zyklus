@@ -1,175 +1,186 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { useData } from '../../context/DataContext'; 
-import type { Asset } from '../../types';
-import { Button, Card, Input } from '../ui/core';
-import { LogOut, Zap, LayoutGrid, List, Bot, XCircle, AlertCircle } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { supabase } from '../../supabaseClient';
+import { Asset, Institution } from '../../types';
+import { LogOut, Search, Calendar, Building as BuildingIcon } from 'lucide-react';
 
-export function UserHome() {
-  const { user, logout } = useAuth();
-  const { assets, createRequest, requests, isLoading } = useData();
+export const UserHome = () => {
+  const { user, signOut } = useAuth();
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
   
-  const [view, setView] = useState<'catalog' | 'history'>('catalog');
-  const [search, setSearch] = useState('');
-  const [cat, setCat] = useState('Todos');
-
-  // Modal State
+  // Estado del carrito/solicitud
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  const [days, setDays] = useState(7);
-  const [motive, setMotive] = useState('');
-  const [zyklaTip, setZyklaTip] = useState<string | null>(null);
+  const [isExternal, setIsExternal] = useState(false);
+  const [requestData, setRequestData] = useState({
+    days: 1,
+    motive: '',
+    institution_id: ''
+  });
 
-  // DEBUG: Ver qué categorías existen realmente en tus datos
-  console.log("Categorías disponibles:", [...new Set(assets.map(a => a.category))]);
+  useEffect(() => {
+    // 1. Cargar activos disponibles
+    const loadData = async () => {
+      const { data: assetsData } = await supabase
+        .from('assets')
+        .select('*')
+        .eq('status', 'Operativa'); // Ajusta según tu CSV (Operativa, Disponible, etc)
+      
+      if (assetsData) setAssets(assetsData as Asset[]);
 
-  const filteredAssets = assets.filter(a => 
-    a.name.toLowerCase().includes(search.toLowerCase()) && 
-    (cat === 'Todos' || a.category === cat)
-  );
+      // 2. Cargar instituciones para el dropdown
+      const { data: instData } = await supabase.from('institutions').select('*');
+      if (instData) setInstitutions(instData as Institution[]);
+    };
+    loadData();
+  }, []);
 
-  // CORRECCIÓN 1: Acceder a user.email a través de la relación, no directo
-  const myRequests = requests.filter(r => r.users?.email === user?.email);
+  const handleRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAsset || !user) return;
 
-  const handleOpenRequest = (asset: Asset) => {
-    setSelectedAsset(asset);
-    setDays(7);
-    setMotive('');
+    const payload: any = {
+      asset_id: selectedAsset.id,
+      user_id: user.id,
+      requester_name: user.name,
+      requester_dept: user.dept || 'N/A',
+      days_requested: requestData.days,
+      motive: requestData.motive,
+      status: 'PENDING',
+      security_check_step: 0
+    };
 
-    // Tips basados en categorías reales del seeder
-    if (asset.category === 'Laptop') setZyklaTip("💡 Zykla: ¿Necesitas un mouse o monitor extra?");
-    else if (asset.category === 'Osciloscopio') setZyklaTip("💡 Zykla: Verifica que las sondas estén calibradas.");
-    else setZyklaTip(null);
-  };
+    // Si es externo, agregar institución
+    if (isExternal && requestData.institution_id) {
+      payload.institution_id = parseInt(requestData.institution_id);
+    }
 
-  const handleConfirmRequest = () => {
-    if (selectedAsset && user) {
-      createRequest(selectedAsset, user, days, motive);
+    const { error } = await supabase.from('requests').insert([payload]);
+
+    if (error) {
+      alert("Error: " + error.message);
+    } else {
+      alert("Solicitud enviada exitosamente.");
       setSelectedAsset(null);
+      setRequestData({ days: 1, motive: '', institution_id: '' });
+      setIsExternal(false);
     }
   };
 
-  // CORRECCIÓN 2: Categorías que coinciden con tu Base de Datos (Seeder)
-  const categories = ['Todos', 'Laptop', 'Osciloscopio', 'Multímetro', 'Estación de Soldadura', 'Kit de Desarrollo'];
-
   return (
-    <div className="min-h-screen pb-24 bg-slate-950 font-sans relative">
-      <header className="p-6 pt-10 flex justify-between items-center bg-slate-900/50 backdrop-blur sticky top-0 z-10 border-b border-white/5">
-        <div>
-          <h1 className="text-xl font-bold text-white">Hola, <span className="text-cyan-400">{user?.name.split(' ')[0]}</span></h1>
-          <p className="text-xs text-slate-400">{user?.dept}</p>
+    <div className="min-h-screen bg-gray-50">
+      <nav className="bg-white shadow p-4 flex justify-between items-center sticky top-0 z-10">
+        <h1 className="font-bold text-xl text-blue-600">ZF Halo <span className="text-gray-400 text-sm">| Catálogo</span></h1>
+        <div className="flex items-center gap-4">
+            <span className="text-sm font-medium">{user?.name}</span>
+            <button onClick={signOut} className="p-2 text-gray-500 hover:text-red-600"><LogOut size={18}/></button>
         </div>
-        <img src={user?.avatar} alt="Profile" className="w-10 h-10 rounded-full border border-slate-700" />
-      </header>
+      </nav>
 
-      <div className="px-6 pt-6">
-        <div className="flex p-1 bg-slate-900/80 rounded-xl border border-slate-800">
-          <button onClick={() => setView('catalog')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${view === 'catalog' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'}`}>
-            <LayoutGrid size={14} /> Catálogo
-          </button>
-          <button onClick={() => setView('history')} className={`flex-1 flex items-center justify-center gap-2 py-2 text-xs font-bold rounded-lg transition-all ${view === 'history' ? 'bg-cyan-500 text-slate-950' : 'text-slate-400'}`}>
-            <List size={14} /> Mis Solicitudes ({myRequests.length})
-          </button>
+      <main className="max-w-6xl mx-auto p-6">
+        {/* Catálogo Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          {assets.map(asset => (
+            <div key={asset.id} className="bg-white rounded-lg shadow overflow-hidden group hover:ring-2 ring-blue-500 transition-all cursor-pointer"
+                 onClick={() => setSelectedAsset(asset)}>
+              <div className="h-40 bg-gray-200 relative">
+                <img src={asset.image || '/placeholder.png'} className="w-full h-full object-cover"/>
+                {asset.bundle_id && (
+                   <span className="absolute top-2 right-2 bg-purple-600 text-white text-xs px-2 py-1 rounded-full">Bundle</span>
+                )}
+              </div>
+              <div className="p-4">
+                <h3 className="font-bold text-gray-800 truncate">{asset.name}</h3>
+                <p className="text-sm text-gray-500">{asset.category || 'General'}</p>
+                <div className="mt-3 flex justify-between items-center">
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded">Disponible</span>
+                  <span className="text-xs text-gray-400">{asset.model}</span>
+                </div>
+              </div>
+            </div>
+          ))}
         </div>
-      </div>
+      </main>
 
-      <div className="p-6 space-y-6">
-        {isLoading && <p className="text-center text-cyan-500 animate-pulse">Cargando datos de la nube...</p>}
-
-        {view === 'catalog' ? (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar equipo..." className="bg-slate-900 border-slate-800" />
+      {/* Modal de Solicitud */}
+      {selectedAsset && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 backdrop-blur-sm">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
+            <div className="bg-blue-600 p-4 text-white flex justify-between items-center">
+               <h3 className="font-bold text-lg">Solicitar Préstamo</h3>
+               <button onClick={() => setSelectedAsset(null)} className="text-white/80 hover:text-white">✕</button>
+            </div>
             
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-              {categories.map(c => (
-                <button key={c} onClick={() => setCat(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition-all whitespace-nowrap ${cat === c ? 'bg-cyan-500 text-slate-950 border-cyan-500' : 'text-slate-400 border-slate-800 bg-slate-900'}`}>{c}</button>
-              ))}
-            </div>
+            <form onSubmit={handleRequest} className="p-6 space-y-4">
+              <div className="flex gap-4 items-center bg-blue-50 p-3 rounded-lg">
+                <img src={selectedAsset.image || '/placeholder.png'} className="w-16 h-16 rounded object-cover bg-white"/>
+                <div>
+                    <p className="font-bold text-blue-900">{selectedAsset.name}</p>
+                    <p className="text-xs text-blue-700">{selectedAsset.serial}</p>
+                </div>
+              </div>
 
-            <div className="grid gap-4">
-              {filteredAssets.length === 0 && !isLoading && (
-                 <p className="text-slate-500 text-center text-sm py-10">No se encontraron activos en esta categoría.</p>
+              <div>
+                <label className="block text-sm font-medium mb-1">Motivo del préstamo</label>
+                <textarea 
+                  required
+                  className="w-full border p-2 rounded focus:ring-2 focus:ring-blue-500 outline-none"
+                  rows={2}
+                  value={requestData.motive}
+                  onChange={e => setRequestData({...requestData, motive: e.target.value})}
+                  placeholder="Descripción del proyecto o uso..."
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                    <label className="block text-sm font-medium mb-1"><Calendar size={14} className="inline"/> Días requeridos</label>
+                    <input 
+                      type="number" min="1" max="30" required
+                      className="w-full border p-2 rounded"
+                      value={requestData.days}
+                      onChange={e => setRequestData({...requestData, days: parseInt(e.target.value)})}
+                    />
+                </div>
+                <div className="flex items-center pt-6">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                        <input 
+                          type="checkbox" 
+                          checked={isExternal}
+                          onChange={e => setIsExternal(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 rounded"
+                        />
+                        <span className="text-sm font-medium text-gray-700">¿Préstamo Externo?</span>
+                    </label>
+                </div>
+              </div>
+
+              {/* Selector de Instituciones (Solo si es externo) */}
+              {isExternal && (
+                <div className="animate-in slide-in-from-top-2">
+                    <label className="block text-sm font-medium mb-1 text-purple-700"><BuildingIcon size={14} className="inline"/> Institución Destino</label>
+                    <select 
+                      required={isExternal}
+                      className="w-full border border-purple-300 bg-purple-50 p-2 rounded focus:ring-2 focus:ring-purple-500"
+                      value={requestData.institution_id}
+                      onChange={e => setRequestData({...requestData, institution_id: e.target.value})}
+                    >
+                        <option value="">-- Seleccionar Institución --</option>
+                        {institutions.map(inst => (
+                            <option key={inst.id} value={inst.id}>{inst.name}</option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">* Requiere aprobación especial de seguridad.</p>
+                </div>
               )}
-              
-              {filteredAssets.map((asset, i) => (
-                <motion.div key={asset.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }}>
-                  <Card className="p-0 overflow-hidden flex h-32 border-slate-800 bg-slate-900/40 relative">
-                    <div className="w-32 h-full relative bg-slate-900 shrink-0">
-                       <img src={asset.image} className="w-full h-full object-cover opacity-60" />
-                       <div className={`absolute top-2 left-2 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider ${asset.status === 'Operativa' ? 'bg-emerald-500 text-slate-950' : 'bg-rose-500 text-white'}`}>{asset.status}</div>
-                    </div>
-                    <div className="flex-1 p-3 flex flex-col justify-between">
-                      <div>
-                        <h3 className="font-bold text-white text-sm line-clamp-1">{asset.name}</h3>
-                        <p className="text-[10px] text-cyan-500 font-bold uppercase tracking-wider mt-1">{asset.category}</p>
-                        <p className="text-[10px] text-slate-500 line-clamp-1 mt-1 font-mono">{asset.tag}</p>
-                      </div>
-                      <div className="flex justify-end mt-2">
-                        {asset.status === 'Operativa' ? (
-                          <Button onClick={() => handleOpenRequest(asset)} className="h-8 px-4 rounded-full bg-slate-800 hover:bg-cyan-500 text-white hover:text-black flex items-center gap-2 text-xs font-bold"><Zap className="w-3 h-3" /> Solicitar</Button>
-                        ) : (
-                          <span className="text-[10px] text-rose-500 font-bold flex items-center gap-1 bg-rose-500/10 px-2 py-1 rounded"><AlertCircle size={10}/> No disp.</span>
-                        )}
-                      </div>
-                    </div>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </motion.div>
-        ) : (
-          <div className="space-y-4">
-             {myRequests.length === 0 && <p className="text-slate-500 text-center text-sm">No tienes solicitudes activas.</p>}
-             {myRequests.map((req) => (
-                <Card key={req.id} className="p-4 border-slate-800 bg-slate-900/50 flex items-center justify-between">
-                  <div>
-                    {/* CORRECCIÓN 3: Acceso seguro a la propiedad assets */}
-                    <h3 className="font-bold text-white text-sm">{req.assets?.name || 'Activo Desconocido'}</h3>
-                    <p className="text-[10px] text-slate-500 font-mono mt-0.5">{new Date(req.created_at).toLocaleDateString()} • {req.days_requested} días</p>
-                  </div>
-                  <div className={`px-3 py-1 rounded-full text-[10px] font-bold border ${req.status === 'PENDING' ? 'text-yellow-500 border-yellow-500/30 bg-yellow-500/10' : 'text-slate-400'}`}>
-                    {req.status}
-                  </div>
-                </Card>
-              ))}
-          </div>
-        )}
-      </div>
 
-      <div className="fixed bottom-6 w-full flex justify-center pointer-events-none z-10">
-        <Button variant="danger" onClick={logout} className="pointer-events-auto shadow-lg rounded-full px-6 backdrop-blur-md bg-slate-900/80 border-slate-800">
-          <LogOut size={16} className="mr-2" /> Salir
-        </Button>
-      </div>
-
-      <AnimatePresence>
-        {selectedAsset && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-            <motion.div initial={{ y: 100, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden">
-               <div className="p-4 border-b border-white/5 flex justify-between">
-                  <h3 className="text-white font-bold">Solicitud Express</h3>
-                  <button onClick={() => setSelectedAsset(null)}><XCircle className="text-slate-400" /></button>
-               </div>
-               <div className="p-5 space-y-5">
-                  <div className="flex gap-4">
-                    <img src={selectedAsset.image} className="w-16 h-16 rounded bg-slate-800 object-cover" />
-                    <div>
-                      <h4 className="text-white font-bold">{selectedAsset.name}</h4>
-                      <p className="text-xs text-slate-500">{selectedAsset.tag}</p>
-                    </div>
-                  </div>
-                  {zyklaTip && <div className="bg-cyan-950/30 border border-cyan-500/20 p-3 rounded-lg flex gap-3"><Bot className="text-cyan-400 w-5 h-5" /><p className="text-xs text-cyan-200">{zyklaTip}</p></div>}
-                  <div>
-                    <div className="flex justify-between text-xs text-slate-400 mb-2 font-bold uppercase"><span>Duración</span><span className="text-cyan-400 text-lg">{days} Días</span></div>
-                    <input type="range" min="1" max="30" value={days} onChange={e => setDays(Number(e.target.value))} className="w-full accent-cyan-500 h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer" />
-                  </div>
-                  <Input placeholder="Motivo (Opcional)" value={motive} onChange={e => setMotive(e.target.value)} />
-                  <Button onClick={handleConfirmRequest} className="w-full bg-cyan-500 text-black font-bold">Confirmar</Button>
-               </div>
-            </motion.div>
+              <button type="submit" className="w-full bg-blue-600 text-white py-3 rounded-lg font-bold hover:bg-blue-700 transition-colors">
+                Confirmar Solicitud
+              </button>
+            </form>
           </div>
-        )}
-      </AnimatePresence>
+        </div>
+      )}
     </div>
   );
-}
+};
