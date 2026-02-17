@@ -5,13 +5,14 @@ import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import {
   Search, LogOut, Clock, Info, Package, ChevronRight,
-  QrCode, RotateCcw, X, CheckCircle, AlertCircle, MessageSquare
+  QrCode, RotateCcw, X, CheckCircle, AlertCircle, MessageSquare, Building2
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import QRCode from 'react-qr-code';
-import { format, isBefore } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -182,10 +183,9 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
 // ─── FEEDBACK MODAL ──────────────────────────────────────────
 function FeedbackModal({ request, onClose }: { request: Request; onClose: () => void }) {
   const [text, setText] = useState('');
-  const { updateAsset } = useData(); // reuse to update request feedback
+  const { updateAsset } = useData();
 
   const handleSubmit = async () => {
-    // Update the request with user's response
     const { supabase } = await import('../../supabaseClient');
     await supabase.from('requests').update({
       status: 'PENDING',
@@ -222,7 +222,7 @@ function FeedbackModal({ request, onClose }: { request: Request; onClose: () => 
 
 // ─── MAIN USER HOME ──────────────────────────────────────────
 export function UserHome() {
-  const { assets, createRequest } = useData();
+  const { assets, createRequest, institutions } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
   const [activeTab, setActiveTab] = useState<'catalog' | 'loans'>('catalog');
@@ -231,6 +231,8 @@ export function UserHome() {
   const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
   const [days, setDays] = useState(7);
   const [motive, setMotive] = useState('');
+  const [isExternal, setIsExternal] = useState(false);
+  const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
 
   // QR + Feedback modals
   const [qrRequest, setQRRequest] = useState<Request | null>(null);
@@ -248,10 +250,12 @@ export function UserHome() {
 
   const handleSubmit = async () => {
     if (!selectedAsset || !user) return;
-    await createRequest(selectedAsset, user, days, motive);
+    await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined);
     setSelectedAsset(null);
     setMotive('');
     setDays(7);
+    setIsExternal(false);
+    setSelectedInstitution(undefined);
     setActiveTab('loans');
   };
 
@@ -270,6 +274,7 @@ export function UserHome() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
+            <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
             <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
           </div>
         </div>
@@ -349,10 +354,10 @@ export function UserHome() {
         )}
       </main>
 
-      {/* Request Modal */}
+      {/* Request Modal — MEJORADO */}
       {selectedAsset && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
-          <Card className="w-full max-w-md space-y-5 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
+          <Card className="w-full max-w-md space-y-6 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-white">Configura tu solicitud</h2>
@@ -363,18 +368,51 @@ export function UserHome() {
               </button>
             </div>
 
-            {/* Duration Slider */}
-            <div>
-              <label className="flex justify-between text-xs text-slate-400 mb-2">
-                <span>Duración del préstamo</span>
-                <span className="text-white font-bold">{days} días</span>
-              </label>
-              <input
-                type="range" min="1" max="30" value={days}
-                onChange={e => setDays(Number(e.target.value))}
-                className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-primary"
-              />
-              <div className="flex justify-between text-[10px] text-slate-600 mt-1"><span>1 día</span><span>30 días</span></div>
+            {/* ✨ SLIDER MEJORADO — MÁS GRANDE Y BONITO */}
+            <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <label className="text-sm font-bold text-white uppercase tracking-wider">Duración</label>
+                <div className="bg-primary text-black px-4 py-2 rounded-xl font-black text-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                  {days} <span className="text-sm font-medium">días</span>
+                </div>
+              </div>
+              
+              <div className="relative">
+                <input
+                  type="range"
+                  min="1"
+                  max="30"
+                  value={days}
+                  onChange={e => setDays(Number(e.target.value))}
+                  className="w-full h-3 bg-slate-800 rounded-full appearance-none cursor-pointer accent-primary
+                    [&::-webkit-slider-thumb]:appearance-none 
+                    [&::-webkit-slider-thumb]:w-6 
+                    [&::-webkit-slider-thumb]:h-6 
+                    [&::-webkit-slider-thumb]:rounded-full 
+                    [&::-webkit-slider-thumb]:bg-primary 
+                    [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
+                    [&::-webkit-slider-thumb]:cursor-pointer
+                    [&::-webkit-slider-thumb]:transition-transform
+                    [&::-webkit-slider-thumb]:hover:scale-110
+                    [&::-moz-range-thumb]:w-6 
+                    [&::-moz-range-thumb]:h-6 
+                    [&::-moz-range-thumb]:rounded-full 
+                    [&::-moz-range-thumb]:bg-primary 
+                    [&::-moz-range-thumb]:border-0
+                    [&::-moz-range-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
+                    [&::-moz-range-thumb]:cursor-pointer"
+                  style={{
+                    background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${((days - 1) / 29) * 100}%, rgb(30 41 59) ${((days - 1) / 29) * 100}%, rgb(30 41 59) 100%)`
+                  }}
+                />
+              </div>
+              
+              <div className="flex justify-between text-[10px] text-slate-500 mt-3 font-mono">
+                <span className={days === 1 ? 'text-primary font-bold' : ''}>1 día</span>
+                <span className={days === 7 ? 'text-primary font-bold' : ''}>1 semana</span>
+                <span className={days === 15 ? 'text-primary font-bold' : ''}>2 semanas</span>
+                <span className={days === 30 ? 'text-primary font-bold' : ''}>1 mes</span>
+              </div>
             </div>
 
             {/* Motive */}
@@ -383,6 +421,39 @@ export function UserHome() {
               value={motive}
               onChange={e => setMotive(e.target.value)}
             />
+
+            {/* ✨ CHECKBOX INSTITUCIÓN EXTERNA */}
+            <div className="space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={isExternal}
+                  onChange={e => setIsExternal(e.target.checked)}
+                  className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
+                />
+                <div className="flex items-center gap-2">
+                  <Building2 size={16} className="text-slate-500 group-hover:text-primary transition-colors" />
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
+                    Es para una institución externa
+                  </span>
+                </div>
+              </label>
+
+              {isExternal && (
+                <div className="pl-8 animate-in slide-in-from-top-2">
+                  <select
+                    value={selectedInstitution}
+                    onChange={e => setSelectedInstitution(Number(e.target.value))}
+                    className="w-full h-11 bg-slate-950 border border-primary/30 rounded-lg px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="">Selecciona institución...</option>
+                    {institutions.map(inst => (
+                      <option key={inst.id} value={inst.id}>{inst.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
 
             {/* Zykla AI Suggestion */}
             <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex gap-3 items-start">

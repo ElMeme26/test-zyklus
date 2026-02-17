@@ -2,19 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── DARK MODE (default) ─────────────────────────────────── */
 @layer base {
+  :root {
+    --bg: #020617;
+    --surface: #0f172a;
+    --text: #f8fafc;
+    --text-secondary: #64748b;
+    --border: rgba(255,255,255,0.06);
+  }
+
+  /* Light mode override */
+  html.light {
+    --bg: #f1f5f9;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --border: rgba(0,0,0,0.08);
+  }
+
   body {
-    @apply bg-background text-slate-50 antialiased selection:bg-primary/30;
+    background-color: var(--bg);
+    color: var(--text);
+    @apply antialiased selection:bg-primary/30;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
+/* ─── DARK MODE Tailwind classes ─────────────────────────────
+   Usamos la clase .dark en <html> para activar dark mode       */
 @layer components {
-  /* Efecto Cristal (Glassmorphism) */
+
+  /* Glass card - adapta según tema */
   .glass {
-    @apply bg-surface/60 backdrop-blur-xl border border-white/10 shadow-2xl;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    @apply backdrop-blur-xl shadow-2xl;
+    transition: background 0.3s ease, border-color 0.3s ease;
   }
 
-  /* Botón Neón */
+  html.light .glass {
+    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+  }
+
+  /* Botón Neón — igual en ambos modos */
   .btn-neon {
     @apply relative overflow-hidden bg-primary text-slate-950 font-bold uppercase tracking-wider
            transition-all duration-300 ease-out
@@ -23,17 +54,99 @@
            hover:shadow-[0_0_40px_rgba(6,182,212,0.6)];
   }
 
-  /* Texto Brillante */
+  /* Texto brillante */
   .text-glow {
     @apply text-primary drop-shadow-[0_0_10px_rgba(34,211,238,0.5)];
   }
-  
-  /* Utilidad para ocultar scrollbar */
-  .scrollbar-hide::-webkit-scrollbar {
-      display: none;
+
+  /* Scrollbar oculta */
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* ── Light mode patches ── */
+
+  /* Cards en modo claro */
+  html.light .bg-slate-900\/50,
+  html.light .bg-slate-900\/80,
+  html.light .bg-slate-900\/95 {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(0,0,0,0.08) !important;
   }
-  .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+
+  html.light .bg-slate-900 {
+    background: #ffffff !important;
+  }
+
+  html.light .bg-slate-950 {
+    background: #f8fafc !important;
+  }
+
+  html.light .border-slate-800 {
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+
+  html.light .border-slate-700 {
+    border-color: rgba(0,0,0,0.15) !important;
+  }
+
+  html.light .text-slate-400 {
+    color: #475569 !important;
+  }
+
+  html.light .text-slate-500 {
+    color: #64748b !important;
+  }
+
+  html.light .text-slate-300 {
+    color: #334155 !important;
+  }
+
+  html.light .text-white {
+    color: #0f172a !important;
+  }
+
+  html.light .bg-background,
+  html.light .bg-background\/80 {
+    background: #f1f5f9 !important;
+  }
+
+  /* Header en modo claro */
+  html.light header {
+    background: rgba(241, 245, 249, 0.9) !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+
+  html.light .bg-surface\/60 {
+    background: rgba(255,255,255,0.8) !important;
+  }
+
+  /* Input en modo claro */
+  html.light input,
+  html.light textarea,
+  html.light select {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+  }
+
+  html.light input::placeholder,
+  html.light textarea::placeholder {
+    color: #94a3b8 !important;
+  }
+
+  /* Table rows en modo claro */
+  html.light .hover\:bg-slate-800\/30:hover {
+    background: rgba(0,0,0,0.03) !important;
+  }
+
+  html.light .divide-slate-800\/50 > * + * {
+    border-color: rgba(0,0,0,0.06) !important;
   }
 }
+
+/* ─── DARK MODE explicit (bg-background) ──────────────────── */
+.bg-background { background-color: #020617; }
+html.light .bg-background { background-color: #f1f5f9; }
+
+.bg-surface { background-color: #0f172a; }
+html.light .bg-surface { background-color: #ffffff; }

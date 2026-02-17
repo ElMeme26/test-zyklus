@@ -17,8 +17,7 @@ export function LoginScreen() {
           <div className="w-16 h-16 mx-auto mb-4 bg-slate-950 rounded-2xl flex items-center justify-center border border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.1)]">
             <Zap className="w-8 h-8 text-cyan-400" />
           </div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">ZF HALO</h1>
-          <p className="text-slate-400 text-xs uppercase tracking-widest mt-1">Control Patrimonial</p>
+          <h1 className="text-2xl font-bold text-white tracking-tight">Zyklus Halo</h1>           <p className="text-slate-400 text-xs uppercase tracking-widest mt-1">Control Patrimonial</p>
         </div>
 
         <div className="space-y-4">

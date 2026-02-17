@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,13 +8,14 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: "#020617", // Slate 950 (Fondo principal ultra oscuro)
-        surface: "#0f172a",    // Slate 900 (Fondo de tarjetas)
-        primary: "#06b6d4",    // Cyan 500 (Tu color Neón Principal)
-        secondary: "#64748b",  // Slate 500 (Textos secundarios)
-        accent: "#f59e0b",     // Amber 500 (Alertas)
-        danger: "#f43f5e",     // Rose 500 (Errores/Rechazos)
-        success: "#10b981",    // Emerald 500 (Éxito/Aprobaciones)
+        // Modo Oscuro (Default)
+        background: "#020617", // Slate 950
+        surface: "#0f172a",    // Slate 900
+        primary: "#06b6d4",    // Cyan 500
+        secondary: "#64748b",  // Slate 500
+        accent: "#f59e0b",     // Amber 500
+        danger: "#f43f5e",     // Rose 500
+        success: "#10b981",    // Emerald 500
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

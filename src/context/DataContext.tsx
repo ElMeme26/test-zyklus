@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../supabaseClient';
 import type { Asset, Request, User, Institution, Notification, AuditLog, MaintenanceLog, Bundle } from '../types';
 import { toast } from 'sonner';
-import { addDays, isBefore, differenceInDays } from 'date-fns';
+import { differenceInDays, differenceInHours, addDays, isBefore } from 'date-fns';
 
 // ─── CONTEXT INTERFACE ───────────────────────────────────────
 interface DataContextType {
@@ -171,38 +171,79 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── MOTOR DE NOTIFICACIONES (Cron simulado) ───────────────
   const checkOverdueRequests = async (reqs: Request[]) => {
-    const now = new Date();
-    for (const req of reqs) {
-      if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
-      const returnDate = new Date(req.expected_return_date);
-      const daysLate = differenceInDays(now, returnDate);
+  const now = new Date();
+  for (const req of reqs) {
+    if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
+    const returnDate = new Date(req.expected_return_date);
+    const daysLate = differenceInDays(now, returnDate);
+    const hoursUntilReturn = differenceInHours(returnDate, now);
 
-      if (daysLate >= 1) {
-        // Marcar como OVERDUE en BD
-        await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
-
-        if (daysLate === 1 && req.user_id) {
-          await createNotification(req.user_id, '⚠️ Préstamo Vencido', 'Tu préstamo ha vencido. Por favor devuelve el activo hoy.', 'ALERT', req.id);
-        }
-        if (daysLate >= 3 && req.user_id) {
-          await createNotification(req.user_id, '🚨 Incumplimiento (3 días)', 'Incumplimiento de devolución detectado. Se requiere acción inmediata.', 'CRITICAL', req.id);
-          // Notificar al líder si existe
-          if (req.users?.manager_id) {
-            await createNotification(req.users.manager_id, '🚨 Alerta de Equipo', `${req.requester_name} lleva 3 días de retraso.`, 'CRITICAL', req.id);
-          }
-        }
-        if (daysLate >= 7 && req.user_id) {
-          await createNotification(req.user_id, '🔴 ALERTA CRÍTICA — 1 Semana', 'Activo con 1 semana de retraso. Marcado como incidencia grave.', 'CRITICAL', req.id);
-        }
-      }
-
-      // Recordatorio 48h antes
-      const hoursUntilReturn = differenceInDays(returnDate, now);
-      if (hoursUntilReturn === 2 && req.user_id) {
-        await createNotification(req.user_id, '📅 Recordatorio', 'Tu préstamo vence en 2 días. Prepara la devolución.', 'WARNING', req.id);
+    // ✅ RECORDATORIOS PREVENTIVOS
+    if (hoursUntilReturn <= 48 && hoursUntilReturn > 24 && req.user_id) {
+      // 48 horas antes
+      const notifExists = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', req.user_id)
+        .eq('request_id', req.id)
+        .eq('title', '📅 Recordatorio — 48h')
+        .single();
+      
+      if (!notifExists.data) {
+        await createNotification(
+          req.user_id,
+          '📅 Recordatorio — 48h',
+          'Tu préstamo vence en 2 días. Prepara la devolución.',
+          'WARNING',
+          req.id
+        );
       }
     }
-  };
+
+    if (hoursUntilReturn <= 24 && hoursUntilReturn > 0 && req.user_id) {
+      // 24 HORAS ANTES (NUEVO)
+      const notifExists = await supabase
+        .from('notifications')
+        .select('id')
+        .eq('user_id', req.user_id)
+        .eq('request_id', req.id)
+        .eq('title', '⏰ Recordatorio — 24h')
+        .single();
+      
+      if (!notifExists.data) {
+        await createNotification(
+          req.user_id,
+          '⏰ Recordatorio — 24h',
+          'Tu préstamo vence mañana. Prepara la devolución.',
+          'WARNING',
+          req.id
+        );
+      }
+    }
+
+    // ⚠️ SISTEMA DE ESCALACIÓN (VENCIDOS)
+    if (daysLate >= 1) {
+      // Marcar como OVERDUE en BD
+      await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
+
+      if (daysLate === 1 && req.user_id) {
+        await createNotification(req.user_id, '⚠️ Préstamo Vencido', 'Tu préstamo ha vencido. Por favor devuelve el activo hoy.', 'ALERT', req.id);
+      }
+      if (daysLate >= 3 && req.user_id) {
+        await createNotification(req.user_id, '🚨 Incumplimiento (3 días)', 'Incumplimiento de devolución detectado. Se requiere acción inmediata.', 'CRITICAL', req.id);
+        // Notificar al líder si existe
+        if (req.users?.manager_id) {
+          await createNotification(req.users.manager_id, '🚨 Alerta de Equipo', `${req.requester_name} lleva 3 días de retraso.`, 'CRITICAL', req.id);
+        }
+      }
+      if (daysLate >= 7 && req.user_id) {
+        await createNotification(req.user_id, '🔴 ALERTA CRÍTICA — 1 Semana', 'Activo con 1 semana de retraso. Marcado como incidencia grave.', 'CRITICAL', req.id);
+      }
+    }
+  }
+};
+
+  
 
   // ─── ASSETS ────────────────────────────────────────────────
   const getNextTag = () => {

@@ -8,6 +8,7 @@ import QRCode from 'react-qr-code';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
+import { ThemeToggle } from '../ui/ThemeToggle';
 
 // ─── QR Modal para el Líder ───────────────────────────────────
 function LeaderQRModal({ request, onClose }: { request: Request; onClose: () => void }) {
@@ -176,6 +177,7 @@ export function ManagerInbox() {
           </div>
           <div className="flex items-center gap-2">
             <NotificationCenter />
+            <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
             <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
           </div>
         </div>

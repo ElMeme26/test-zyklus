@@ -11,6 +11,8 @@ import {
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
 import { NotificationCenter } from '../ui/NotificationCenter';
+import { ThemeToggle } from '../ui/ThemeToggle';
+
 
 // ─── ASSET INFO MODAL (QR Scan Informativo) ──────────────────
 function AssetInfoModal({ asset, relatedRequest, onClose }: {
@@ -411,6 +413,7 @@ export function AdminDashboard() {
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
           <NotificationCenter />
+          <ThemeToggle /> {/* ← AGREGAR AQUÍ */}
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
         </div>
       </header>

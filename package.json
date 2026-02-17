@@ -18,15 +18,19 @@
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "framer-motion": "^11.0.8",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
+    "xlsx": "^0.18.5",
     "lucide-react": "^0.344.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.13.0",
-    "recharts": "^2.12.2",
-    "sonner": "^1.4.3",
+    "recharts": "^2.15.4",
+    "sonner": "^1.7.4",
     "tailwind-merge": "^2.2.1",
     "tailwindcss-animate": "^1.0.7"
+    
   },
   "devDependencies": {
     "@types/react": "^18.2.64",
@@ -39,4 +43,5 @@
     "vite": "^5.1.4"
   },
   "keywords": []
+  
 }

@@ -14,6 +14,8 @@ import { ChatAssistant } from '../ui/ChatAssistant';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { format, subDays, isAfter } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ThemeToggle } from '../ui/ThemeToggle';
+import { ExportButtons } from './ExportButtons';
 
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
 
@@ -146,10 +148,9 @@ export function AuditorOverview() {
           <p className="text-slate-500 text-xs mt-0.5">Trazabilidad total del patrimonio</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportCSV}>
-            <Download size={14} className="mr-1.5" /> Exportar CSV
-          </Button>
+          <ExportButtons requests={requests} assets={assets} auditLogs={auditLogs} />
           <NotificationCenter />
+          <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
         </div>
       </header>
