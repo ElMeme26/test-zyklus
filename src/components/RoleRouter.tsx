@@ -1,7 +1,8 @@
 import React from 'react';
 import { useAuth } from '../context/AuthContext';
+import { Loader2 } from 'lucide-react';
 
-// Importaciones directas de tus componentes
+// Importaciones de componentes
 import { UserHome } from './user/UserHome';
 import { ManagerInbox } from './manager/ManagerInbox';
 import { AdminDashboard } from './admin/AdminDashboard';
@@ -10,13 +11,23 @@ import { GuardScanner } from './guard/GuardScanner';
 import { LoginScreen } from './LoginScreen';
 
 export const RoleRouter = () => {
-  const { user, session } = useAuth();
+  const { user, session, loading } = useAuth();
 
+  // 1. Pantalla de carga mientras verificamos sesión
+  if (loading) {
+    return (
+      <div className="h-screen w-screen bg-slate-950 flex items-center justify-center text-cyan-500">
+        <Loader2 className="animate-spin w-10 h-10" />
+      </div>
+    );
+  }
+
+  // 2. Si no hay usuario logueado, mostrar Login
   if (!session || !user) {
     return <LoginScreen />;
   }
 
-  // Switch principal de roles
+  // 3. Router según el ROL
   switch (user.role) {
     case 'USUARIO':
       return <UserHome />;
@@ -35,14 +46,16 @@ export const RoleRouter = () => {
       
     default:
       return (
-        <div className="h-screen flex items-center justify-center flex-col p-4">
-          <h1 className="text-2xl font-bold text-red-600">Error: Rol Desconocido</h1>
-          <p>Tu usuario tiene el rol: <strong>{user.role}</strong>, el cual no está configurado.</p>
+        <div className="h-screen flex items-center justify-center flex-col p-4 bg-slate-100">
+          <h1 className="text-2xl font-bold text-red-600">Acceso Denegado</h1>
+          <p className="mt-2 text-slate-600">
+            Tu rol <strong>({user.role})</strong> no tiene permisos configurados.
+          </p>
           <button 
              onClick={() => window.location.reload()}
-             className="mt-4 px-4 py-2 bg-gray-800 text-white rounded"
+             className="mt-4 px-4 py-2 bg-slate-800 text-white rounded hover:bg-slate-700"
           >
-             Recargar
+             Recargar Aplicación
           </button>
         </div>
       );
