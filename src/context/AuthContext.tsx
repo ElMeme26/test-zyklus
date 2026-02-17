@@ -5,9 +5,16 @@ import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
+  
+  // Nombres estándar
   login: (email: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+
+  // Alias de compatibilidad (para componentes que usen estos nombres)
+  signIn: (email: string) => Promise<void>;
+  signOut: () => void;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -18,7 +25,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const storedUser = localStorage.getItem('zf_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
   }, []);
 
   const login = async (email: string) => {
@@ -31,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .single();
 
       if (error || !data) {
-        toast.error("Usuario no encontrado. Prueba con: alex.user@zf.com");
+        toast.error("Usuario no encontrado.");
         return;
       }
 
@@ -41,8 +50,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       toast.success(`Bienvenido, ${userData.name}`);
       
     } catch (err) {
-      console.error(err);
-      toast.error("Error de conexión");
+      toast.error("Error de conexión.");
     } finally {
       setIsLoading(false);
     }
@@ -55,7 +63,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      isLoading,
+      // Alias
+      signIn: login,
+      signOut: logout,
+      loading: isLoading
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -63,6 +80,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth error");
+  if (!context) throw new Error("Use useAuth within AuthProvider");
   return context;
 };

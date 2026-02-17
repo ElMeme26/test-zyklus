@@ -1,22 +1,23 @@
-import { AuthProvider, useAuth } from './context/AuthContext';
-import { DataProvider } from './context/DataContext'; // <--- IMPORTANTE
-import { LoginScreen } from './components/LoginScreen';
-import { RoleRouter } from './components/RoleRouter';
-import { Toaster } from 'sonner';
+import React from 'react';
+import { BrowserRouter } from 'react-router-dom';
+import { AuthProvider } from './context/AuthContext';
+import { DataProvider } from './context/DataContext';
+import { ThemeProvider } from './context/ThemeContext';
+import RoleRouter from './components/RoleRouter';
+import './index.css';
 
-function Content() {
-  const { user } = useAuth();
-  // Si hay usuario mostramos el Router, si no el Login
-  return user ? <RoleRouter /> : <LoginScreen />;
-}
-
-export default function App() {
+function App() {
   return (
-    <AuthProvider>
-      <DataProvider> {/* <--- AGREGAMOS ESTO */}
-        <Content />
-        <Toaster position="top-center" theme="dark" />
-      </DataProvider>
-    </AuthProvider>
+    <BrowserRouter>
+      <ThemeProvider>
+        <AuthProvider>
+          <DataProvider>
+            <RoleRouter />
+          </DataProvider>
+        </AuthProvider>
+      </ThemeProvider>
+    </BrowserRouter>
   );
 }
+
+export default App;
