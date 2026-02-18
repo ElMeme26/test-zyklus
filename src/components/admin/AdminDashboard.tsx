@@ -15,6 +15,8 @@ import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { AssetQRPrint } from './AssetQRPrint';
 import { DashboardCharts } from '../auditor/AuditorOverview';
+// ✨ IMPORTANTE: Importamos el Escáner para la cámara
+import { Scanner } from '@yudiel/react-qr-scanner';
 
 // ─── ASSET INFO MODAL (QR Scan Informativo) ──────────────────
 function AssetInfoModal({ asset, relatedRequest, onClose }: {
@@ -63,12 +65,6 @@ function AssetInfoModal({ asset, relatedRequest, onClose }: {
               )}
             </div>
           )}
-          {(asset.maintenance_alert || asset.status === 'Requiere Mantenimiento') && (
-            <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-3 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-amber-400" />
-              <p className="text-xs text-amber-300">Este activo requiere mantenimiento preventivo.</p>
-            </div>
-          )}
         </div>
       </Card>
     </div>
@@ -76,8 +72,9 @@ function AssetInfoModal({ asset, relatedRequest, onClose }: {
 }
 
 // ─── MAINTENANCE PANEL ───────────────────────────────────────
-function MaintenancePanel() {
-  const { assets, maintenanceLogs, validateMaintenanceAsset, resolveMaintenance } = useData();
+// ✨ Se pasaron las funciones y estados de impresión a este componente
+function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[], onPrintAll: () => void }) {
+  const { maintenanceLogs, validateMaintenanceAsset, resolveMaintenance } = useData();
   const [searchMaint, setSearchMaint] = useState('');
 
   const maintenanceAssets = assets.filter(a =>
@@ -95,14 +92,24 @@ function MaintenancePanel() {
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Wrench className="text-amber-400" /> Panel de Mantenimiento
         </h2>
-        <div className="relative w-full md:w-64">
-          <Search className="absolute left-3 top-2 text-slate-500 w-4 h-4" />
-          <Input 
-            placeholder="Buscar por nombre o tag..." 
-            value={searchMaint} 
-            onChange={e => setSearchMaint(e.target.value)} 
-            className="pl-9 h-9"
-          />
+        {/* Buscador y Botón de Imprimir Juntos */}
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative flex-1 sm:w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
+            <Input 
+              placeholder="Buscar por nombre o tag..." 
+              value={searchMaint} 
+              onChange={e => setSearchMaint(e.target.value)} 
+              className="pl-9 h-10"
+            />
+          </div>
+          <Button 
+            variant="outline" 
+            onClick={onPrintAll}
+            className="border-primary/30 text-primary hover:bg-primary/10 h-10 whitespace-nowrap"
+          >
+            <Printer size={16} className="mr-2" /> Imprimir Todos los QR
+          </Button>
         </div>
       </div>
 
@@ -127,16 +134,9 @@ function MaintenancePanel() {
                       <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-bold">
                         {asset.status}
                       </span>
-                      {asset.usage_count !== undefined && (
-                        <span className="text-[10px] text-slate-500">Usos: {asset.usage_count}</span>
-                      )}
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    onClick={() => validateMaintenanceAsset(asset.id)}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex-shrink-0"
-                  >
+                  <Button size="sm" onClick={() => validateMaintenanceAsset(asset.id)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex-shrink-0">
                     <CheckCircle size={12} className="mr-1" /> Validar
                   </Button>
                 </div>
@@ -148,9 +148,7 @@ function MaintenancePanel() {
 
       {maintenanceLogs.length > 0 && (
         <div>
-          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
-            Historial de Incidencias
-          </h3>
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Historial de Incidencias</h3>
           <div className="space-y-2">
             {maintenanceLogs.slice(0, 8).map(log => (
               <div key={log.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
@@ -178,9 +176,8 @@ function MaintenancePanel() {
 }
 
 // ─── INVENTORY VIEW ───────────────────────────────────────────
-function InventoryView() {
-  const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBatchRequest } = useData();
-  const { user } = useAuth();
+function InventoryView({ onPrintSelected, onPrintSingle }: { onPrintSelected: (ids: Set<string>) => void, onPrintSingle: (asset: Asset) => void }) {
+  const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBundle } = useData();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState<string>('Todas');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -189,22 +186,12 @@ function InventoryView() {
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [showQRPrint, setShowQRPrint] = useState(false);
-  const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
+  // ✨ MODAL PARA CREAR BUNDLE/COMBO (Corrección Principal)
+  const [showBundleModal, setShowBundleModal] = useState(false);
+  const [bundleName, setBundleName] = useState('');
+  const [bundleDesc, setBundleDesc] = useState('');
 
-  const handlePrintSingle = (asset: Asset) => {
-    setQrPrintAssets([asset]);
-    setShowQRPrint(true);
-  };
-
-  const handlePrintSelected = () => {
-    const selected = assets.filter(a => selectedIds.has(a.id));
-    if (selected.length === 0) return;
-    setQrPrintAssets(selected);
-    setShowQRPrint(true);
-  };
-
-  const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category).filter(Boolean)))];
+  const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
   
   const filteredAssets = assets.filter(a =>
     (a.name?.toLowerCase() || '').includes(search.toLowerCase()) &&
@@ -219,11 +206,7 @@ function InventoryView() {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) { 
-      const r = new FileReader(); 
-      r.onload = ev => importAssets(ev.target?.result as string); 
-      r.readAsText(f); 
-    }
+    if (f) { const r = new FileReader(); r.onload = ev => importAssets(ev.target?.result as string); r.readAsText(f); }
   };
 
   const handleSave = async () => {
@@ -242,71 +225,89 @@ function InventoryView() {
 
   return (
     <div className="animate-in fade-in">
-      {/* Controls */}
-      <div className="flex flex-wrap gap-3 mb-5">
-        <div className="relative flex-1 min-w-48">
-          <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
-          <Input 
-            placeholder="Buscar activo..." 
-            value={search} 
-            onChange={e => setSearch(e.target.value)} 
-            className="pl-9 bg-slate-900 border-slate-800" 
-          />
-        </div>
-        <div className="flex gap-2 flex-wrap">
-          {categories.slice(0, 5).map(cat => (
-            <button 
-              key={cat} 
-              onClick={() => setCatFilter(String(cat))} 
-              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border ${catFilter === cat ? 'bg-primary text-black border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+      
+      {/* ✨ MEJORA: Top Actions organizadas arriba del buscador */}
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80 shadow-lg gap-4">
+          <div>
+            <h3 className="text-white font-bold text-lg">Gestión de Inventario</h3>
+            <p className="text-slate-500 text-xs mt-1">Da de alta equipos nuevos o importa de forma masiva</p>
+          </div>
+          <div className="flex gap-2 w-full sm:w-auto">
+            <input type="file" ref={fileInputRef} hidden accept=".csv" onChange={handleFileUpload} />
+            <Button variant="outline" onClick={() => fileInputRef.current?.click()} className="flex-1 sm:flex-none border-primary/20 text-primary hover:bg-primary/10">
+              <Upload size={16} className="mr-2" /> Importar CSV
+            </Button>
+            <Button 
+              variant="neon" 
+              onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Disponible', maintenance_period_days: 180, maintenance_usage_threshold: 10 }); setShowModal(true); }} 
+              className="flex-1 sm:flex-none"
             >
-              {cat}
-            </button>
-          ))}
-          <input type="file" ref={fileInputRef} hidden accept=".csv" onChange={handleFileUpload} />
-          <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-            <Upload size={14} className="mr-1.5" /> CSV
-          </Button>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => {
-              setQrPrintAssets(assets);
-              setShowQRPrint(true);
-            }}
-            className="border-primary/30 text-primary hover:bg-primary/10"
-          >
-            <Printer size={14} className="mr-1" /> Imprimir Todos los QR
-          </Button>
+              <Plus size={16} className="mr-2" /> Alta Activo
+            </Button>
+          </div>
+        </div>
+
+        {/* Buscador y Categorías */}
+        <div className="flex flex-wrap gap-3">
+          <div className="relative flex-1 min-w-[250px]">
+            <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
+            <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800" />
+          </div>
+          <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
+            {categories.map(cat => (
+              <button 
+                key={cat} 
+                onClick={() => setCatFilter(String(cat))} 
+                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+              >
+                {cat}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Batch actions */}
       {selectedIds.size > 0 && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2 rounded-full shadow-lg flex items-center gap-4 font-bold text-sm">
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center gap-4 font-bold text-sm">
           <span>{selectedIds.size} seleccionados</span>
-          {user && (
-            <Button 
-              size="sm" 
-              variant="secondary" 
-              onClick={() => {
-                createBatchRequest(assets.filter(a => selectedIds.has(a.id)), user, 7, 'Combo Admin');
-                setSelectedIds(new Set());
-              }} 
-              className="h-7 text-xs"
-            >
-              Crear Combo
-            </Button>
-          )}
-          <Button
-            size="sm"
-            variant="secondary"
-            onClick={handlePrintSelected}
-            className="h-7 text-xs flex items-center gap-1"
-          >
-            <Printer size={12} /> Imprimir QR
+          <Button size="sm" variant="secondary" onClick={() => setShowBundleModal(true)} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">
+            Crear Combo Fijo
           </Button>
-          <button onClick={() => setSelectedIds(new Set())}><X size={16} /></button>
+          <Button size="sm" variant="secondary" onClick={() => onPrintSelected(selectedIds)} className="h-8 text-xs flex items-center gap-1 bg-black text-white hover:bg-slate-900 border-0">
+            <Printer size={14} /> Imprimir QR
+          </Button>
+          <button onClick={() => setSelectedIds(new Set())} className="hover:text-rose-600"><X size={18} /></button>
+        </div>
+      )}
+
+      {/* Modal para Crear Bundle */}
+      {showBundleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-sm space-y-4 border-primary/30">
+             <h3 className="text-white font-bold text-lg">Nuevo Combo (Kit)</h3>
+             <p className="text-xs text-slate-400">Agrupará los {selectedIds.size} activos seleccionados para que puedan solicitarse juntos.</p>
+             <Input placeholder="Nombre del Combo (Ej. Kit de Fotografía)" value={bundleName} onChange={e=>setBundleName(e.target.value)} />
+             <Input placeholder="Descripción breve" value={bundleDesc} onChange={e=>setBundleDesc(e.target.value)} />
+             <div className="flex gap-2 pt-2">
+                <Button onClick={() => setShowBundleModal(false)} variant="ghost" className="flex-1">Cancelar</Button>
+                <Button 
+                  variant="neon" 
+                  className="flex-1"
+                  disabled={!bundleName.trim()}
+                  onClick={() => {
+                    createBundle(bundleName, bundleDesc, Array.from(selectedIds));
+                    setShowBundleModal(false);
+                    setSelectedIds(new Set());
+                    setBundleName('');
+                    setBundleDesc('');
+                  }}
+                >
+                  Guardar Combo
+                </Button>
+             </div>
+          </Card>
         </div>
       )}
 
@@ -343,11 +344,7 @@ function InventoryView() {
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-2">
-                    <button
-                      onClick={() => handlePrintSingle(a)}
-                      className="text-slate-400 hover:text-cyan-400 transition-colors"
-                      title="Imprimir QR"
-                    >
+                    <button onClick={() => onPrintSingle(a)} className="text-slate-400 hover:text-cyan-400 transition-colors" title="Imprimir QR">
                       <QrCode size={14} />
                     </button>
                     <button onClick={() => { setIsEditing(true); setCurrentAsset(a); setShowModal(true); }} className="text-slate-400 hover:text-primary transition-colors">
@@ -367,18 +364,10 @@ function InventoryView() {
         )}
       </div>
 
-      {/* FAB */}
-      <button
-        onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Disponible', maintenance_period_days: 180, maintenance_usage_threshold: 10 }); setShowModal(true); }}
-        className="fixed bottom-24 right-6 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg text-black z-30 hover:scale-110 transition-transform"
-      >
-        <Plus size={24} />
-      </button>
-
       {/* Asset Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-3 max-h-[90vh] overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-700 p-6 rounded-2xl w-full max-w-lg space-y-3 max-h-[90vh] overflow-y-auto shadow-2xl">
             <h3 className="text-white font-bold">{isEditing ? 'Editar' : 'Nuevo'} Activo</h3>
             <div className="grid grid-cols-2 gap-3">
               <Input placeholder="Nombre *" value={currentAsset.name || ''} onChange={e => setCurrentAsset({ ...currentAsset, name: e.target.value })} />
@@ -391,7 +380,6 @@ function InventoryView() {
               <Input type="number" placeholder="Valor Comercial" value={currentAsset.commercial_value || ''} onChange={e => setCurrentAsset({ ...currentAsset, commercial_value: Number(e.target.value) })} />
             </div>
 
-            {/* Estado */}
             <select
               className="w-full h-10 bg-slate-950 border border-slate-700 text-white rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
               value={currentAsset.status || 'Disponible'}
@@ -405,7 +393,6 @@ function InventoryView() {
               <option value="Fuera de servicio">Fuera de servicio</option>
             </select>
 
-            {/* Mantenimiento Preventivo */}
             <div className="border border-amber-500/20 rounded-xl p-4 bg-amber-500/5 space-y-3">
               <p className="text-xs font-bold text-amber-400 uppercase tracking-widest flex items-center gap-1">
                 <Shield size={12} /> Reglas de Mantenimiento Preventivo
@@ -420,7 +407,6 @@ function InventoryView() {
                   <Input type="number" placeholder="10" value={currentAsset.maintenance_usage_threshold || ''} onChange={e => setCurrentAsset({ ...currentAsset, maintenance_usage_threshold: Number(e.target.value) })} />
                 </div>
               </div>
-              <p className="text-[10px] text-slate-500">El activo se bloqueará automáticamente al alcanzar estos umbrales.</p>
             </div>
 
             <div className="flex justify-end gap-2 pt-2">
@@ -429,13 +415,6 @@ function InventoryView() {
             </div>
           </div>
         </div>
-      )}
-
-      {showQRPrint && (
-        <AssetQRPrint
-          assets={qrPrintAssets}
-          onClose={() => setShowQRPrint(false)}
-        />
       )}
     </div>
   );
@@ -446,14 +425,25 @@ export function AdminDashboard() {
   const { logout } = useAuth();
   const { processQRScan, assets } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance'>('inventory');
+  
+  // Scanned Info
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
+  
+  // Camera Scanner State
+  const [useCamera, setUseCamera] = useState(false);
+
+  // QR Print State
+  const [showQRPrint, setShowQRPrint] = useState(false);
+  const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
 
   const maintenanceCount = assets.filter(a => a.maintenance_alert || a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento').length;
 
-  const handleScan = async () => {
-    const qr = prompt('Escanea o ingresa el QR del activo:');
-    if (!qr) return;
-    const result = await processQRScan(qr);
+  // Manejar el escaneo de cámara
+  const handleCameraScan = async (detectedCodes: any) => {
+    const code = detectedCodes?.[0]?.rawValue;
+    if (!code) return;
+    setUseCamera(false);
+    const result = await processQRScan(code);
     if (result) setScannedInfo(result);
   };
 
@@ -461,11 +451,46 @@ export function AdminDashboard() {
     <div className="min-h-screen bg-background font-sans pb-24 relative">
       <ChatAssistant />
 
+      {/* Info Escaneada Modal */}
       {scannedInfo && (
         <AssetInfoModal
           asset={scannedInfo.asset}
           relatedRequest={scannedInfo.request}
           onClose={() => setScannedInfo(null)}
+        />
+      )}
+
+      {/* ✨ Scanner Cámara Modal */}
+      {useCamera && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-md border-primary/30">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <ScanLine size={18} className="text-primary" /> Escanear QR del Activo
+              </h3>
+              <button onClick={() => setUseCamera(false)} className="text-slate-400 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+              <Scanner
+                onScan={handleCameraScan}
+                constraints={{ facingMode: 'environment' }}
+                styles={{ container: { width: '100%', height: '100%' } }}
+              />
+            </div>
+            <p className="text-xs text-slate-500 text-center mt-4">
+              Centra el código QR en la pantalla para ver su ficha técnica.
+            </p>
+          </Card>
+        </div>
+      )}
+
+      {/* Imprimir QRs Modal (Global) */}
+      {showQRPrint && (
+        <AssetQRPrint
+          assets={qrPrintAssets}
+          onClose={() => setShowQRPrint(false)}
         />
       )}
 
@@ -493,7 +518,8 @@ export function AdminDashboard() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleScan} className="border-primary/30 text-primary hover:bg-primary/10 text-xs">
+          {/* Botón Escáner activa la CÁMARA */}
+          <Button variant="outline" size="sm" onClick={() => setUseCamera(true)} className="border-primary/30 text-primary hover:bg-primary/10 text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
           <NotificationCenter />
@@ -504,10 +530,29 @@ export function AdminDashboard() {
 
       {/* Main Content */}
       <main className="p-4 md:p-6">
-        {currentView === 'inventory' && <InventoryView />}
+        {currentView === 'inventory' && (
+          <InventoryView 
+            onPrintSelected={(ids) => {
+              setQrPrintAssets(assets.filter(a => ids.has(a.id)));
+              setShowQRPrint(true);
+            }} 
+            onPrintSingle={(a) => {
+              setQrPrintAssets([a]);
+              setShowQRPrint(true);
+            }} 
+          />
+        )}
         {currentView === 'analytics' && <div className="animate-in fade-in"><DashboardCharts /></div>}
         {currentView === 'external' && <InstitutionsManager />}
-        {currentView === 'maintenance' && <MaintenancePanel />}
+        {currentView === 'maintenance' && (
+          <MaintenancePanel 
+            assets={assets} 
+            onPrintAll={() => {
+              setQrPrintAssets(assets);
+              setShowQRPrint(true);
+            }} 
+          />
+        )}
       </main>
 
       {/* Mobile Nav */}

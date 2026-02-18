@@ -19,7 +19,6 @@ import { ExportButtons } from './ExportButtons';
 
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
 
-// ─── KPI CARD ─────────────────────────────────────────────────
 function KPICard({ label, value, color, icon, sublabel }: {
   label: string; value: string | number; color: string; icon: React.ReactNode; sublabel?: string;
 }) {
@@ -37,16 +36,13 @@ function KPICard({ label, value, color, icon, sublabel }: {
   );
 }
 
-// ─── COMPONENTE DE GRÁFICAS COMPARTIDO (Para Auditor y Admin) ───
 export function DashboardCharts() {
   const { assets, requests } = useData();
 
-  // 1. Lógica Top 8 Activos (Acortado a 2 palabras) y orientada Horizontalmente
   const top8Assets = useMemo(() => {
     return Object.entries(
       requests.reduce((acc, req) => {
         const name = req.assets?.name || 'Desconocido';
-        // Acortar el nombre a las primeras 2 palabras
         const shortName = name.split(' ').slice(0, 2).join(' '); 
         acc[shortName] = (acc[shortName] || 0) + 1;
         return acc;
@@ -57,7 +53,6 @@ export function DashboardCharts() {
     .slice(0, 8);
   }, [requests]);
 
-  // 2. Lógica por Disciplina (Lista desplegable dinámica)
   const disciplinas = useMemo(() => {
     return Array.from(new Set(requests.map(r => r.requester_disciplina).filter(Boolean)));
   }, [requests]);
@@ -77,10 +72,9 @@ export function DashboardCharts() {
     )
     .map(([name, count]) => ({ name, count }))
     .sort((a, b) => b.count - a.count)
-    .slice(0, 5); // Mostramos el top 5 de esa disciplina
+    .slice(0, 5); 
   }, [requests, selectedDisciplina]);
 
-  // 3. Distribución por Categorías
   const categoryData = useMemo(() =>
     Object.entries(
       assets.reduce((acc: Record<string, number>, a) => {
@@ -94,14 +88,11 @@ export function DashboardCharts() {
 
   return (
     <div className="space-y-6">
-      {/* Charts Row 1 */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Gráfica 1: Top 8 General (Horizontal) */}
         <Card>
           <h3 className="text-white font-bold mb-4 text-sm">Top 8 Activos Más Solicitados</h3>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
-              {/* layout="vertical" hace que las barras sean horizontales */}
               <BarChart layout="vertical" data={top8Assets} margin={{ left: 20 }}>
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
@@ -116,12 +107,11 @@ export function DashboardCharts() {
           </div>
         </Card>
 
-        {/* Gráfica 2: Top por Disciplina Interactiva */}
         <Card>
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-white font-bold text-sm">Top por Disciplina</h3>
             <select 
-              className="bg-slate-950 border border-slate-700 text-xs text-white rounded p-1.5 focus:outline-none focus:border-primary"
+              className="bg-slate-950 border border-slate-700 text-xs text-white rounded p-1.5 focus:outline-none focus:border-primary max-w-[120px]"
               value={selectedDisciplina}
               onChange={e => setSelectedDisciplina(e.target.value)}
             >
@@ -151,7 +141,6 @@ export function DashboardCharts() {
         </Card>
       </div>
 
-      {/* Charts Row 2 (Categorías) */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <h3 className="text-white font-bold mb-4 text-sm">Distribución por Categoría</h3>
@@ -173,7 +162,6 @@ export function DashboardCharts() {
 }
 
 
-// ─── AUDIT LOG ROW CONFIG ─────────────────────────────────────
 const actionBadge: Record<string, string> = {
   CREATE: 'text-emerald-400 bg-emerald-500/10',
   APPROVE: 'text-cyan-400 bg-cyan-500/10',
@@ -185,14 +173,12 @@ const actionBadge: Record<string, string> = {
   ALERT: 'text-rose-400 bg-rose-500/10',
 };
 
-// ─── VISTA PRINCIPAL DEL AUDITOR ──────────────────────────────
 export function AuditorOverview() {
   const { assets, requests, auditLogs, maintenanceLogs } = useData();
   const { logout } = useAuth();
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
 
-  // ─── KPIs ─────────────────────────────────────────────────
   const kpis = useMemo(() => {
     const total = assets.length;
     const disponible = assets.filter(a => a.status === 'Disponible').length;
@@ -208,29 +194,24 @@ export function AuditorOverview() {
     return { total, disponible, prestada, mantenimiento, baja, disponibilidad, activeLoans, overdueLoans, totalLoans30d };
   }, [assets, requests]);
 
-
-  // ─── FILTERED AUDIT LOGS ─────────────────────────────────
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
-      // EXCLUIR 'CREATE' de la vista SIEMPRE
       l.action !== 'CREATE' && 
       (filterAction === 'ALL' || l.action === filterAction) &&
       (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
     ), [auditLogs, filterAction, searchLog]
   );
 
-
   return (
     <div className="min-h-screen bg-background font-sans pb-20">
       <ChatAssistant />
 
-      {/* Header */}
       <header className="sticky top-0 z-30 flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-background/80 backdrop-blur">
         <div>
           <h1 className="text-xl font-bold text-white flex items-center gap-2">
             <TrendingUp className="text-primary" /> Panel de Auditoría
           </h1>
-          <p className="text-slate-500 text-xs mt-0.5">Trazabilidad total del patrimonio</p>
+          <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Trazabilidad total del patrimonio</p>
         </div>
         <div className="flex items-center gap-2">
           <ExportButtons requests={requests} assets={assets} auditLogs={auditLogs} />
@@ -240,8 +221,7 @@ export function AuditorOverview() {
         </div>
       </header>
 
-      <main className="p-6 space-y-8">
-        {/* KPIs */}
+      <main className="p-6 space-y-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
           <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
@@ -249,23 +229,21 @@ export function AuditorOverview() {
           <KPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
         </div>
 
-        {/* GRÁFICAS REUTILIZABLES */}
         <DashboardCharts />
 
-        {/* Audit Trail — Time-Travel */}
         <div>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4">
             <h3 className="text-white font-bold flex items-center gap-2">
               <ShieldCheck className="text-primary" size={18} /> Trazabilidad Total (Audit Log)
             </h3>
-            <div className="flex gap-2">
-              <div className="relative">
+            <div className="flex gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-auto">
                 <Search size={12} className="absolute left-2.5 top-2.5 text-slate-500" />
                 <input
                   value={searchLog}
                   onChange={e => setSearchLog(e.target.value)}
-                  placeholder="Buscar en logs..."
-                  className="h-9 pl-7 pr-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary w-44"
+                  placeholder="Buscar..."
+                  className="h-9 w-full md:w-44 pl-7 pr-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
                 />
               </div>
               <select
@@ -274,7 +252,6 @@ export function AuditorOverview() {
                 className="h-9 px-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="ALL">Todas</option>
-                {/* <option value="CREATE">CREATE</option>  <- Removido también del selector */}
                 <option value="APPROVE">APPROVE</option>
                 <option value="CHECKOUT">CHECKOUT</option>
                 <option value="CHECKIN">CHECKIN</option>
@@ -284,29 +261,33 @@ export function AuditorOverview() {
             </div>
           </div>
 
-          <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden">
-            <table className="w-full text-left text-xs text-slate-400">
+          <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto w-full">
+            <table className="w-full text-left text-xs text-slate-400 min-w-[600px]">
               <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
                 <tr>
-                  <th className="p-3">Timestamp</th>
-                  <th className="p-3">Acción</th>
-                  <th className="p-3">Actor</th>
+                  <th className="p-3 w-32">Timestamp</th>
+                  <th className="p-3 w-24">Acción</th>
+                  <th className="p-3 w-32">Actor</th>
+                  {/* ✨ Aquí removimos el truncado. Añadimos min-width y wrap normal */}
                   <th className="p-3">Detalle</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {filteredLogs.slice(0, 20).map(log => (
                   <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-3 font-mono text-[10px] text-slate-500 whitespace-nowrap">
+                    <td className="p-3 font-mono text-[10px] text-slate-500 whitespace-nowrap align-top">
                       {format(new Date(log.timestamp), 'dd/MM/yy HH:mm', { locale: es })}
                     </td>
-                    <td className="p-3">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${actionBadge[log.action] || 'text-slate-400 bg-slate-700'}`}>
+                    <td className="p-3 align-top">
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${actionBadge[log.action] || 'text-slate-400 bg-slate-700'}`}>
                         {log.action}
                       </span>
                     </td>
-                    <td className="p-3 text-slate-300">{log.actor_name || log.actor_id}</td>
-                    <td className="p-3 text-slate-400 truncate max-w-xs">{log.details || '—'}</td>
+                    <td className="p-3 text-slate-300 align-top">{log.actor_name || log.actor_id}</td>
+                    {/* ✨ Celda de detalle arreglada para móviles */}
+                    <td className="p-3 text-slate-400 min-w-[200px] whitespace-normal leading-relaxed break-words align-top">
+                      {log.details || '—'}
+                    </td>
                   </tr>
                 ))}
                 {filteredLogs.length === 0 && (
@@ -323,17 +304,17 @@ export function AuditorOverview() {
         {/* Maintenance Logs */}
         {maintenanceLogs.length > 0 && (
           <div>
-            <h3 className="text-white font-bold flex items-center gap-2 mb-4">
+            <h3 className="text-white font-bold flex items-center gap-2 mb-4 text-sm md:text-base">
               <Wrench className="text-amber-400" size={18} /> Historial de Mantenimientos
             </h3>
             <div className="space-y-2">
               {maintenanceLogs.slice(0, 10).map(log => (
-                <div key={log.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+                <div key={log.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl gap-2">
                   <div>
                     <p className="text-white font-medium text-sm">{log.assets?.name || `Activo #${log.asset_id}`}</p>
                     <p className="text-slate-500 text-xs">{log.issue_description}</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <span className={`text-[10px] font-bold px-2 py-1 rounded border ${log.status === 'RESOLVED' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'}`}>
                       {log.status}
                     </span>

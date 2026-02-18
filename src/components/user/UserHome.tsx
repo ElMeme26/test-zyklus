@@ -5,7 +5,7 @@ import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import {
   Search, LogOut, Clock, Info, Package, ChevronRight,
-  QrCode, RotateCcw, X, CheckCircle, AlertCircle, MessageSquare, Building2
+  QrCode, RotateCcw, X, CheckCircle, MessageSquare, Building2
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import QRCode from 'react-qr-code';
@@ -230,7 +230,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   // Request modal
   const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
-  const [days, setDays] = useState(0); // <-- 0 días por defecto (Mismo día)
+  const [days, setDays] = useState(0); 
   const [motive, setMotive] = useState('');
   const [isExternal, setIsExternal] = useState(false);
   const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
@@ -241,7 +241,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
 
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
-      a.status === 'Disponible' && // <-- Cambio clave aquí
+      a.status === 'Disponible' && 
       !a.maintenance_alert &&
       ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (a.tag?.toLowerCase() || '').includes(search.toLowerCase()) ||
@@ -287,25 +287,13 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex border-t border-slate-800">
-            <button
-              onClick={() => setActiveTab('catalog')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-            >
-              Catálogo
-            </button>
-            <button
-              onClick={() => setActiveTab('loans')}
-              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-            >
-              Mis Préstamos
-            </button>
+            <button onClick={() => setActiveTab('catalog')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}>Catálogo</button>
+            <button onClick={() => setActiveTab('loans')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}>Mis Préstamos</button>
           </div>
         </header>
       )}
 
-      {/* Header Alternativo si es Vista de Manager (Auto-Solicitud) */}
       {isManagerView && (
         <header className="flex justify-between items-center mb-6">
           <div>
@@ -319,30 +307,31 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       <main className="p-4">
         {activeTab === 'catalog' ? (
           <>
-            {/* Search and Tabs Activos/Combos */}
-            <div className="flex flex-col sm:flex-row gap-4 mb-6">
-              <div className="relative flex-1">
-                <Search className="absolute left-4 top-3 text-slate-500 w-4 h-4" />
-                <Input
-                  placeholder="¿Qué necesitas hoy?"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  className="pl-11 h-10 rounded-lg shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)]"
-                />
-              </div>
-              <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+            {/* ✨ MEJORA: Recuadro centrado y buscador organizado */}
+            <div className="flex flex-col gap-5 mb-8 mt-2 max-w-2xl mx-auto">
+              <div className="flex bg-slate-900 rounded-xl p-1.5 border border-slate-800 shadow-inner w-full sm:max-w-md mx-auto">
                 <button 
                   onClick={() => setView('activos')} 
-                  className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${view === 'activos' ? 'bg-primary text-black' : 'text-slate-400'}`}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${view === 'activos' ? 'bg-primary text-black shadow-md scale-105' : 'text-slate-400 hover:text-white'}`}
                 >
                   Activos Sueltos
                 </button>
                 <button 
                   onClick={() => setView('combos')} 
-                  className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${view === 'combos' ? 'bg-primary text-black' : 'text-slate-400'}`}
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${view === 'combos' ? 'bg-primary text-black shadow-md scale-105' : 'text-slate-400 hover:text-white'}`}
                 >
                   Combos (Kits)
                 </button>
+              </div>
+
+              <div className="relative w-full">
+                <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
+                <Input
+                  placeholder={view === 'activos' ? "¿Qué activo necesitas hoy?" : "¿Qué combo necesitas hoy?"}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
+                />
               </div>
             </div>
 
@@ -352,29 +341,15 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 {filteredAssets.map(asset => (
                   <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
                     <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
-                      <img
-                        src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`}
-                        className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                        alt={asset.name}
-                      />
-                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">
-                        {asset.tag}
-                      </span>
-                      {asset.category && (
-                        <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">
-                          {asset.category}
-                        </span>
-                      )}
+                      <img src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" alt={asset.name} />
+                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">{asset.tag}</span>
+                      {asset.category && <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">{asset.category}</span>}
                     </div>
                     <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
                     <p className="text-secondary text-xs mb-3 truncate">{asset.description || 'Sin descripción'}</p>
                     <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                        <CheckCircle size={10} /> Disponible
-                      </span>
-                      <Button size="sm" variant="neon" className="text-[11px] h-7">
-                        Solicitar <ChevronRight size={12} />
-                      </Button>
+                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><CheckCircle size={10} /> Disponible</span>
+                      <Button size="sm" variant="neon" className="text-[11px] h-7">Solicitar <ChevronRight size={12} /></Button>
                     </div>
                   </Card>
                 ))}
@@ -388,9 +363,9 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {bundles.map(bundle => (
-                  <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => setSelectedBundle(bundle)}>
+                  <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => setSelectedBundle(bundle)}>
                     <div className="flex items-center gap-4 mb-4">
-                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:scale-110 transition-transform">
                         <Package size={24} />
                       </div>
                       <div>
@@ -399,7 +374,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       </div>
                     </div>
                     {bundle.description && <p className="text-xs text-slate-300 mb-4">{bundle.description}</p>}
-                    <Button size="sm" variant="neon" className="w-full text-xs h-8">
+                    <Button size="sm" variant="neon" className="w-full text-xs h-9 font-bold tracking-wider">
                       Solicitar Combo Completo
                     </Button>
                   </Card>
@@ -434,7 +409,6 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               </button>
             </div>
 
-            {/* Slider de Días */}
             <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4">
                 <label className="text-sm font-bold text-white uppercase tracking-wider">Retorno</label>
@@ -444,25 +418,12 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               </div>
               
               <div className="relative">
-                <input
-                  type="range"
-                  min="0"
-                  max="30"
-                  value={days}
-                  onChange={e => setDays(Number(e.target.value))}
+                <input type="range" min="0" max="30" value={days} onChange={e => setDays(Number(e.target.value))}
                   className="w-full h-3 bg-slate-800 rounded-full appearance-none cursor-pointer accent-primary
-                    [&::-webkit-slider-thumb]:appearance-none 
-                    [&::-webkit-slider-thumb]:w-6 
-                    [&::-webkit-slider-thumb]:h-6 
-                    [&::-webkit-slider-thumb]:rounded-full 
-                    [&::-webkit-slider-thumb]:bg-primary 
-                    [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
-                    [&::-webkit-slider-thumb]:cursor-pointer
-                    [&::-webkit-slider-thumb]:transition-transform
-                    [&::-webkit-slider-thumb]:hover:scale-110"
-                  style={{
-                    background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${(days / 30) * 100}%, rgb(30 41 59) ${(days / 30) * 100}%, rgb(30 41 59) 100%)`
-                  }}
+                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 
+                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
+                    [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                  style={{ background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${(days / 30) * 100}%, rgb(30 41 59) ${(days / 30) * 100}%, rgb(30 41 59) 100%)` }}
                 />
               </div>
               
@@ -474,61 +435,30 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               </div>
             </div>
 
-            {/* Motive */}
-            <Input
-              placeholder="Motivo del préstamo (opcional)"
-              value={motive}
-              onChange={e => setMotive(e.target.value)}
-            />
+            <Input placeholder="Motivo del préstamo (opcional)" value={motive} onChange={e => setMotive(e.target.value)} />
 
-            {/* Checkbox Institución Externa */}
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={isExternal}
-                  onChange={e => setIsExternal(e.target.checked)}
-                  className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
-                />
+                <input type="checkbox" checked={isExternal} onChange={e => setIsExternal(e.target.checked)} className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all" />
                 <div className="flex items-center gap-2">
                   <Building2 size={16} className="text-slate-500 group-hover:text-primary transition-colors" />
-                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                    Es para una institución externa
-                  </span>
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Es para una institución externa</span>
                 </div>
               </label>
 
               {isExternal && (
                 <div className="pl-8 animate-in slide-in-from-top-2">
-                  <select
-                    value={selectedInstitution}
-                    onChange={e => setSelectedInstitution(Number(e.target.value))}
-                    className="w-full h-11 bg-slate-950 border border-primary/30 rounded-lg px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
+                  <select value={selectedInstitution} onChange={e => setSelectedInstitution(Number(e.target.value))} className="w-full h-11 bg-slate-950 border border-primary/30 rounded-lg px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50">
                     <option value="">Selecciona institución...</option>
-                    {institutions.map(inst => (
-                      <option key={inst.id} value={inst.id}>{inst.name}</option>
-                    ))}
+                    {institutions.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
                   </select>
                 </div>
               )}
             </div>
 
-            {/* Zykla AI Suggestion */}
-            {selectedAsset && (
-              <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex gap-3 items-start">
-                <Info size={16} className="text-primary flex-shrink-0 mt-0.5" />
-                <p className="text-xs text-slate-400">
-                  <span className="text-primary font-bold">Zykla sugiere:</span> Si solicitas este equipo, considera agregarlo como un combo la próxima vez si lo usas frecuentemente con otros accesorios.
-                </p>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-3 pt-1">
               <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }}>Cancelar</Button>
-              <Button variant="neon" onClick={handleSubmit}>
-                {isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud'}
-              </Button>
+              <Button variant="neon" onClick={handleSubmit}>{isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud'}</Button>
             </div>
           </Card>
         </div>
