@@ -241,6 +241,17 @@ const handlePrintSelected = () => {
           <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
             <Upload size={14} className="mr-1.5" /> CSV
           </Button>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => {
+              setQrPrintAssets(assets); // Todos los activos
+              setShowQRPrint(true);
+            }}
+            className="border-primary/30 text-primary hover:bg-primary/10"
+          >
+            <Printer size={14} className="mr-1" /> Imprimir Todos los QR
+          </Button>
         </div>
       </div>
 
