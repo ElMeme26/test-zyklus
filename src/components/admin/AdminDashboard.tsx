@@ -131,7 +131,7 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[], onPrintAll:
                     <h4 className="text-white font-bold">{asset.name}</h4>
                     <p className="text-slate-400 text-xs">{asset.tag} · {asset.category}</p>
                     <div className="flex gap-2 mt-2">
-                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-bold">
+                      <span className="text-[10px] bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-0.5 rounded font-bold whitespace-nowrap">
                         {asset.status}
                       </span>
                     </div>
@@ -162,7 +162,7 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[], onPrintAll:
                       Resolver
                     </Button>
                   )}
-                  <span className={`text-[10px] font-bold px-2 py-1 rounded border ${log.status === 'RESOLVED' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'}`}>
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded border whitespace-nowrap ${log.status === 'RESOLVED' ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-amber-400 bg-amber-500/10 border-amber-500/20'}`}>
                     {log.status}
                   </span>
                 </div>
@@ -338,7 +338,8 @@ function InventoryView({ onPrintSelected, onPrintSingle }: { onPrintSelected: (i
                 </td>
                 <td className="p-3 hidden md:table-cell text-xs">{a.category || '—'}</td>
                 <td className="p-3 text-center">
-                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${statusColors[a.status] || 'text-slate-400 bg-slate-700'}`}>
+                  {/* Se agregó whitespace-nowrap aquí para evitar saltos de línea */}
+                  <span className={`text-[10px] font-bold px-2 py-0.5 rounded whitespace-nowrap ${statusColors[a.status] || 'text-slate-400 bg-slate-700'}`}>
                     {a.status}
                   </span>
                 </td>

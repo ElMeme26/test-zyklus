@@ -62,32 +62,34 @@
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* ── Corrección de Etiquetas de Estado en Modo Claro (Legibilidad Crítica) ── */
+  /* ── CORRECCIÓN EXCLUSIVA: LETRAS BLANCAS PARA ESTADOS CRÍTICOS ── */
   
-  /* ESTADO: En mantenimiento / Requiere Mantenimiento */
-  html.light .text-amber-400, 
-  html.light .text-orange-400 {
-    color: #92400e !important; /* Marrón/Ámbar oscuro */
+  /* ESTADO: En mantenimiento / Requiere Mantenimiento (Calibración) */
+  html.light span.text-amber-400, 
+  html.light span.text-orange-400 {
+    color: #ffffff !important; /* Letras blancas exclusivas para la etiqueta */
   }
   
-  html.light .bg-amber-500\/10,
-  html.light .bg-orange-500\/10 {
-    background-color: rgba(245, 158, 11, 0.25) !important;
-    border: 1px solid rgba(146, 64, 14, 0.4) !important;
+  html.light span.bg-amber-500\/10,
+  html.light span.bg-orange-500\/10 {
+    background-color: #d97706 !important; /* Fondo Amber 600 sólido para contraste */
+    border: 1px solid #b45309 !important;
   }
 
   /* ESTADO: Fuera de servicio / Dada de baja */
-  html.light .text-slate-400,
-  html.light .text-slate-500 {
-    color: #1e293b !important; /* Slate 900 para contraste máximo */
+  /* Al usar span.rounded aseguramos que los botones de QR/Editar (que son <button>) no se vean afectados */
+  html.light span.text-slate-400.rounded,
+  html.light span.text-slate-500.rounded {
+    color: #ffffff !important; 
   }
 
-  html.light .bg-slate-700\/50 {
-    background-color: rgba(148, 163, 184, 0.25) !important;
-    border: 1px solid rgba(30, 41, 59, 0.4) !important;
+  html.light span.bg-slate-700\/50,
+  html.light span.bg-slate-700 {
+    background-color: #475569 !important; /* Fondo Slate 600 sólido para contraste */
+    border: 1px solid #1e293b !important;
   }
 
-  /* ESTADO: Disponible */
+  /* ESTADO: Disponible (Se mantiene oscuro para visibilidad en fondo claro) */
   html.light .text-emerald-400 {
     color: #064e3b !important; /* Verde bosque muy oscuro */
   }
