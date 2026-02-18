@@ -247,12 +247,26 @@ export function GuardScanner() {
         const reqData = JSON.parse(requestQR);
         const assetData = JSON.parse(assetQR);
         
-        if (reqData.asset_id !== assetData.id && reqData.asset_id !== assetData.asset_id) {
-          toast.error('⚠️ ERROR: El activo NO coincide con la solicitud');
+        if (reqData.type !== 'REQUEST') {
+          toast.error('El primer QR no es una solicitud válida');
+          setStep(1);
           return;
         }
-      } catch {
-        toast.error('Error validando QRs');
+
+        if (assetData.type !== 'ASSET_PHYSICAL') {
+          toast.error('El segundo QR no es una etiqueta de Activo');
+          setAssetQR('');
+          return;
+        }
+
+        if (reqData.asset_id !== assetData.id) {
+          toast.error('El activo escaneado no coincide con la solicitud');
+          return;
+        }
+
+        toast.success('Procesando salida...')
+      } catch (e) {
+        toast.error('Error en la lectura de datos JSON');
         return;
       }
 

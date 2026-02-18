@@ -196,3 +196,21 @@ export interface QRPayload {
   generated_at: string;
   is_valid: boolean; // false después de check-in
 }
+
+// ─── QR TYPES ────────────────────────────────────────────────
+export type QRType = 'REQUEST' | 'ASSET_PHYSICAL';
+
+export interface QRRequestPayload {
+  type: 'REQUEST';
+  request_id: number;
+  asset_id: string;
+  requester_name: string;
+  generated_at: string;
+}
+
+export interface QRAssetPayload {
+  type: 'ASSET_PHYSICAL';
+  id: string; // asset_id
+  tag: string;
+  name: string;
+}

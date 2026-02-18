@@ -346,7 +346,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generateQRCode = (requestId: number): string => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return '';
+    
+    // Usamos la interfaz definida para asegurar consistencia
     const payload = {
+      type: 'REQUEST', // <--- CLAVE PARA EL FLUJO
       request_id: requestId,
       asset_id: req.asset_id,
       asset_name: req.assets?.name || '',
@@ -354,8 +357,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       checkout_date: new Date().toISOString(),
       expected_return: req.expected_return_date || '',
       generated_at: new Date().toISOString(),
-      is_valid: true,
     };
+    
     return JSON.stringify(payload);
   };
 
