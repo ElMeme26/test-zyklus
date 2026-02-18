@@ -509,30 +509,102 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (req.status !== 'APPROVED') {
           return { success: false, message: `⛔ Salida no autorizada. Estado actual: ${req.status}` };
         }
+        
         // Verificar mantenimiento preventivo (bloqueo)
-        const assetData = await supabase.from('assets').select('*').eq('id', req.asset_id).single();
-        if (assetData.data?.status === 'Requiere Mantenimiento') {
+        const { data: assetData, error: assetFetchError } = await supabase
+          .from('assets')
+          .select('*')
+          .eq('id', req.asset_id)
+          .single();
+          
+        if (assetFetchError) {
+          console.error('Error fetching asset:', assetFetchError);
+          return { success: false, message: 'Error al verificar el activo' };
+        }
+          
+        if (assetData?.status === 'Requiere Mantenimiento') {
           return { success: false, message: '🔧 Activo bloqueado por mantenimiento pendiente.' };
         }
 
-        await supabase.from('requests').update({
-          status: 'ACTIVE',
-          checkout_at: new Date().toISOString(),
-          digital_signature: signature,
-          security_check_step: 1,
-        }).eq('id', reqId);
+        // **IMPORTANTE**: Actualizar PRIMERO el activo, LUEGO la solicitud
+        // Esto asegura que si la solicitud falla, el activo no queda en estado inconsistente
+        
+        // 1. Actualizar el estado del activo a "Prestada"
+        const { error: assetError } = await supabase
+          .from('assets')
+          .update({ 
+            status: 'Prestada',
+            usage_count: (assetData?.usage_count || 0) + 1
+          })
+          .eq('id', req.asset_id);
 
-        await supabase.from('assets').update({ status: 'Prestada' }).eq('id', req.asset_id);
+        if (assetError) {
+          console.error('❌ ERROR ACTUALIZANDO ACTIVO:', assetError);
+          console.error('Asset ID:', req.asset_id);
+          console.error('Intended status:', 'Prestada');
+          return { success: false, message: `Error al actualizar el activo: ${assetError.message}` };
+        }
 
-        await logAudit('CHECKOUT', 'guard', 'Guardia', String(reqId), 'REQUEST',
+        console.log('✅ Activo actualizado correctamente a Prestada. Asset ID:', req.asset_id);
+
+        // 2. Actualizar la solicitud a ACTIVE
+        const { error: reqError } = await supabase
+          .from('requests')
+          .update({
+            status: 'ACTIVE',
+            checkout_at: new Date().toISOString(),
+            digital_signature: signature,
+            security_check_step: 1,
+          })
+          .eq('id', reqId);
+
+        if (reqError) {
+          console.error('❌ ERROR ACTUALIZANDO REQUEST:', reqError);
+          // Intentar revertir el activo a Operativa si falla la solicitud
+          await supabase.from('assets').update({ status: 'Operativa' }).eq('id', req.asset_id);
+          return { success: false, message: `Error al procesar la solicitud: ${reqError.message}` };
+        }
+
+        console.log('✅ Request actualizado correctamente a ACTIVE. Request ID:', reqId);
+
+        // 3. Registrar en audit log
+        await logAudit(
+          'CHECKOUT', 
+          'guard', 
+          'Guardia', 
+          String(reqId), 
+          'REQUEST',
           `Salida autorizada: ${req.requester_name} — ${req.assets?.name}`,
           { signature, asset_id: req.asset_id }
         );
 
-        toast.success(`✅ Salida registrada: ${req.assets?.name}`);
-        fetchData();
-        return { success: true, message: 'Salida exitosa', data: req };
+        // 4. Refrescar datos del sistema
+        console.log('🔄 Refrescando datos del sistema...');
+        await fetchData();
+        console.log('✅ Datos del sistema refrescados');
 
+        // 5. Volver a consultar el request CON el activo actualizado
+        const { data: updatedReq, error: refetchError } = await supabase
+          .from('requests')
+          .select(`*, assets:asset_id(*), users:user_id(*)`)
+          .eq('id', reqId)
+          .single();
+
+        if (refetchError) {
+          console.error('⚠️ Error al re-fetch del request:', refetchError);
+        }
+
+        console.log('📊 Request actualizado:', updatedReq);
+        console.log('📊 Activo en request actualizado:', updatedReq?.assets);
+        console.log('📊 Estado del activo:', updatedReq?.assets?.status);
+
+        toast.success(`✅ Salida registrada: ${req.assets?.name}`);
+        
+        return { 
+          success: true, 
+          message: 'Salida exitosa', 
+          data: updatedReq || req
+        };
       } else {
         // CHECK-IN
         if (!['ACTIVE', 'OVERDUE'].includes(req.status)) {
