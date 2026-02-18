@@ -12,13 +12,13 @@
     --border: rgba(255,255,255,0.06);
   }
 
-  /* Light mode override */
+  /* Light mode override - Contraste Mejorado */
   html.light {
-    --bg: #f1f5f9;
-    --surface: #ffffff;
-    --text: #0f172a;
-    --text-secondary: #475569;
-    --border: rgba(0,0,0,0.08);
+    --bg: #f8fafc; /* Fondo más suave */
+    --surface: #ffffff; /* Blanco puro para tarjetas */
+    --text: #0f172a; /* Texto principal oscuro */
+    --text-secondary: #475569; /* Gris pizarra para texto secundario */
+    --border: rgba(0,0,0,0.1); /* Bordes más definidos pero sutiles */
   }
 
   body {
@@ -29,11 +29,9 @@
   }
 }
 
-/* ─── DARK MODE Tailwind classes ─────────────────────────────
-   Usamos la clase .dark en <html> para activar dark mode       */
+/* ─── Tailwind classes ───────────────────────────── */
 @layer components {
 
-  /* Glass card - adapta según tema */
   .glass {
     background: var(--surface);
     border: 1px solid var(--border);
@@ -42,10 +40,9 @@
   }
 
   html.light .glass {
-    box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05); /* Sombra más limpia en light mode */
   }
 
-  /* Botón Neón — igual en ambos modos */
   .btn-neon {
     @apply relative overflow-hidden bg-primary text-slate-950 font-bold uppercase tracking-wider
            transition-all duration-300 ease-out
@@ -54,31 +51,46 @@
            hover:shadow-[0_0_40px_rgba(6,182,212,0.6)];
   }
 
-  /* Texto brillante */
+  html.light .btn-neon {
+    @apply shadow-[0_4px_15px_rgba(6,182,212,0.3)] hover:shadow-[0_8px_25px_rgba(6,182,212,0.5)];
+  }
+
   .text-glow {
     @apply text-primary drop-shadow-[0_0_10px_rgba(34,211,238,0.5)];
   }
 
-  /* Scrollbar oculta */
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* ── Light mode patches ── */
+  /* ── Light mode patches (Corrigiendo contraste) ── */
 
-  /* Cards en modo claro */
   html.light .bg-slate-900\/50,
   html.light .bg-slate-900\/80,
   html.light .bg-slate-900\/95 {
     background: rgba(255, 255, 255, 0.95) !important;
     border-color: rgba(0,0,0,0.08) !important;
+    color: #0f172a !important; /* Forzar texto oscuro en fondos translucidos */
   }
 
   html.light .bg-slate-900 {
     background: #ffffff !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+
+  /* Excepción para la pantalla de Login: Mantenerla oscura o forzar contraste */
+  html.light .login-bg {
+    background: #ffffff !important;
+  }
+  html.light .login-card {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+  html.light .login-text {
+    color: #0f172a !important;
   }
 
   html.light .bg-slate-950 {
-    background: #f8fafc !important;
+    background: #f1f5f9 !important;
   }
 
   html.light .border-slate-800 {
@@ -107,26 +119,21 @@
 
   html.light .bg-background,
   html.light .bg-background\/80 {
-    background: #f1f5f9 !important;
+    background: #f8fafc !important;
   }
 
-  /* Header en modo claro */
   html.light header {
-    background: rgba(241, 245, 249, 0.9) !important;
+    background: rgba(248, 250, 252, 0.9) !important;
     border-color: rgba(0,0,0,0.1) !important;
   }
 
-  html.light .bg-surface\/60 {
-    background: rgba(255,255,255,0.8) !important;
-  }
-
-  /* Input en modo claro */
   html.light input,
   html.light textarea,
   html.light select {
     background: #ffffff !important;
     border-color: #cbd5e1 !important;
     color: #0f172a !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
 
   html.light input::placeholder,
@@ -134,7 +141,6 @@
     color: #94a3b8 !important;
   }
 
-  /* Table rows en modo claro */
   html.light .hover\:bg-slate-800\/30:hover {
     background: rgba(0,0,0,0.03) !important;
   }
@@ -143,10 +149,3 @@
     border-color: rgba(0,0,0,0.06) !important;
   }
 }
-
-/* ─── DARK MODE explicit (bg-background) ──────────────────── */
-.bg-background { background-color: #020617; }
-html.light .bg-background { background-color: #f1f5f9; }
-
-.bg-surface { background-color: #0f172a; }
-html.light .bg-surface { background-color: #ffffff; }

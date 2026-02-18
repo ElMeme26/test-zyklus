@@ -24,7 +24,7 @@ export function ChatAssistant() {
   const handleSend = async () => {
     if (!input.trim()) return;
     if (!GEMINI_API_KEY) {
-      setMessages(prev => [...prev, { role: 'bot', text: '⚠️ API Key de Gemini no configurada. Configura VITE_GEMINI_API_KEY en tu .env' }]);
+      setMessages(prev => [...prev, { role: 'bot', text: '⚠️ API Key de Gemini no encontrada. Por favor configura VITE_GEMINI_API_KEY en tu archivo .env' }]);
       return;
     }
 
@@ -44,42 +44,28 @@ export function ChatAssistant() {
           mis_prestamos: userRequests.map(r => ({
             id: r.id,
             activo: r.assets?.name,
-            tag: r.assets?.tag,
             estado: r.status,
             dias: r.days_requested,
-            retorno: r.expected_return_date,
-            motivo: r.motive
+            retorno: r.expected_return_date
           })),
-          activos_disponibles: assets.filter(a => a.status === 'Operativa').map(a => ({
+          activos_disponibles: assets.filter(a => a.status === 'Disponible').map(a => ({
             nombre: a.name,
-            tag: a.tag,
             categoria: a.category
-          })).slice(0, 20)
+          })).slice(0, 15) // Limitamos a 15 para no saturar el prompt
         });
       } else if (user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR') {
-        // Admin y Auditor ven todo
+        // Admin y Auditor ven resúmenes
         context = JSON.stringify({
           total_activos: assets.length,
-          activos: assets.map(a => ({
-            nombre: a.name,
-            tag: a.tag,
-            estado: a.status,
-            categoria: a.category,
-            ubicacion: a.location,
-            marca: a.brand,
-            uso: a.usage_count
-          })).slice(0, 50),
-          solicitudes_recientes: requests.slice(0, 20).map(r => ({
-            solicitante: r.requester_name,
-            activo: r.assets?.name,
-            estado: r.status,
-            fecha: r.created_at
-          }))
+          disponibles: assets.filter(a => a.status === 'Disponible').length,
+          en_mantenimiento: assets.filter(a => a.status === 'En mantenimiento').length,
+          prestados: assets.filter(a => a.status === 'Prestada').length,
+          solicitudes_pendientes: requests.filter(r => r.status === 'PENDING').length
         });
       } else {
         // Otros roles: vista limitada
         context = JSON.stringify({
-          activos_categoria: assets.map(a => ({ nombre: a.name, categoria: a.category, estado: a.status })).slice(0, 30)
+          activos_resumen: assets.map(a => ({ nombre: a.name, estado: a.status })).slice(0, 20)
         });
       }
       
@@ -92,16 +78,13 @@ DATOS DEL SISTEMA:
 ${context}
 
 INSTRUCCIONES:
-- Responde de forma concisa, amigable y profesional
-- Si el usuario pregunta por vencimientos, búscalos en los datos
-- Si pregunta por renovaciones, explícale cómo hacerlo desde su panel
-- Si es USUARIO, solo respondes sobre SUS préstamos y activos disponibles
-- Si es ADMIN o AUDITOR, puedes responder sobre TODO el inventario
-- Si no tienes la información exacta, sugiere buscar en el sistema
-- NUNCA inventes datos, usa solo lo que está en el contexto
-- Sé breve: máximo 3-4 líneas por respuesta`;
+- Responde de forma concisa, amigable y profesional.
+- Si el usuario pregunta por vencimientos, búscalos en los datos.
+- NUNCA inventes datos, usa solo lo que está en el contexto. Si no lo sabes, di que no tienes esa información a mano.
+- Sé breve: máximo 3 líneas por respuesta.`;
 
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${GEMINI_API_KEY}`, {
+      // ✨ CORRECCIÓN: Endpoint actualizado a gemini-1.5-flash
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -112,12 +95,14 @@ INSTRUCCIONES:
           }],
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: 500
+            maxOutputTokens: 300
           }
         })
       });
 
       if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        console.error("Gemini API Error details:", errData);
         throw new Error(`API Error: ${response.status}`);
       }
 
@@ -126,10 +111,10 @@ INSTRUCCIONES:
       setMessages(prev => [...prev, { role: 'bot', text: botReply }]);
       
     } catch (error) {
-      console.error('Gemini API Error:', error);
+      console.error('Gemini Fetch Error:', error);
       setMessages(prev => [...prev, { 
         role: 'bot', 
-        text: "⚠️ Error de conexión con Zykla IA. Verifica tu API Key o intenta más tarde." 
+        text: "⚠️ Hubo un error al conectar con los servidores de IA. Intenta de nuevo más tarde." 
       }]);
     } finally { 
       setIsLoading(false); 
