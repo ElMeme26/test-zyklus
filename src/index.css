@@ -14,11 +14,11 @@
 
   /* Light mode override - Contraste Mejorado */
   html.light {
-    --bg: #f8fafc; /* Fondo más suave */
-    --surface: #ffffff; /* Blanco puro para tarjetas */
-    --text: #0f172a; /* Texto principal oscuro */
-    --text-secondary: #475569; /* Gris pizarra para texto secundario */
-    --border: rgba(0,0,0,0.1); /* Bordes más definidos pero sutiles */
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --border: rgba(0,0,0,0.1);
   }
 
   body {
@@ -40,7 +40,7 @@
   }
 
   html.light .glass {
-    box-shadow: 0 10px 30px rgba(0,0,0,0.05); /* Sombra más limpia en light mode */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
   }
 
   .btn-neon {
@@ -62,65 +62,76 @@
   .scrollbar-hide::-webkit-scrollbar { display: none; }
   .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
-  /* ── Light mode patches (Corrigiendo contraste) ── */
+  /* ── Corrección de Etiquetas de Estado en Modo Claro (Legibilidad Crítica) ── */
+  
+  /* ESTADO: En mantenimiento / Requiere Mantenimiento */
+  html.light .text-amber-400, 
+  html.light .text-orange-400 {
+    color: #92400e !important; /* Marrón/Ámbar oscuro */
+  }
+  
+  html.light .bg-amber-500\/10,
+  html.light .bg-orange-500\/10 {
+    background-color: rgba(245, 158, 11, 0.25) !important;
+    border: 1px solid rgba(146, 64, 14, 0.4) !important;
+  }
+
+  /* ESTADO: Fuera de servicio / Dada de baja */
+  html.light .text-slate-400,
+  html.light .text-slate-500 {
+    color: #1e293b !important; /* Slate 900 para contraste máximo */
+  }
+
+  html.light .bg-slate-700\/50 {
+    background-color: rgba(148, 163, 184, 0.25) !important;
+    border: 1px solid rgba(30, 41, 59, 0.4) !important;
+  }
+
+  /* ESTADO: Disponible */
+  html.light .text-emerald-400 {
+    color: #064e3b !important; /* Verde bosque muy oscuro */
+  }
+  
+  html.light .bg-emerald-500\/10 {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    border: 1px solid rgba(6, 78, 59, 0.3) !important;
+  }
+
+  /* ── Light mode patches (Contraste de Interfaz) ── */
+
+  html.light .bg-slate-900\/40 {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  }
 
   html.light .bg-slate-900\/50,
   html.light .bg-slate-900\/80,
   html.light .bg-slate-900\/95 {
     background: rgba(255, 255, 255, 0.95) !important;
-    border-color: rgba(0,0,0,0.08) !important;
-    color: #0f172a !important; /* Forzar texto oscuro en fondos translucidos */
+    border-color: rgba(0,0,0,0.1) !important;
+    color: #0f172a !important; 
   }
 
   html.light .bg-slate-900 {
     background: #ffffff !important;
-    border-color: rgba(0,0,0,0.1) !important;
+    border-color: rgba(0,0,0,0.15) !important;
   }
 
-  /* Excepción para la pantalla de Login: Mantenerla oscura o forzar contraste */
-  html.light .login-bg {
-    background: #ffffff !important;
-  }
+  html.light .login-bg { background: #ffffff !important; }
   html.light .login-card {
     background: #f8fafc !important;
     border-color: #cbd5e1 !important;
   }
-  html.light .login-text {
-    color: #0f172a !important;
-  }
+  html.light .login-text { color: #0f172a !important; }
 
-  html.light .bg-slate-950 {
-    background: #f1f5f9 !important;
-  }
+  html.light .bg-slate-950 { background: #f1f5f9 !important; }
+  html.light .border-slate-800 { border-color: rgba(0,0,0,0.1) !important; }
+  html.light .border-slate-700 { border-color: rgba(0,0,0,0.15) !important; }
 
-  html.light .border-slate-800 {
-    border-color: rgba(0,0,0,0.1) !important;
-  }
-
-  html.light .border-slate-700 {
-    border-color: rgba(0,0,0,0.15) !important;
-  }
-
-  html.light .text-slate-400 {
-    color: #475569 !important;
-  }
-
-  html.light .text-slate-500 {
-    color: #64748b !important;
-  }
-
-  html.light .text-slate-300 {
-    color: #334155 !important;
-  }
-
-  html.light .text-white {
-    color: #0f172a !important;
-  }
-
+  html.light .text-white { color: #0f172a !important; }
   html.light .bg-background,
-  html.light .bg-background\/80 {
-    background: #f8fafc !important;
-  }
+  html.light .bg-background\/80 { background: #f8fafc !important; }
 
   html.light header {
     background: rgba(248, 250, 252, 0.9) !important;
@@ -136,16 +147,14 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
 
-  html.light input::placeholder,
-  html.light textarea::placeholder {
-    color: #94a3b8 !important;
-  }
+  html.light input::placeholder { color: #94a3b8 !important; }
 
-  html.light .hover\:bg-slate-800\/30:hover {
-    background: rgba(0,0,0,0.03) !important;
+  html.light .hover\:bg-slate-800\/30:hover,
+  html.light tr.hover\:bg-slate-800\/30:hover {
+    background-color: #f1f5f9 !important;
   }
 
   html.light .divide-slate-800\/50 > * + * {
-    border-color: rgba(0,0,0,0.06) !important;
+    border-color: rgba(0,0,0,0.08) !important;
   }
 }

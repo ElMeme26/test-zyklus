@@ -273,9 +273,9 @@ function InventoryView({ onPrintSelected, onPrintSingle }: { onPrintSelected: (i
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center gap-4 font-bold text-sm">
           <span>{selectedIds.size} seleccionados</span>
           <Button size="sm" variant="secondary" onClick={() => setShowBundleModal(true)} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">
-            Crear Combo Fijo
+            Crear
           </Button>
-          <Button size="sm" variant="secondary" onClick={() => onPrintSelected(selectedIds)} className="h-8 text-xs flex items-center gap-1 bg-black text-white hover:bg-slate-900 border-0">
+          <Button size="sm" variant="secondary" onClick={() => onPrintSelected(selectedIds)} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">
             <Printer size={14} /> Imprimir QR
           </Button>
           <button onClick={() => setSelectedIds(new Set())} className="hover:text-rose-600"><X size={18} /></button>
@@ -386,7 +386,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: { onPrintSelected: (i
               onChange={e => setCurrentAsset({ ...currentAsset, status: e.target.value as AssetState })}
             >
               <option value="Disponible">Disponible</option>
-              <option value="En mantenimiento">En mantenimiento</option>
+              <option value="En Mantenimiento">En mantenimiento</option>
               <option value="Requiere Mantenimiento">Requiere Mantenimiento</option>
               <option value="Prestada">Prestada</option>
               <option value="Dada de baja">Dada de baja</option>
