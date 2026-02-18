@@ -3,15 +3,16 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import type { Asset, AssetState } from '../../types';
 import { Card, Button, Input } from '../ui/core';
-import {
-  LogOut, Database, Plus, Search, Edit, Trash2, X,
+import { LogOut, Database, Plus, Search, Edit, Trash2, X,
   Upload, CheckSquare, Square, LayoutGrid, Building2,
-  ScanLine, Wrench, Shield, AlertTriangle, CheckCircle
+  ScanLine, Wrench, Shield, AlertTriangle, CheckCircle,
+  QrCode, Printer                                        // ← AGREGAR
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { AssetQRPrint } from './AssetQRPrint';
 
 
 // ─── ASSET INFO MODAL (QR Scan Informativo) ──────────────────
@@ -173,6 +174,24 @@ function InventoryView() {
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  
+  const [showQRPrint, setShowQRPrint] = useState(false);
+  const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
+
+// Helper: abrir modal de impresión para un solo activo
+const handlePrintSingle = (asset: Asset) => {
+  setQrPrintAssets([asset]);
+  setShowQRPrint(true);
+};
+
+// Helper: abrir modal de impresión para los seleccionados
+const handlePrintSelected = () => {
+  const selected = assets.filter(a => selectedIds.has(a.id));
+  if (selected.length === 0) return;
+  setQrPrintAssets(selected);
+  setShowQRPrint(true);
+};
+
   const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category).filter(Boolean)))];
   const filteredAssets = assets.filter(a =>
     (a.name?.toLowerCase() || '').includes(search.toLowerCase()) &&
@@ -226,6 +245,7 @@ function InventoryView() {
       </div>
 
       {/* Batch actions */}
+      
       {selectedIds.size > 0 && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2 rounded-full shadow-lg flex items-center gap-4 font-bold text-sm">
           <span>{selectedIds.size} seleccionados</span>
@@ -237,6 +257,15 @@ function InventoryView() {
               Crear Combo
             </Button>
           )}
+          {/* ← BOTÓN NUEVO */}
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={handlePrintSelected}
+            className="h-7 text-xs flex items-center gap-1"
+          >
+            <Printer size={12} /> Imprimir QR
+          </Button>
           <button onClick={() => setSelectedIds(new Set())}><X size={16} /></button>
         </div>
       )}
@@ -274,6 +303,14 @@ function InventoryView() {
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-2">
+                    {/* ← BOTÓN NUEVO — imprimir QR de un solo activo */}
+                    <button
+                      onClick={() => handlePrintSingle(a)}
+                      className="text-slate-400 hover:text-cyan-400 transition-colors"
+                      title="Imprimir QR"
+                    >
+                      <QrCode size={14} />
+                    </button>
                     <button onClick={() => { setIsEditing(true); setCurrentAsset(a); setShowModal(true); }} className="text-slate-400 hover:text-primary transition-colors">
                       <Edit size={14} />
                     </button>
@@ -353,6 +390,14 @@ function InventoryView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ← AGREGAR AQUÍ, al final, antes del cierre del div */}
+      {showQRPrint && (
+        <AssetQRPrint
+          assets={qrPrintAssets}
+          onClose={() => setShowQRPrint(false)}
+        />
       )}
     </div>
   );
