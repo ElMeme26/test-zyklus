@@ -5,7 +5,7 @@
 export type UserRole = 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO' | 'GUARDIA';
 
 export type AssetState =
-  | 'Operativa'
+  | 'Disponible'
   | 'En mantenimiento'
   | 'Prestada'
   | 'Dada de baja'
@@ -35,7 +35,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  dept: string;
+  disciplina: string;
   avatar?: string;
   phone?: string;
   manager_id?: string;
@@ -98,7 +98,7 @@ export interface Request {
   user_id: string;
   institution_id?: number;
   requester_name: string;
-  requester_dept?: string;
+  requester_disciplina?: string;
   days_requested: number;
   motive?: string;
   status: RequestStatus;

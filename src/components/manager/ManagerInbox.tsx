@@ -3,12 +3,13 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import { Check, X, RotateCcw, Box, User as UserIcon, LogOut, Users, QrCode, Clock, AlertCircle } from 'lucide-react';
+import { Check, X, RotateCcw, Box, User as UserIcon, LogOut, Users, QrCode, Clock, Plus } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { UserHome } from '../user/UserHome'; // ← Importante para el auto-solicitar
 
 // ─── QR Modal para el Líder ───────────────────────────────────
 function LeaderQRModal({ request, onClose }: { request: Request; onClose: () => void }) {
@@ -120,11 +121,13 @@ function TeamView() {
 
 // ─── MAIN MANAGER INBOX ──────────────────────────────────────
 export function ManagerInbox() {
-  const { requests, approveRequest, rejectRequest, returnRequestWithFeedback, createRequest, assets } = useData();
+  const { requests, approveRequest, rejectRequest, returnRequestWithFeedback } = useData();
   const { logout, user } = useAuth();
+  
   const [activeTab, setActiveTab] = useState<'inbox' | 'team' | 'myloans'>('inbox');
   const [rejectionModal, setRejectionModal] = useState<{ reqId: number; type: 'reject' | 'return' } | null>(null);
   const [leaderQRReq, setLeaderQRReq] = useState<Request | null>(null);
+  const [isRequesting, setIsRequesting] = useState(false); // ← Estado para el flujo de auto-solicitud
 
   const pendingRequests = requests.filter(r =>
     r.status === 'PENDING' &&
@@ -135,23 +138,10 @@ export function ManagerInbox() {
     r.user_id === user?.id && ['APPROVED', 'ACTIVE'].includes(r.status)
   );
 
-  const handleAutoRequest = async () => {
-    const available = assets.filter(a => a.status === 'Operativa');
-    if (!available.length || !user) return;
-    // Auto-aprobación: crear solicitud directamente como APPROVED
-    const { supabase } = await import('../../supabaseClient');
-    const { data } = await supabase.from('requests').insert({
-      asset_id: available[0].id,
-      user_id: user.id,
-      requester_name: user.name,
-      requester_dept: user.dept,
-      days_requested: 7,
-      motive: 'Auto-solicitud líder',
-      status: 'APPROVED',
-      approved_at: new Date().toISOString(),
-    }).select(`*, assets:asset_id(*)`).single();
-    if (data) setLeaderQRReq(data);
-  };
+  // Si el líder le pica a "Auto-solicitar", renderizamos el UserHome en modo 'ManagerView'
+  if (isRequesting) {
+    return <UserHome isManagerView={true} onBack={() => setIsRequesting(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-background font-sans pb-24">
@@ -229,8 +219,9 @@ export function ManagerInbox() {
                       <p className="text-primary text-sm font-medium">{req.assets?.name || `Activo #${req.asset_id}`}</p>
                       <p className="text-slate-400 text-xs mt-1 italic">"{req.motive || 'Sin motivo especificado'}"</p>
                       <div className="flex gap-3 mt-2 text-[11px] text-slate-500 font-mono">
-                        <span className="flex items-center gap-1"><Clock size={10} /> {req.days_requested} días</span>
-                        <span>{req.requester_dept}</span>
+                        {/* Se actualizó requester_dept a requester_disciplina */}
+                        <span className="flex items-center gap-1"><Clock size={10} /> {req.days_requested === 0 ? 'Mismo día' : `${req.days_requested} días`}</span>
+                        <span>{req.requester_disciplina}</span>
                       </div>
                     </div>
                   </div>
@@ -276,8 +267,8 @@ export function ManagerInbox() {
           <div className="space-y-4">
             <div className="flex justify-between items-center">
               <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Mis Préstamos</h2>
-              <Button size="sm" variant="outline" onClick={handleAutoRequest} className="text-xs">
-                + Auto-solicitar
+              <Button size="sm" variant="neon" onClick={() => setIsRequesting(true)} className="text-xs">
+                <Plus size={14} className="mr-1" /> Auto-solicitar
               </Button>
             </div>
             {myRequests.length === 0 ? (

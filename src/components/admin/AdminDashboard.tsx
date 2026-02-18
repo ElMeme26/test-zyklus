@@ -3,17 +3,18 @@ import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import type { Asset, AssetState } from '../../types';
 import { Card, Button, Input } from '../ui/core';
-import { LogOut, Database, Plus, Search, Edit, Trash2, X,
+import { 
+  LogOut, Database, Plus, Search, Edit, Trash2, X,
   Upload, CheckSquare, Square, LayoutGrid, Building2,
   ScanLine, Wrench, Shield, AlertTriangle, CheckCircle,
-  QrCode, Printer                                        // ← AGREGAR
+  QrCode, Printer, PieChart
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { AssetQRPrint } from './AssetQRPrint';
-
+import { DashboardCharts } from '../auditor/AuditorOverview';
 
 // ─── ASSET INFO MODAL (QR Scan Informativo) ──────────────────
 function AssetInfoModal({ asset, relatedRequest, onClose }: {
@@ -76,32 +77,47 @@ function AssetInfoModal({ asset, relatedRequest, onClose }: {
 
 // ─── MAINTENANCE PANEL ───────────────────────────────────────
 function MaintenancePanel() {
-  const { assets, maintenanceLogs, validateMaintenanceAsset, reportMaintenance, resolveMaintenance } = useData();
+  const { assets, maintenanceLogs, validateMaintenanceAsset, resolveMaintenance } = useData();
+  const [searchMaint, setSearchMaint] = useState('');
+
   const maintenanceAssets = assets.filter(a =>
     a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento' || a.maintenance_alert
   );
 
+  const filteredMaint = maintenanceAssets.filter(a => 
+    a.name.toLowerCase().includes(searchMaint.toLowerCase()) || 
+    a.tag.toLowerCase().includes(searchMaint.toLowerCase())
+  );
+
   return (
     <div className="space-y-6 animate-in fade-in">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Wrench className="text-amber-400" /> Panel de Mantenimiento
         </h2>
+        <div className="relative w-full md:w-64">
+          <Search className="absolute left-3 top-2 text-slate-500 w-4 h-4" />
+          <Input 
+            placeholder="Buscar por nombre o tag..." 
+            value={searchMaint} 
+            onChange={e => setSearchMaint(e.target.value)} 
+            className="pl-9 h-9"
+          />
+        </div>
       </div>
 
-      {/* Activos que requieren atención */}
       <div>
         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
-          Requieren Atención ({maintenanceAssets.length})
+          Requieren Atención ({filteredMaint.length})
         </h3>
-        {maintenanceAssets.length === 0 ? (
+        {filteredMaint.length === 0 ? (
           <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl text-slate-500">
             <CheckCircle size={32} className="mx-auto mb-2 text-emerald-500/30" />
-            <p className="text-sm">Todo el inventario en buen estado 🎉</p>
+            <p className="text-sm">Todo el inventario en buen estado o sin coincidencias 🎉</p>
           </div>
         ) : (
           <div className="grid gap-3">
-            {maintenanceAssets.map(asset => (
+            {filteredMaint.map(asset => (
               <Card key={asset.id} className="border-amber-500/20">
                 <div className="flex items-center justify-between gap-4">
                   <div>
@@ -130,7 +146,6 @@ function MaintenancePanel() {
         )}
       </div>
 
-      {/* Logs de Mantenimiento */}
       {maintenanceLogs.length > 0 && (
         <div>
           <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
@@ -167,32 +182,30 @@ function InventoryView() {
   const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBatchRequest } = useData();
   const { user } = useAuth();
   const [search, setSearch] = useState('');
-  const [catFilter, setCatFilter] = useState('Todas');
+  const [catFilter, setCatFilter] = useState<string>('Todas');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  
   const [showQRPrint, setShowQRPrint] = useState(false);
   const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
 
-// Helper: abrir modal de impresión para un solo activo
-const handlePrintSingle = (asset: Asset) => {
-  setQrPrintAssets([asset]);
-  setShowQRPrint(true);
-};
+  const handlePrintSingle = (asset: Asset) => {
+    setQrPrintAssets([asset]);
+    setShowQRPrint(true);
+  };
 
-// Helper: abrir modal de impresión para los seleccionados
-const handlePrintSelected = () => {
-  const selected = assets.filter(a => selectedIds.has(a.id));
-  if (selected.length === 0) return;
-  setQrPrintAssets(selected);
-  setShowQRPrint(true);
-};
+  const handlePrintSelected = () => {
+    const selected = assets.filter(a => selectedIds.has(a.id));
+    if (selected.length === 0) return;
+    setQrPrintAssets(selected);
+    setShowQRPrint(true);
+  };
 
   const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category).filter(Boolean)))];
+  
   const filteredAssets = assets.filter(a =>
     (a.name?.toLowerCase() || '').includes(search.toLowerCase()) &&
     (catFilter === 'Todas' || a.category === catFilter)
@@ -206,7 +219,11 @@ const handlePrintSelected = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0];
-    if (f) { const r = new FileReader(); r.onload = ev => importAssets(ev.target?.result as string); r.readAsText(f); }
+    if (f) { 
+      const r = new FileReader(); 
+      r.onload = ev => importAssets(ev.target?.result as string); 
+      r.readAsText(f); 
+    }
   };
 
   const handleSave = async () => {
@@ -216,7 +233,7 @@ const handlePrintSelected = () => {
   };
 
   const statusColors: Record<string, string> = {
-    'Operativa': 'text-emerald-400 bg-emerald-500/10',
+    'Disponible': 'text-emerald-400 bg-emerald-500/10',
     'Prestada': 'text-cyan-400 bg-cyan-500/10',
     'En mantenimiento': 'text-amber-400 bg-amber-500/10',
     'Requiere Mantenimiento': 'text-orange-400 bg-orange-500/10',
@@ -229,11 +246,20 @@ const handlePrintSelected = () => {
       <div className="flex flex-wrap gap-3 mb-5">
         <div className="relative flex-1 min-w-48">
           <Search className="absolute left-3 top-2.5 text-slate-500 w-4 h-4" />
-          <Input placeholder="Buscar activo..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 bg-slate-900 border-slate-800" />
+          <Input 
+            placeholder="Buscar activo..." 
+            value={search} 
+            onChange={e => setSearch(e.target.value)} 
+            className="pl-9 bg-slate-900 border-slate-800" 
+          />
         </div>
         <div className="flex gap-2 flex-wrap">
           {categories.slice(0, 5).map(cat => (
-            <button key={cat} onClick={() => setCatFilter(cat)} className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border ${catFilter === cat ? 'bg-primary text-black border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}>
+            <button 
+              key={cat} 
+              onClick={() => setCatFilter(String(cat))} 
+              className={`px-3 py-2 rounded-lg text-xs font-bold transition-all border ${catFilter === cat ? 'bg-primary text-black border-primary' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+            >
               {cat}
             </button>
           ))}
@@ -245,7 +271,7 @@ const handlePrintSelected = () => {
             variant="outline" 
             size="sm" 
             onClick={() => {
-              setQrPrintAssets(assets); // Todos los activos
+              setQrPrintAssets(assets);
               setShowQRPrint(true);
             }}
             className="border-primary/30 text-primary hover:bg-primary/10"
@@ -256,19 +282,22 @@ const handlePrintSelected = () => {
       </div>
 
       {/* Batch actions */}
-      
       {selectedIds.size > 0 && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2 rounded-full shadow-lg flex items-center gap-4 font-bold text-sm">
           <span>{selectedIds.size} seleccionados</span>
           {user && (
-            <Button size="sm" variant="secondary" onClick={() => {
-              createBatchRequest(assets.filter(a => selectedIds.has(a.id)), user, 7, 'Combo Admin');
-              setSelectedIds(new Set());
-            }} className="h-7 text-xs">
+            <Button 
+              size="sm" 
+              variant="secondary" 
+              onClick={() => {
+                createBatchRequest(assets.filter(a => selectedIds.has(a.id)), user, 7, 'Combo Admin');
+                setSelectedIds(new Set());
+              }} 
+              className="h-7 text-xs"
+            >
               Crear Combo
             </Button>
           )}
-          {/* ← BOTÓN NUEVO */}
           <Button
             size="sm"
             variant="secondary"
@@ -314,7 +343,6 @@ const handlePrintSelected = () => {
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-2">
-                    {/* ← BOTÓN NUEVO — imprimir QR de un solo activo */}
                     <button
                       onClick={() => handlePrintSingle(a)}
                       className="text-slate-400 hover:text-cyan-400 transition-colors"
@@ -341,7 +369,7 @@ const handlePrintSelected = () => {
 
       {/* FAB */}
       <button
-        onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Operativa', maintenance_period_days: 180, maintenance_usage_threshold: 10 }); setShowModal(true); }}
+        onClick={() => { setIsEditing(false); setCurrentAsset({ tag: getNextTag(), status: 'Disponible', maintenance_period_days: 180, maintenance_usage_threshold: 10 }); setShowModal(true); }}
         className="fixed bottom-24 right-6 w-14 h-14 bg-primary rounded-full flex items-center justify-center shadow-lg text-black z-30 hover:scale-110 transition-transform"
       >
         <Plus size={24} />
@@ -366,10 +394,10 @@ const handlePrintSelected = () => {
             {/* Estado */}
             <select
               className="w-full h-10 bg-slate-950 border border-slate-700 text-white rounded-lg px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
-              value={currentAsset.status || 'Operativa'}
+              value={currentAsset.status || 'Disponible'}
               onChange={e => setCurrentAsset({ ...currentAsset, status: e.target.value as AssetState })}
             >
-              <option value="Operativa">Operativa</option>
+              <option value="Disponible">Disponible</option>
               <option value="En mantenimiento">En mantenimiento</option>
               <option value="Requiere Mantenimiento">Requiere Mantenimiento</option>
               <option value="Prestada">Prestada</option>
@@ -403,7 +431,6 @@ const handlePrintSelected = () => {
         </div>
       )}
 
-      {/* ← AGREGAR AQUÍ, al final, antes del cierre del div */}
       {showQRPrint && (
         <AssetQRPrint
           assets={qrPrintAssets}
@@ -417,8 +444,8 @@ const handlePrintSelected = () => {
 // ─── MAIN ADMIN DASHBOARD ────────────────────────────────────
 export function AdminDashboard() {
   const { logout } = useAuth();
-  const { processQRScan, assets, maintenanceLogs } = useData();
-  const [currentView, setCurrentView] = useState<'inventory' | 'external' | 'maintenance'>('inventory');
+  const { processQRScan, assets } = useData();
+  const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance'>('inventory');
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
 
   const maintenanceCount = assets.filter(a => a.maintenance_alert || a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento').length;
@@ -451,6 +478,7 @@ export function AdminDashboard() {
           <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
             {[
               { id: 'inventory', icon: <LayoutGrid size={13} />, label: 'Inventario' },
+              { id: 'analytics', icon: <PieChart size={13} />, label: 'Analíticas' },
               { id: 'external', icon: <Building2 size={13} />, label: 'Externos' },
               { id: 'maintenance', icon: <Wrench size={13} />, label: `Mant. ${maintenanceCount > 0 ? `(${maintenanceCount})` : ''}` },
             ].map(tab => (
@@ -469,7 +497,7 @@ export function AdminDashboard() {
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
           <NotificationCenter />
-          <ThemeToggle /> {/* ← AGREGAR AQUÍ */}
+          <ThemeToggle /> 
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
         </div>
       </header>
@@ -477,17 +505,18 @@ export function AdminDashboard() {
       {/* Main Content */}
       <main className="p-4 md:p-6">
         {currentView === 'inventory' && <InventoryView />}
+        {currentView === 'analytics' && <div className="animate-in fade-in"><DashboardCharts /></div>}
         {currentView === 'external' && <InstitutionsManager />}
         {currentView === 'maintenance' && <MaintenancePanel />}
       </main>
 
       {/* Mobile Nav */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 p-2 flex justify-around z-50">
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-slate-900 border-t border-slate-800 p-2 grid grid-cols-4 z-50">
         <button onClick={() => setCurrentView('inventory')} className={`flex flex-col items-center p-2 gap-0.5 ${currentView === 'inventory' ? 'text-primary' : 'text-slate-500'}`}>
           <LayoutGrid size={20} /><span className="text-[10px] font-bold">Inventario</span>
         </button>
-        <button onClick={handleScan} className="flex flex-col items-center p-2 text-black bg-primary rounded-full -mt-5 shadow-lg border-4 border-slate-950">
-          <ScanLine size={22} />
+        <button onClick={() => setCurrentView('analytics')} className={`flex flex-col items-center p-2 gap-0.5 ${currentView === 'analytics' ? 'text-primary' : 'text-slate-500'}`}>
+          <PieChart size={20} /><span className="text-[10px] font-bold">Analíticas</span>
         </button>
         <button onClick={() => setCurrentView('external')} className={`flex flex-col items-center p-2 gap-0.5 ${currentView === 'external' ? 'text-primary' : 'text-slate-500'}`}>
           <Building2 size={20} /><span className="text-[10px] font-bold">Externos</span>

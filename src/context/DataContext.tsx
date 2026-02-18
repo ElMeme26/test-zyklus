@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import { supabase } from '../supabaseClient';
 import type { Asset, Request, User, Institution, Notification, AuditLog, MaintenanceLog, Bundle } from '../types';
 import { toast } from 'sonner';
-import { differenceInDays, differenceInHours, addDays, isBefore } from 'date-fns';
+import { differenceInDays, differenceInHours, addDays } from 'date-fns';
 
 // ─── CONTEXT INTERFACE ───────────────────────────────────────
 interface DataContextType {
@@ -25,7 +25,7 @@ interface DataContextType {
 
   // Bundles / Combos
   createBundle: (name: string, description: string, assetIds: string[]) => Promise<void>;
-  createBatchRequest: (assets: Asset[], user: User, days: number, motive: string) => Promise<void>;
+  createBatchRequest: (assets: Asset[], user: User, days: number, motive: string, autoApprove?: boolean) => Promise<void>;
 
   // Instituciones Externas
   addInstitution: (inst: Partial<Institution>) => Promise<void>;
@@ -41,7 +41,7 @@ interface DataContextType {
   getTeamRequests: (managerId: string) => Request[];
 
   // Solicitudes (Usuario)
-  createRequest: (asset: Asset, user: User, days: number, motive?: string, institutionId?: number) => Promise<void>;
+  createRequest: (asset: Asset, user: User, days: number, motive?: string, institutionId?: number, autoApprove?: boolean) => Promise<void>;
   cancelRequest: (reqId: number) => Promise<void>;
   renewRequest: (reqId: number, additionalDays: number) => Promise<void>;
   getUserRequests: (userId: string) => Request[];
@@ -83,7 +83,7 @@ const logAudit = async (
   actorId: string,
   actorName: string,
   targetId: string,
-  targetType: AuditLog['target_type'],
+  targetType: string,
   details?: string,
   metadata?: Record<string, unknown>
 ) => {
@@ -102,7 +102,7 @@ const createNotification = async (
   userId: string,
   title: string,
   message: string,
-  type: Notification['type'] = 'INFO',
+  type: string = 'INFO',
   requestId?: number,
   assetId?: string
 ) => {
@@ -157,8 +157,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setAuditLogs((auditRes.data || []) as AuditLog[]);
       setBundles((bundlesRes.data || []) as Bundle[]);
 
-      // Correr verificación de vencimientos automática
-      await checkOverdueRequests(reqRes.data || []);
+      await checkOverdueRequests((reqRes.data || []) as Request[]);
 
     } catch (error) {
       console.error('fetchData error:', error);
@@ -171,79 +170,34 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // ─── MOTOR DE NOTIFICACIONES (Cron simulado) ───────────────
   const checkOverdueRequests = async (reqs: Request[]) => {
-  const now = new Date();
-  for (const req of reqs) {
-    if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
-    const returnDate = new Date(req.expected_return_date);
-    const daysLate = differenceInDays(now, returnDate);
-    const hoursUntilReturn = differenceInHours(returnDate, now);
+    const now = new Date();
+    for (const req of reqs) {
+      if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
+      const returnDate = new Date(req.expected_return_date);
+      const daysLate = differenceInDays(now, returnDate);
+      const hoursUntilReturn = differenceInHours(returnDate, now);
 
-    // ✅ RECORDATORIOS PREVENTIVOS
-    if (hoursUntilReturn <= 48 && hoursUntilReturn > 24 && req.user_id) {
-      // 48 horas antes
-      const notifExists = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', req.user_id)
-        .eq('request_id', req.id)
-        .eq('title', '📅 Recordatorio — 48h')
-        .single();
-      
-      if (!notifExists.data) {
-        await createNotification(
-          req.user_id,
-          '📅 Recordatorio — 48h',
-          'Tu préstamo vence en 2 días. Prepara la devolución.',
-          'WARNING',
-          req.id
-        );
+      if (hoursUntilReturn <= 48 && hoursUntilReturn > 24 && req.user_id) {
+        const { data: notifExists } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '📅 Recordatorio — 48h').single();
+        if (!notifExists) await createNotification(req.user_id, '📅 Recordatorio — 48h', 'Tu préstamo vence en 2 días. Prepara la devolución.', 'WARNING', req.id);
       }
-    }
 
-    if (hoursUntilReturn <= 24 && hoursUntilReturn > 0 && req.user_id) {
-      // 24 HORAS ANTES (NUEVO)
-      const notifExists = await supabase
-        .from('notifications')
-        .select('id')
-        .eq('user_id', req.user_id)
-        .eq('request_id', req.id)
-        .eq('title', '⏰ Recordatorio — 24h')
-        .single();
-      
-      if (!notifExists.data) {
-        await createNotification(
-          req.user_id,
-          '⏰ Recordatorio — 24h',
-          'Tu préstamo vence mañana. Prepara la devolución.',
-          'WARNING',
-          req.id
-        );
+      if (hoursUntilReturn <= 24 && hoursUntilReturn > 0 && req.user_id) {
+        const { data: notifExists } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '⏰ Recordatorio — 24h').single();
+        if (!notifExists) await createNotification(req.user_id, '⏰ Recordatorio — 24h', 'Tu préstamo vence mañana. Prepara la devolución.', 'WARNING', req.id);
       }
-    }
 
-    // ⚠️ SISTEMA DE ESCALACIÓN (VENCIDOS)
-    if (daysLate >= 1) {
-      // Marcar como OVERDUE en BD
-      await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
-
-      if (daysLate === 1 && req.user_id) {
-        await createNotification(req.user_id, '⚠️ Préstamo Vencido', 'Tu préstamo ha vencido. Por favor devuelve el activo hoy.', 'ALERT', req.id);
-      }
-      if (daysLate >= 3 && req.user_id) {
-        await createNotification(req.user_id, '🚨 Incumplimiento (3 días)', 'Incumplimiento de devolución detectado. Se requiere acción inmediata.', 'CRITICAL', req.id);
-        // Notificar al líder si existe
-        if (req.users?.manager_id) {
-          await createNotification(req.users.manager_id, '🚨 Alerta de Equipo', `${req.requester_name} lleva 3 días de retraso.`, 'CRITICAL', req.id);
+      if (daysLate >= 1) {
+        await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
+        if (daysLate === 1 && req.user_id) await createNotification(req.user_id, '⚠️ Préstamo Vencido', 'Tu préstamo ha vencido. Por favor devuelve el activo hoy.', 'ALERT', req.id);
+        if (daysLate >= 3 && req.user_id) {
+          await createNotification(req.user_id, '🚨 Incumplimiento (3 días)', 'Incumplimiento de devolución detectado. Se requiere acción inmediata.', 'CRITICAL', req.id);
+          if (req.users?.manager_id) await createNotification(req.users.manager_id, '🚨 Alerta de Equipo', `${req.requester_name} lleva 3 días de retraso.`, 'CRITICAL', req.id);
         }
-      }
-      if (daysLate >= 7 && req.user_id) {
-        await createNotification(req.user_id, '🔴 ALERTA CRÍTICA — 1 Semana', 'Activo con 1 semana de retraso. Marcado como incidencia grave.', 'CRITICAL', req.id);
+        if (daysLate >= 7 && req.user_id) await createNotification(req.user_id, '🔴 ALERTA CRÍTICA — 1 Semana', 'Activo con 1 semana de retraso. Marcado como incidencia grave.', 'CRITICAL', req.id);
       }
     }
-  }
-};
-
-  
+  };
 
   // ─── ASSETS ────────────────────────────────────────────────
   const getNextTag = () => {
@@ -256,13 +210,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const payload = {
       ...asset,
       tag: asset.tag || getNextTag(),
-      status: asset.status || 'Operativa',
+      status: asset.status || 'Disponible',
       usage_count: 0,
       maintenance_usage_threshold: asset.maintenance_usage_threshold || 10,
-      maintenance_period_days: asset.maintenance_period_days || 180,
-      next_maintenance_date: asset.maintenance_period_days
-        ? addDays(new Date(), asset.maintenance_period_days).toISOString()
-        : addDays(new Date(), 180).toISOString(),
+      maintenance_period_days: 180,
+      next_maintenance_date: addDays(new Date(), 180).toISOString(),
     };
     const { data, error } = await supabase.from('assets').insert([payload]).select().single();
     if (error) { toast.error(error.message); return; }
@@ -274,7 +226,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateAsset = async (id: string, updates: Partial<Asset>) => {
     const { error } = await supabase.from('assets').update(updates).eq('id', id);
     if (!error) { toast.success('Activo actualizado'); fetchData(); }
-    else toast.error(error.message);
   };
 
   const deleteAsset = async (id: string) => {
@@ -289,20 +240,18 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const vals = line.split(',');
       const obj: Record<string, string> = {};
       headers.forEach((h, i) => { obj[h] = (vals[i] || '').trim(); });
-      return { name: obj.name || obj.nombre || 'Sin nombre', tag: obj.tag || getNextTag(), category: obj.category || obj.categoria || 'General', serial: obj.serial || obj.serie, status: 'Operativa' as const };
+      return { name: obj.name || obj.nombre || 'Sin nombre', tag: obj.tag || getNextTag(), category: obj.category || obj.categoria || 'General', serial: obj.serial || obj.serie, status: 'Disponible' as const };
     });
     const { error } = await supabase.from('assets').insert(rows);
     if (!error) { toast.success(`${rows.length} activos importados`); fetchData(); }
-    else toast.error(error.message);
   };
 
-  // ─── MANTENIMIENTO PREVENTIVO ──────────────────────────────
   const validateMaintenanceAsset = async (assetId: string) => {
     const asset = assets.find(a => a.id === assetId);
     if (!asset) return;
-    const newMaintenanceDate = addDays(new Date(), asset.maintenance_period_days || 180);
+    const newMaintenanceDate = addDays(new Date(), 180);
     await supabase.from('assets').update({
-      status: 'Operativa',
+      status: 'Disponible',
       maintenance_alert: false,
       usage_count: 0,
       next_maintenance_date: newMaintenanceDate.toISOString(),
@@ -320,12 +269,22 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
-  const createBatchRequest = async (selectedAssets: Asset[], user: User, days: number, motive: string) => {
+  const createBatchRequest = async (selectedAssets: Asset[], user: User, days: number, motive: string, autoApprove = false) => {
+    let returnDate;
+    if (days === 0) {
+      const d = new Date(); d.setHours(21, 0, 0, 0); returnDate = d.toISOString();
+    } else {
+      returnDate = addDays(new Date(), days).toISOString();
+    }
+
+    const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
+    const finalApproveDate = autoApprove ? new Date().toISOString() : null;
+
     const rows = selectedAssets.map(a => ({
       asset_id: a.id, user_id: user.id, requester_name: user.name,
-      requester_dept: user.dept, days_requested: days,
-      motive: `[COMBO] ${motive}`, status: 'PENDING',
-      expected_return_date: addDays(new Date(), days).toISOString(),
+      requester_disciplina: user.disciplina, days_requested: days,
+      motive: `[COMBO] ${motive}`, status: finalStatus,
+      approved_at: finalApproveDate, expected_return_date: returnDate,
     }));
     const { error } = await supabase.from('requests').insert(rows);
     if (!error) { toast.success(`Combo de ${rows.length} activos solicitado`); fetchData(); }
@@ -346,10 +305,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const generateQRCode = (requestId: number): string => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return '';
-    
-    // Usamos la interfaz definida para asegurar consistencia
     const payload = {
-      type: 'REQUEST', // <--- CLAVE PARA EL FLUJO
+      type: 'REQUEST', 
       request_id: requestId,
       asset_id: req.asset_id,
       asset_name: req.assets?.name || '',
@@ -358,7 +315,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       expected_return: req.expected_return_date || '',
       generated_at: new Date().toISOString(),
     };
-    
     return JSON.stringify(payload);
   };
 
@@ -376,7 +332,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  // ─── ADMIN QR SCAN (Ficha Técnica) ─────────────────────────
   const processQRScan = async (qrData: string): Promise<{ asset?: Asset; request?: Request } | null> => {
     try {
       const json = JSON.parse(qrData);
@@ -402,7 +357,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }).eq('id', reqId);
     if (!error) {
       toast.success('✅ Solicitud aprobada');
-      await createNotification(req.user_id, '✅ Solicitud Aprobada', `Tu solicitud para "${req.assets?.name}" fue aprobada. Ya puedes generar tu QR.`, 'INFO', reqId);
+      await createNotification(req.user_id, '✅ Solicitud Aprobada', `Tu solicitud para "${req.assets?.name}" fue aprobada.`, 'INFO', reqId);
       await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado para ${req.requester_name}`);
       fetchData();
     }
@@ -425,7 +380,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const req = requests.find(r => r.id === reqId);
     const { error } = await supabase.from('requests').update({
       status: 'ACTION_REQUIRED',
-      feedback_log: feedback,
+      rejection_reason: feedback,
     }).eq('id', reqId);
     if (!error) {
       toast.warning('📋 Devuelta al usuario');
@@ -438,28 +393,39 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     requests.filter(r => r.users?.manager_id === managerId);
 
   // ─── SOLICITUDES USUARIO ───────────────────────────────────
-  const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number) => {
-    // Verificar si el activo requiere mantenimiento (bloqueo automático)
+  const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
     if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) {
-      toast.error('🔧 Este activo requiere mantenimiento. No disponible temporalmente.');
+      toast.error('🔧 Este activo requiere mantenimiento.');
       return;
     }
-    if (asset.status !== 'Operativa') {
+    if (asset.status !== 'Disponible') {
       toast.error(`El activo no está disponible (${asset.status})`);
       return;
     }
+
+    let returnDate;
+    if (days === 0) {
+      const d = new Date(); d.setHours(21, 0, 0, 0); returnDate = d.toISOString();
+    } else {
+      returnDate = addDays(new Date(), days).toISOString();
+    }
+
+    const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
+    const finalApproveDate = autoApprove ? new Date().toISOString() : null;
+
     const { error } = await supabase.from('requests').insert({
       asset_id: asset.id,
       user_id: user.id,
       institution_id: institutionId || null,
       requester_name: user.name,
-      requester_dept: user.dept,
+      requester_disciplina: user.disciplina,
       days_requested: days,
       motive,
-      status: 'PENDING',
-      expected_return_date: addDays(new Date(), days).toISOString(),
+      status: finalStatus,
+      approved_at: finalApproveDate,
+      expected_return_date: returnDate,
     });
-    if (!error) { toast.success('📤 Solicitud enviada al Líder'); fetchData(); }
+    if (!error) { toast.success(autoApprove ? '✅ Auto-Aprobado' : '📤 Solicitud enviada al Líder'); fetchData(); }
     else toast.error(error.message);
   };
 
@@ -510,145 +476,58 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
           return { success: false, message: `⛔ Salida no autorizada. Estado actual: ${req.status}` };
         }
         
-        // Verificar mantenimiento preventivo (bloqueo)
-        const { data: assetData, error: assetFetchError } = await supabase
-          .from('assets')
-          .select('*')
-          .eq('id', req.asset_id)
-          .single();
-          
-        if (assetFetchError) {
-          console.error('Error fetching asset:', assetFetchError);
-          return { success: false, message: 'Error al verificar el activo' };
-        }
+        const { data: assetData } = await supabase.from('assets').select('*').eq('id', req.asset_id).single();
           
         if (assetData?.status === 'Requiere Mantenimiento') {
           return { success: false, message: '🔧 Activo bloqueado por mantenimiento pendiente.' };
         }
 
-        // **IMPORTANTE**: Actualizar PRIMERO el activo, LUEGO la solicitud
-        // Esto asegura que si la solicitud falla, el activo no queda en estado inconsistente
-        
-        // 1. Actualizar el estado del activo a "Prestada"
-        const { error: assetError } = await supabase
-          .from('assets')
-          .update({ 
-            status: 'Prestada',
-            usage_count: (assetData?.usage_count || 0) + 1
-          })
-          .eq('id', req.asset_id);
-
-        if (assetError) {
-          console.error('❌ ERROR ACTUALIZANDO ACTIVO:', assetError);
-          console.error('Asset ID:', req.asset_id);
-          console.error('Intended status:', 'Prestada');
-          return { success: false, message: `Error al actualizar el activo: ${assetError.message}` };
-        }
-
-        console.log('✅ Activo actualizado correctamente a Prestada. Asset ID:', req.asset_id);
-
-        // 2. Actualizar la solicitud a ACTIVE
         const { error: reqError } = await supabase
           .from('requests')
           .update({
             status: 'ACTIVE',
             checkout_at: new Date().toISOString(),
             digital_signature: signature,
-            security_check_step: 1,
           })
           .eq('id', reqId);
 
-        if (reqError) {
-          console.error('❌ ERROR ACTUALIZANDO REQUEST:', reqError);
-          // Intentar revertir el activo a Operativa si falla la solicitud
-          await supabase.from('assets').update({ status: 'Operativa' }).eq('id', req.asset_id);
-          return { success: false, message: `Error al procesar la solicitud: ${reqError.message}` };
-        }
+        if (reqError) return { success: false, message: `Error solicitud: ${reqError.message}` };
 
-        console.log('✅ Request actualizado correctamente a ACTIVE. Request ID:', reqId);
+        await supabase.from('assets').update({ status: 'Prestada', usage_count: (assetData?.usage_count || 0) + 1 }).eq('id', req.asset_id);
 
-        // 3. Registrar en audit log
-        await logAudit(
-          'CHECKOUT', 
-          'guard', 
-          'Guardia', 
-          String(reqId), 
-          'REQUEST',
-          `Salida autorizada: ${req.requester_name} — ${req.assets?.name}`,
-          { signature, asset_id: req.asset_id }
-        );
-
-        // 4. Refrescar datos del sistema
-        console.log('🔄 Refrescando datos del sistema...');
+        await logAudit('CHECKOUT', 'guard', 'Guardia', String(reqId), 'REQUEST', `Salida autorizada: ${req.requester_name}`, { signature });
         await fetchData();
-        console.log('✅ Datos del sistema refrescados');
-
-        // 5. Volver a consultar el request CON el activo actualizado
-        const { data: updatedReq, error: refetchError } = await supabase
-          .from('requests')
-          .select(`*, assets:asset_id(*), users:user_id(*)`)
-          .eq('id', reqId)
-          .single();
-
-        if (refetchError) {
-          console.error('⚠️ Error al re-fetch del request:', refetchError);
-        }
-
-        console.log('📊 Request actualizado:', updatedReq);
-        console.log('📊 Activo en request actualizado:', updatedReq?.assets);
-        console.log('📊 Estado del activo:', updatedReq?.assets?.status);
-
-        toast.success(`✅ Salida registrada: ${req.assets?.name}`);
-        
-        return { 
-          success: true, 
-          message: 'Salida exitosa', 
-          data: updatedReq || req
-        };
+        return { success: true, message: 'Salida exitosa', data: req };
       } else {
-        // CHECK-IN
         if (!['ACTIVE', 'OVERDUE'].includes(req.status)) {
-          return { success: false, message: `⚠️ Este activo no está marcado como salido. Estado: ${req.status}` };
+          return { success: false, message: `⚠️ Activo no marcado como salido.` };
         }
 
-        const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Operativa';
+        const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
         const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
 
         await supabase.from('requests').update({
-          status: newReqStatus,
-          checkin_at: new Date().toISOString(),
-          returned_at: new Date().toISOString(),
-          is_damaged: isDamaged,
-          damage_notes: damageNotes,
-          security_check_step: 2,
-          qr_expires_at: new Date().toISOString(), // QR caduca
+          status: newReqStatus, checkin_at: new Date().toISOString(),
+          is_damaged: isDamaged, damage_notes: damageNotes,
         }).eq('id', reqId);
 
         await supabase.from('assets').update({ status: newAssetStatus }).eq('id', req.asset_id);
 
         if (isDamaged) {
-          // Crear log de mantenimiento automático
           await supabase.from('maintenance_logs').insert({
-            asset_id: req.asset_id,
-            reported_by_user_id: req.user_id,
-            issue_description: damageNotes || 'Daños reportados en devolución',
-            status: 'OPEN',
+            asset_id: req.asset_id, reported_by_user_id: req.user_id,
+            issue_description: damageNotes || 'Daños en devolución', status: 'OPEN',
           });
-          toast.warning(`🔧 Activo enviado a mantenimiento: ${req.assets?.name}`);
+          toast.warning(`🔧 Activo a mantenimiento: ${req.assets?.name}`);
         } else {
-          toast.success(`✅ Retorno registrado: ${req.assets?.name}`);
+          toast.success(`✅ Retorno registrado`);
         }
 
-        await logAudit('CHECKIN', 'guard', 'Guardia', String(reqId), 'REQUEST',
-          `Retorno: ${req.requester_name} — Daños: ${isDamaged}`,
-          { isDamaged, damageNotes, asset_id: req.asset_id }
-        );
-
+        await logAudit('CHECKIN', 'guard', 'Guardia', String(reqId), 'REQUEST', `Retorno: ${req.requester_name}`);
         fetchData();
         return { success: true, message: isDamaged ? 'Activo enviado a mantenimiento' : 'Retorno exitoso', data: req };
       }
     } catch (err) {
-      console.error('processGuardScan error:', err);
       return { success: false, message: 'Error procesando QR' };
     }
   };
@@ -679,9 +558,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const resolveMaintenance = async (logId: number, cost?: number) => {
     const log = maintenanceLogs.find(l => l.id === logId);
     await supabase.from('maintenance_logs').update({ status: 'RESOLVED', resolved_at: new Date().toISOString(), cost }).eq('id', logId);
-    if (log?.asset_id) {
-      await supabase.from('assets').update({ status: 'Operativa', maintenance_alert: false }).eq('id', log.asset_id);
-    }
+    if (log?.asset_id) await supabase.from('assets').update({ status: 'Disponible', maintenance_alert: false }).eq('id', log.asset_id);
     toast.success('✅ Mantenimiento resuelto');
     fetchData();
   };

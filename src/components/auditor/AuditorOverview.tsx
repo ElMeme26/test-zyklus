@@ -4,11 +4,11 @@ import { useAuth } from '../../context/AuthContext';
 import { Card, Button } from '../ui/core';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
+  PieChart, Pie, Cell, CartesianGrid, Legend
 } from 'recharts';
 import {
-  FileText, Download, TrendingUp, AlertCircle, CheckCircle2, LogOut,
-  Search, Filter, Clock, ShieldCheck, Wrench, Package
+  TrendingUp, AlertCircle, CheckCircle2, LogOut,
+  Search, ShieldCheck, Wrench, Package
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { NotificationCenter } from '../ui/NotificationCenter';
@@ -37,41 +37,50 @@ function KPICard({ label, value, color, icon, sublabel }: {
   );
 }
 
-// ─── AUDIT LOG ROW ────────────────────────────────────────────
-const actionBadge: Record<string, string> = {
-  CREATE: 'text-emerald-400 bg-emerald-500/10',
-  APPROVE: 'text-cyan-400 bg-cyan-500/10',
-  REJECT: 'text-rose-400 bg-rose-500/10',
-  CHECKOUT: 'text-blue-400 bg-blue-500/10',
-  CHECKIN: 'text-purple-400 bg-purple-500/10',
-  MAINTENANCE: 'text-amber-400 bg-amber-500/10',
-  UPDATE: 'text-slate-400 bg-slate-500/10',
-  ALERT: 'text-rose-400 bg-rose-500/10',
-};
+// ─── COMPONENTE DE GRÁFICAS COMPARTIDO (Para Auditor y Admin) ───
+export function DashboardCharts() {
+  const { assets, requests } = useData();
 
-export function AuditorOverview() {
-  const { assets, requests, auditLogs, maintenanceLogs } = useData();
-  const { logout, user } = useAuth();
-  const [searchLog, setSearchLog] = useState('');
-  const [filterAction, setFilterAction] = useState('ALL');
+  // 1. Lógica Top 8 Activos (Acortado a 2 palabras) y orientada Horizontalmente
+  const top8Assets = useMemo(() => {
+    return Object.entries(
+      requests.reduce((acc, req) => {
+        const name = req.assets?.name || 'Desconocido';
+        // Acortar el nombre a las primeras 2 palabras
+        const shortName = name.split(' ').slice(0, 2).join(' '); 
+        acc[shortName] = (acc[shortName] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    )
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+  }, [requests]);
 
-  // ─── KPIs ─────────────────────────────────────────────────
-  const kpis = useMemo(() => {
-    const total = assets.length;
-    const operativa = assets.filter(a => a.status === 'Operativa').length;
-    const prestada = assets.filter(a => a.status === 'Prestada').length;
-    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
-    const baja = assets.filter(a => a.status === 'Dada de baja').length;
-    const disponibilidad = total > 0 ? Math.round((operativa / total) * 100) : 0;
+  // 2. Lógica por Disciplina (Lista desplegable dinámica)
+  const disciplinas = useMemo(() => {
+    return Array.from(new Set(requests.map(r => r.requester_disciplina).filter(Boolean)));
+  }, [requests]);
 
-    const activeLoans = requests.filter(r => r.status === 'ACTIVE').length;
-    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
-    const totalLoans30d = requests.filter(r => isAfter(new Date(r.created_at), subDays(new Date(), 30))).length;
+  const [selectedDisciplina, setSelectedDisciplina] = useState(disciplinas[0] || '');
 
-    return { total, operativa, prestada, mantenimiento, baja, disponibilidad, activeLoans, overdueLoans, totalLoans30d };
-  }, [assets, requests]);
+  const disciplinaData = useMemo(() => {
+    return Object.entries(
+      requests
+        .filter(r => r.requester_disciplina === selectedDisciplina)
+        .reduce((acc, req) => {
+           const name = req.assets?.name || 'Desconocido';
+           const shortName = name.split(' ').slice(0, 2).join(' ');
+           acc[shortName] = (acc[shortName] || 0) + 1;
+           return acc;
+        }, {} as Record<string, number>)
+    )
+    .map(([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 5); // Mostramos el top 5 de esa disciplina
+  }, [requests, selectedDisciplina]);
 
-  // ─── CHART DATA ───────────────────────────────────────────
+  // 3. Distribución por Categorías
   const categoryData = useMemo(() =>
     Object.entries(
       assets.reduce((acc: Record<string, number>, a) => {
@@ -83,57 +92,133 @@ export function AuditorOverview() {
     [assets]
   );
 
-  const statusData = useMemo(() => [
-    { name: 'Operativa', value: kpis.operativa },
-    { name: 'Prestada', value: kpis.prestada },
-    { name: 'Mantenimiento', value: kpis.mantenimiento },
-    { name: 'Baja', value: kpis.baja },
-  ].filter(d => d.value > 0), [kpis]);
+  return (
+    <div className="space-y-6">
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Gráfica 1: Top 8 General (Horizontal) */}
+        <Card>
+          <h3 className="text-white font-bold mb-4 text-sm">Top 8 Activos Más Solicitados</h3>
+          <div className="h-72">
+            <ResponsiveContainer width="100%" height="100%">
+              {/* layout="vertical" hace que las barras sean horizontales */}
+              <BarChart layout="vertical" data={top8Assets} margin={{ left: 20 }}>
+                <XAxis type="number" hide />
+                <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
+                <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff'}} cursor={{fill: '#1e293b', opacity: 0.4}}/>
+                <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} barSize={20}>
+                  {top8Assets.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
 
-  // Top activos más solicitados
-  const topAssets = useMemo(() => {
-    const counts: Record<string, { name: string; count: number }> = {};
-    requests.forEach(r => {
-      const id = r.asset_id;
-      if (!counts[id]) counts[id] = { name: r.assets?.name || id, count: 0 };
-      counts[id].count++;
-    });
-    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 8);
-  }, [requests]);
+        {/* Gráfica 2: Top por Disciplina Interactiva */}
+        <Card>
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-white font-bold text-sm">Top por Disciplina</h3>
+            <select 
+              className="bg-slate-950 border border-slate-700 text-xs text-white rounded p-1.5 focus:outline-none focus:border-primary"
+              value={selectedDisciplina}
+              onChange={e => setSelectedDisciplina(e.target.value)}
+            >
+              {disciplinas.length > 0 ? (
+                disciplinas.map(d => <option key={d} value={d}>{d}</option>)
+              ) : (
+                <option value="">Sin datos</option>
+              )}
+            </select>
+          </div>
+          <div className="h-72">
+            {disciplinaData.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={disciplinaData} margin={{ left: 20 }}>
+                  <XAxis type="number" hide />
+                  <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
+                  <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff'}} cursor={{fill: '#1e293b', opacity: 0.4}}/>
+                  <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                Sin solicitudes para esta disciplina
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
 
-  // Vencidos por usuario
-  const overdueByUser = useMemo(() => {
-    const counts: Record<string, { name: string; count: number }> = {};
-    requests.filter(r => r.status === 'OVERDUE').forEach(r => {
-      const name = r.requester_name;
-      if (!counts[name]) counts[name] = { name, count: 0 };
-      counts[name].count++;
-    });
-    return Object.values(counts).sort((a, b) => b.count - a.count).slice(0, 10);
-  }, [requests]);
+      {/* Charts Row 2 (Categorías) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <Card>
+          <h3 className="text-white font-bold mb-4 text-sm">Distribución por Categoría</h3>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
+                  {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
+                </Pie>
+                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
+                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} formatter={v => <span className="text-slate-300">{v}</span>} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+
+// ─── AUDIT LOG ROW CONFIG ─────────────────────────────────────
+const actionBadge: Record<string, string> = {
+  CREATE: 'text-emerald-400 bg-emerald-500/10',
+  APPROVE: 'text-cyan-400 bg-cyan-500/10',
+  REJECT: 'text-rose-400 bg-rose-500/10',
+  CHECKOUT: 'text-blue-400 bg-blue-500/10',
+  CHECKIN: 'text-purple-400 bg-purple-500/10',
+  MAINTENANCE: 'text-amber-400 bg-amber-500/10',
+  UPDATE: 'text-slate-400 bg-slate-500/10',
+  ALERT: 'text-rose-400 bg-rose-500/10',
+};
+
+// ─── VISTA PRINCIPAL DEL AUDITOR ──────────────────────────────
+export function AuditorOverview() {
+  const { assets, requests, auditLogs, maintenanceLogs } = useData();
+  const { logout } = useAuth();
+  const [searchLog, setSearchLog] = useState('');
+  const [filterAction, setFilterAction] = useState('ALL');
+
+  // ─── KPIs ─────────────────────────────────────────────────
+  const kpis = useMemo(() => {
+    const total = assets.length;
+    const disponible = assets.filter(a => a.status === 'Disponible').length;
+    const prestada = assets.filter(a => a.status === 'Prestada').length;
+    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
+    const baja = assets.filter(a => a.status === 'Dada de baja').length;
+    const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
+
+    const activeLoans = requests.filter(r => r.status === 'ACTIVE').length;
+    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
+    const totalLoans30d = requests.filter(r => isAfter(new Date(r.created_at), subDays(new Date(), 30))).length;
+
+    return { total, disponible, prestada, mantenimiento, baja, disponibilidad, activeLoans, overdueLoans, totalLoans30d };
+  }, [assets, requests]);
+
 
   // ─── FILTERED AUDIT LOGS ─────────────────────────────────
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
+      // EXCLUIR 'CREATE' de la vista SIEMPRE
+      l.action !== 'CREATE' && 
       (filterAction === 'ALL' || l.action === filterAction) &&
       (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
     ), [auditLogs, filterAction, searchLog]
   );
 
-  // ─── EXPORT ──────────────────────────────────────────────
-  const exportCSV = () => {
-    const headers = ['ID', 'Activo', 'Solicitante', 'Departamento', 'Estado', 'Días', 'Fecha', 'Retorno'];
-    const rows = requests.map(r => [
-      r.id, r.assets?.name || r.asset_id, r.requester_name, r.requester_dept,
-      r.status, r.days_requested, r.created_at, r.expected_return_date || ''
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url; a.download = `zyklus_report_${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    a.click();
-  };
 
   return (
     <div className="min-h-screen bg-background font-sans pb-20">
@@ -150,7 +235,7 @@ export function AuditorOverview() {
         <div className="flex items-center gap-2">
           <ExportButtons requests={requests} assets={assets} auditLogs={auditLogs} />
           <NotificationCenter />
-          <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
+          <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
         </div>
       </header>
@@ -159,88 +244,13 @@ export function AuditorOverview() {
         {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
-          <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.operativa} operativos`} />
+          <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
           <KPICard label="Vencidos" value={kpis.overdueLoans} color="border-l-rose-500" icon={<AlertCircle />} sublabel="Requieren atención" />
           <KPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
         </div>
 
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Category Distribution */}
-          <Card>
-            <h3 className="text-white font-bold mb-4 text-sm">Distribución por Categoría</h3>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
-                    {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
-                  <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} formatter={v => <span className="text-slate-300">{v}</span>} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* Status Distribution */}
-          <Card>
-            <h3 className="text-white font-bold mb-4 text-sm">Estado del Inventario</h3>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={statusData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis type="number" tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 11 }} width={90} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
-                  <Bar dataKey="value" fill="#06b6d4" radius={[0, 4, 4, 0]}>
-                    {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-        </div>
-
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Top Requested */}
-          <Card>
-            <h3 className="text-white font-bold mb-4 text-sm">Top 8 Activos Más Solicitados</h3>
-            <div className="h-56">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={topAssets}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                  <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 9 }} />
-                  <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
-                  <Bar dataKey="count" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </Card>
-
-          {/* Top Overdue Users */}
-          <Card>
-            <h3 className="text-white font-bold mb-4 text-sm">Top Vencidos por Usuario</h3>
-            {overdueByUser.length === 0 ? (
-              <div className="h-56 flex items-center justify-center text-slate-500 border border-dashed border-slate-800 rounded-xl">
-                <p className="text-sm">Sin retrasos activos 🎉</p>
-              </div>
-            ) : (
-              <div className="h-56">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={overdueByUser}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-                    <XAxis dataKey="name" tick={{ fill: '#64748b', fontSize: 9 }} />
-                    <YAxis tick={{ fill: '#64748b', fontSize: 11 }} />
-                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
-                    <Bar dataKey="count" fill="#f43f5e" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </Card>
-        </div>
+        {/* GRÁFICAS REUTILIZABLES */}
+        <DashboardCharts />
 
         {/* Audit Trail — Time-Travel */}
         <div>
@@ -264,7 +274,7 @@ export function AuditorOverview() {
                 className="h-9 px-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-primary"
               >
                 <option value="ALL">Todas</option>
-                <option value="CREATE">CREATE</option>
+                {/* <option value="CREATE">CREATE</option>  <- Removido también del selector */}
                 <option value="APPROVE">APPROVE</option>
                 <option value="CHECKOUT">CHECKOUT</option>
                 <option value="CHECKIN">CHECKIN</option>

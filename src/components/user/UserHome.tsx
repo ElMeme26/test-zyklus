@@ -183,7 +183,6 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
 // ─── FEEDBACK MODAL ──────────────────────────────────────────
 function FeedbackModal({ request, onClose }: { request: Request; onClose: () => void }) {
   const [text, setText] = useState('');
-  const { updateAsset } = useData();
 
   const handleSubmit = async () => {
     const { supabase } = await import('../../supabaseClient');
@@ -221,15 +220,17 @@ function FeedbackModal({ request, onClose }: { request: Request; onClose: () => 
 }
 
 // ─── MAIN USER HOME ──────────────────────────────────────────
-export function UserHome() {
-  const { assets, createRequest, institutions } = useData();
+export function UserHome({ isManagerView = false, onBack }: { isManagerView?: boolean; onBack?: () => void }) {
+  const { assets, bundles, createRequest, createBatchRequest, institutions } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<'activos' | 'combos'>('activos');
   const [activeTab, setActiveTab] = useState<'catalog' | 'loans'>('catalog');
 
   // Request modal
   const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
-  const [days, setDays] = useState(7);
+  const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
+  const [days, setDays] = useState(0); // <-- 0 días por defecto (Mismo día)
   const [motive, setMotive] = useState('');
   const [isExternal, setIsExternal] = useState(false);
   const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
@@ -240,7 +241,7 @@ export function UserHome() {
 
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
-      a.status === 'Operativa' &&
+      a.status === 'Disponible' && // <-- Cambio clave aquí
       !a.maintenance_alert &&
       ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (a.tag?.toLowerCase() || '').includes(search.toLowerCase()) ||
@@ -249,138 +250,203 @@ export function UserHome() {
   );
 
   const handleSubmit = async () => {
-    if (!selectedAsset || !user) return;
-    await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined);
+    if (!user) return;
+    if (selectedAsset) {
+      await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
+    } else if (selectedBundle) {
+      await createBatchRequest(selectedBundle.assets || [], user, days, motive, isManagerView);
+    }
     setSelectedAsset(null);
+    setSelectedBundle(null);
     setMotive('');
-    setDays(7);
+    setDays(0);
     setIsExternal(false);
     setSelectedInstitution(undefined);
-    setActiveTab('loans');
+    if (!isManagerView) setActiveTab('loans');
+    if (isManagerView && onBack) onBack();
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans pb-24">
-      <ChatAssistant />
+    <div className={`min-h-screen ${isManagerView ? 'bg-transparent' : 'bg-background'} font-sans pb-24`}>
+      {!isManagerView && <ChatAssistant />}
       {qrRequest && <QRModal request={qrRequest} onClose={() => setQRRequest(null)} />}
       {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} />}
 
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-lg font-bold text-white">Hola, <span className="text-primary">{user?.name?.split(' ')[0]}</span></h1>
-            <p className="text-[11px] text-slate-500">{user?.dept}</p>
+      {!isManagerView && (
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <h1 className="text-lg font-bold text-white">Hola, <span className="text-primary">{user?.name?.split(' ')[0]}</span></h1>
+              <p className="text-[11px] text-slate-500">{user?.disciplina}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotificationCenter />
+              <ThemeToggle />
+              <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationCenter />
-            <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
-            <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex border-t border-slate-800">
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-          >
-            Catálogo
-          </button>
-          <button
-            onClick={() => setActiveTab('loans')}
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-          >
-            Mis Préstamos
-          </button>
-        </div>
-      </header>
+          {/* Tabs */}
+          <div className="flex border-t border-slate-800">
+            <button
+              onClick={() => setActiveTab('catalog')}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
+            >
+              Catálogo
+            </button>
+            <button
+              onClick={() => setActiveTab('loans')}
+              className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
+            >
+              Mis Préstamos
+            </button>
+          </div>
+        </header>
+      )}
+
+      {/* Header Alternativo si es Vista de Manager (Auto-Solicitud) */}
+      {isManagerView && (
+        <header className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
+            <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
+          </div>
+          <Button variant="outline" onClick={onBack}>Cancelar</Button>
+        </header>
+      )}
 
       <main className="p-4">
         {activeTab === 'catalog' ? (
           <>
-            {/* Search */}
-            <div className="relative mb-6">
-              <Search className="absolute left-4 top-3 text-slate-500 w-4 h-4" />
-              <Input
-                placeholder="¿Qué necesitas hoy?"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-11 h-12 rounded-full shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)]"
-              />
+            {/* Search and Tabs Activos/Combos */}
+            <div className="flex flex-col sm:flex-row gap-4 mb-6">
+              <div className="relative flex-1">
+                <Search className="absolute left-4 top-3 text-slate-500 w-4 h-4" />
+                <Input
+                  placeholder="¿Qué necesitas hoy?"
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-11 h-10 rounded-lg shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)]"
+                />
+              </div>
+              <div className="flex bg-slate-900 rounded-lg p-1 border border-slate-800">
+                <button 
+                  onClick={() => setView('activos')} 
+                  className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${view === 'activos' ? 'bg-primary text-black' : 'text-slate-400'}`}
+                >
+                  Activos Sueltos
+                </button>
+                <button 
+                  onClick={() => setView('combos')} 
+                  className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${view === 'combos' ? 'bg-primary text-black' : 'text-slate-400'}`}
+                >
+                  Combos (Kits)
+                </button>
+              </div>
             </div>
 
             {/* Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredAssets.map(asset => (
-                <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
-                  <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
-                    <img
-                      src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`}
-                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                      alt={asset.name}
-                    />
-                    <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">
-                      {asset.tag}
-                    </span>
-                    {asset.category && (
-                      <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">
-                        {asset.category}
+            {view === 'activos' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {filteredAssets.map(asset => (
+                  <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
+                    <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
+                      <img
+                        src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`}
+                        className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
+                        alt={asset.name}
+                      />
+                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">
+                        {asset.tag}
                       </span>
-                    )}
+                      {asset.category && (
+                        <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">
+                          {asset.category}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
+                    <p className="text-secondary text-xs mb-3 truncate">{asset.description || 'Sin descripción'}</p>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                        <CheckCircle size={10} /> Disponible
+                      </span>
+                      <Button size="sm" variant="neon" className="text-[11px] h-7">
+                        Solicitar <ChevronRight size={12} />
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+                {filteredAssets.length === 0 && (
+                  <div className="col-span-full text-center py-16 text-slate-500">
+                    <Package size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>No hay activos disponibles con ese filtro.</p>
                   </div>
-                  <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
-                  <p className="text-secondary text-xs mb-3 truncate">{asset.description || 'Sin descripción'}</p>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                    <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle size={10} /> Disponible
-                    </span>
-                    <Button size="sm" variant="neon" className="text-[11px] h-7">
-                      Solicitar <ChevronRight size={12} />
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {bundles.map(bundle => (
+                  <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer" onClick={() => setSelectedBundle(bundle)}>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary">
+                        <Package size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-white font-bold text-lg">{bundle.name}</h3>
+                        <p className="text-slate-400 text-xs">{(bundle.assets || []).length} activos incluidos</p>
+                      </div>
+                    </div>
+                    {bundle.description && <p className="text-xs text-slate-300 mb-4">{bundle.description}</p>}
+                    <Button size="sm" variant="neon" className="w-full text-xs h-8">
+                      Solicitar Combo Completo
                     </Button>
+                  </Card>
+                ))}
+                {bundles.length === 0 && (
+                  <div className="col-span-full text-center py-16 text-slate-500">
+                    <Package size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>No hay combos configurados en el sistema.</p>
                   </div>
-                </Card>
-              ))}
-              {filteredAssets.length === 0 && (
-                <div className="col-span-3 text-center py-16 text-slate-500">
-                  <Package size={40} className="mx-auto mb-3 opacity-30" />
-                  <p>No hay activos disponibles con ese filtro.</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <MyLoansView onShowQR={(req) => setQRRequest(req)} onFeedback={(req) => setFeedbackRequest(req)} />
         )}
       </main>
 
-      {/* Request Modal — MEJORADO */}
-      {selectedAsset && (
+      {/* Request Modal — Mismo Día Logic */}
+      {(selectedAsset || selectedBundle) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md space-y-6 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-white">Configura tu solicitud</h2>
-                <p className="text-primary text-sm mt-0.5">{selectedAsset.name}</p>
+                <p className="text-primary text-sm mt-0.5">
+                  {selectedAsset ? selectedAsset.name : `Combo: ${selectedBundle?.name}`}
+                </p>
               </div>
-              <button onClick={() => setSelectedAsset(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }} className="text-slate-400 hover:text-white">
                 <X size={18} />
               </button>
             </div>
 
-            {/* ✨ SLIDER MEJORADO — MÁS GRANDE Y BONITO */}
+            {/* Slider de Días */}
             <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4">
-                <label className="text-sm font-bold text-white uppercase tracking-wider">Duración</label>
-                <div className="bg-primary text-black px-4 py-2 rounded-xl font-black text-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                  {days} <span className="text-sm font-medium">días</span>
+                <label className="text-sm font-bold text-white uppercase tracking-wider">Retorno</label>
+                <div className="bg-primary text-black px-4 py-2 rounded-xl font-black text-xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                  {days === 0 ? 'Mismo Día' : `${days} días`}
                 </div>
               </div>
               
               <div className="relative">
                 <input
                   type="range"
-                  min="1"
+                  min="0"
                   max="30"
                   value={days}
                   onChange={e => setDays(Number(e.target.value))}
@@ -393,36 +459,29 @@ export function UserHome() {
                     [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
                     [&::-webkit-slider-thumb]:cursor-pointer
                     [&::-webkit-slider-thumb]:transition-transform
-                    [&::-webkit-slider-thumb]:hover:scale-110
-                    [&::-moz-range-thumb]:w-6 
-                    [&::-moz-range-thumb]:h-6 
-                    [&::-moz-range-thumb]:rounded-full 
-                    [&::-moz-range-thumb]:bg-primary 
-                    [&::-moz-range-thumb]:border-0
-                    [&::-moz-range-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
-                    [&::-moz-range-thumb]:cursor-pointer"
+                    [&::-webkit-slider-thumb]:hover:scale-110"
                   style={{
-                    background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${((days - 1) / 29) * 100}%, rgb(30 41 59) ${((days - 1) / 29) * 100}%, rgb(30 41 59) 100%)`
+                    background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${(days / 30) * 100}%, rgb(30 41 59) ${(days / 30) * 100}%, rgb(30 41 59) 100%)`
                   }}
                 />
               </div>
               
               <div className="flex justify-between text-[10px] text-slate-500 mt-3 font-mono">
-                <span className={days === 1 ? 'text-primary font-bold' : ''}>1 día</span>
-                <span className={days === 7 ? 'text-primary font-bold' : ''}>1 semana</span>
-                <span className={days === 15 ? 'text-primary font-bold' : ''}>2 semanas</span>
-                <span className={days === 30 ? 'text-primary font-bold' : ''}>1 mes</span>
+                <span className={days === 0 ? 'text-primary font-bold' : ''}>Hoy (9pm)</span>
+                <span className={days === 7 ? 'text-primary font-bold' : ''}>1 sem</span>
+                <span className={days === 15 ? 'text-primary font-bold' : ''}>15 días</span>
+                <span className={days === 30 ? 'text-primary font-bold' : ''}>30 días</span>
               </div>
             </div>
 
             {/* Motive */}
             <Input
-              placeholder="Motivo del préstamo (opcional, ayuda a aprobar más rápido)"
+              placeholder="Motivo del préstamo (opcional)"
               value={motive}
               onChange={e => setMotive(e.target.value)}
             />
 
-            {/* ✨ CHECKBOX INSTITUCIÓN EXTERNA */}
+            {/* Checkbox Institución Externa */}
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer group">
                 <input
@@ -456,16 +515,20 @@ export function UserHome() {
             </div>
 
             {/* Zykla AI Suggestion */}
-            <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex gap-3 items-start">
-              <Info size={16} className="text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                <span className="text-primary font-bold">Zykla sugiere:</span> Si solicitas este equipo, considera agregar accesorios complementarios disponibles para optimizar tu proyecto.
-              </p>
-            </div>
+            {selectedAsset && (
+              <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex gap-3 items-start">
+                <Info size={16} className="text-primary flex-shrink-0 mt-0.5" />
+                <p className="text-xs text-slate-400">
+                  <span className="text-primary font-bold">Zykla sugiere:</span> Si solicitas este equipo, considera agregarlo como un combo la próxima vez si lo usas frecuentemente con otros accesorios.
+                </p>
+              </div>
+            )}
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <Button variant="ghost" onClick={() => setSelectedAsset(null)}>Cancelar</Button>
-              <Button variant="neon" onClick={handleSubmit}>Enviar Solicitud</Button>
+              <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }}>Cancelar</Button>
+              <Button variant="neon" onClick={handleSubmit}>
+                {isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud'}
+              </Button>
             </div>
           </Card>
         </div>
