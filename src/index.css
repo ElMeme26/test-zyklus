@@ -120,6 +120,16 @@
     border-color: rgba(0,0,0,0.15) !important;
   }
 
+  /* Botones oscuros (Cámara/Escaner) en modo claro */
+  html.light .bg-slate-800 {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+  html.light .hover\:bg-slate-700:hover {
+    background: #cbd5e1 !important;
+  }
+
   html.light .login-bg { background: #ffffff !important; }
   html.light .login-card {
     background: #f8fafc !important;
@@ -131,7 +141,15 @@
   html.light .border-slate-800 { border-color: rgba(0,0,0,0.1) !important; }
   html.light .border-slate-700 { border-color: rgba(0,0,0,0.15) !important; }
 
-  html.light .text-white { color: #0f172a !important; }
+  html.light .text-slate-400 { color: #475569 !important; }
+  html.light .text-slate-500 { color: #64748b !important; }
+  html.light .text-slate-300 { color: #334155 !important; }
+
+  /* ✨ Regla clave: Si tiene la clase .keep-white NUNCA cambia a oscuro en light mode */
+  html.light .text-white:not(.keep-white) {
+    color: #0f172a !important;
+  }
+
   html.light .bg-background,
   html.light .bg-background\/80 { background: #f8fafc !important; }
 
@@ -149,7 +167,8 @@
     box-shadow: 0 1px 2px rgba(0,0,0,0.05);
   }
 
-  html.light input::placeholder { color: #94a3b8 !important; }
+  html.light input::placeholder,
+  html.light textarea::placeholder { color: #94a3b8 !important; }
 
   html.light .hover\:bg-slate-800\/30:hover,
   html.light tr.hover\:bg-slate-800\/30:hover {

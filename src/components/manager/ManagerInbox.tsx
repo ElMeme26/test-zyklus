@@ -3,17 +3,23 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import { Check, X, RotateCcw, Box, User as UserIcon, LogOut, Users, QrCode, Clock, Plus } from 'lucide-react';
+import { Check, X, RotateCcw, Box, User as UserIcon, LogOut, Users, QrCode, Clock, Plus, Package } from 'lucide-react';
 import QRCode from 'react-qr-code';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
-import { UserHome } from '../user/UserHome'; // ← Importante para el auto-solicitar
+import { UserHome } from '../user/UserHome';
 
 // ─── QR Modal para el Líder ───────────────────────────────────
-function LeaderQRModal({ request, onClose }: { request: Request; onClose: () => void }) {
-  const qrData = JSON.stringify({ request_id: request.id, asset_id: request.asset_id, generated_at: new Date().toISOString() });
+function LeaderQRModal({ request, onClose }: { request: any; onClose: () => void }) {
+  const qrData = JSON.stringify({ 
+    request_id: request.id, 
+    bundle_group_id: request.bundle_group_id, 
+    asset_id: request.asset_id, 
+    generated_at: new Date().toISOString() 
+  });
+  
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
       <Card className="w-full max-w-xs text-center border-primary/30">
@@ -24,8 +30,10 @@ function LeaderQRModal({ request, onClose }: { request: Request; onClose: () => 
         <div className="bg-white p-4 rounded-xl mb-4 inline-block">
           <QRCode value={qrData} size={180} />
         </div>
-        <p className="text-xs text-slate-400">Solicitud #{request.id} • {request.assets?.name}</p>
-        <p className="text-[10px] text-slate-500 mt-1">Aprobación automática como Líder.</p>
+        <p className="text-xs text-slate-400 font-bold mb-1">
+          {request.is_bundle ? `📦 Combo (${request.bundle_items} piezas)` : request.assets?.name}
+        </p>
+        <p className="text-[10px] text-slate-500">Aprobación automática de Líder.</p>
       </Card>
     </div>
   );
@@ -62,7 +70,7 @@ function RejectionModal({ onConfirm, onCancel, type }: {
             onClick={() => reason && onConfirm(reason)}
             disabled={!reason.trim()}
           >
-            {type === 'reject' ? 'Rechazar' : 'Devolver'}
+            {type === 'reject' ? 'Confirmar Rechazo' : 'Confirmar Devolución'}
           </Button>
         </div>
       </Card>
@@ -74,10 +82,20 @@ function RejectionModal({ onConfirm, onCancel, type }: {
 function TeamView() {
   const { requests } = useData();
   const { user } = useAuth();
-  const teamActive = requests.filter(r =>
+  
+  // Agrupar los prestamos del equipo por Combo
+  const teamActive = Array.from(requests.filter(r =>
     r.users?.manager_id === user?.id &&
     ['ACTIVE', 'OVERDUE', 'APPROVED'].includes(r.status)
-  );
+  ).reduce((acc, r) => {
+    if (r.bundle_group_id) {
+       if (!acc.has(r.bundle_group_id)) acc.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
+       else acc.get(r.bundle_group_id).bundle_items++;
+    } else {
+       acc.set(r.id, r);
+    }
+    return acc;
+  }, new Map()).values());
 
   return (
     <div className="space-y-4">
@@ -89,7 +107,7 @@ function TeamView() {
         </div>
       ) : (
         <div className="space-y-3">
-          {teamActive.map(req => {
+          {teamActive.map((req: any) => {
             const isOverdue = req.status === 'OVERDUE';
             return (
               <div key={req.id} className={`bg-slate-900 border rounded-xl p-4 flex items-center gap-4 ${isOverdue ? 'border-rose-500/30' : 'border-slate-800'}`}>
@@ -98,7 +116,9 @@ function TeamView() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-white font-bold text-sm truncate">{req.requester_name}</p>
-                  <p className="text-slate-400 text-xs truncate">{req.assets?.name}</p>
+                  <p className="text-slate-400 text-xs truncate">
+                    {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name}
+                  </p>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-[10px] font-bold px-2 py-1 rounded border ${isOverdue ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'}`}>
@@ -121,24 +141,21 @@ function TeamView() {
 
 // ─── MAIN MANAGER INBOX ──────────────────────────────────────
 export function ManagerInbox() {
-  const { requests, approveRequest, rejectRequest, returnRequestWithFeedback } = useData();
+  const { getUserRequests, getTeamRequests, approveRequest, rejectRequest, returnRequestWithFeedback } = useData();
   const { logout, user } = useAuth();
   
   const [activeTab, setActiveTab] = useState<'inbox' | 'team' | 'myloans'>('inbox');
   const [rejectionModal, setRejectionModal] = useState<{ reqId: number; type: 'reject' | 'return' } | null>(null);
-  const [leaderQRReq, setLeaderQRReq] = useState<Request | null>(null);
-  const [isRequesting, setIsRequesting] = useState(false); // ← Estado para el flujo de auto-solicitud
+  const [leaderQRReq, setLeaderQRReq] = useState<any | null>(null);
+  const [isRequesting, setIsRequesting] = useState(false);
 
-  const pendingRequests = requests.filter(r =>
-    r.status === 'PENDING' &&
-    r.users?.manager_id === user?.id
-  );
+  // Usamos las funciones del DataContext que ya agrupan por Combos
+  const teamRequestsGrouped = getTeamRequests(user?.id || '');
+  const pendingRequests = teamRequestsGrouped.filter(r => r.status === 'PENDING');
 
-  const myRequests = requests.filter(r =>
-    r.user_id === user?.id && ['APPROVED', 'ACTIVE'].includes(r.status)
-  );
+  const myRequestsGrouped = getUserRequests(user?.id || '');
+  const myActiveLoans = myRequestsGrouped.filter(r => ['APPROVED', 'ACTIVE'].includes(r.status));
 
-  // Si el líder le pica a "Auto-solicitar", renderizamos el UserHome en modo 'ManagerView'
   if (isRequesting) {
     return <UserHome isManagerView={true} onBack={() => setIsRequesting(false)} />;
   }
@@ -146,12 +163,16 @@ export function ManagerInbox() {
   return (
     <div className="min-h-screen bg-background font-sans pb-24">
       {leaderQRReq && <LeaderQRModal request={leaderQRReq} onClose={() => setLeaderQRReq(null)} />}
+      
       {rejectionModal && (
         <RejectionModal
           type={rejectionModal.type}
           onConfirm={(reason) => {
-            if (rejectionModal.type === 'reject') rejectRequest(rejectionModal.reqId, reason);
-            else returnRequestWithFeedback(rejectionModal.reqId, reason);
+            if (rejectionModal.type === 'reject') {
+               rejectRequest(rejectionModal.reqId, reason);
+            } else {
+               returnRequestWithFeedback(rejectionModal.reqId, reason);
+            }
             setRejectionModal(null);
           }}
           onCancel={() => setRejectionModal(null)}
@@ -177,7 +198,7 @@ export function ManagerInbox() {
           {[
             { id: 'inbox', label: 'Bandeja', badge: pendingRequests.length },
             { id: 'team', label: 'Mi Equipo', badge: 0 },
-            { id: 'myloans', label: 'Mis Préstamos', badge: myRequests.length },
+            { id: 'myloans', label: 'Mis Préstamos', badge: myActiveLoans.length },
           ].map(tab => (
             <button
               key={tab.id}
@@ -205,21 +226,30 @@ export function ManagerInbox() {
                 <p className="text-slate-400">Todo al día. No hay solicitudes pendientes.</p>
               </div>
             )}
-            {pendingRequests.map(req => (
-              <Card key={req.id} className="hover:border-primary/20 transition-all">
+            
+            {pendingRequests.map((req: any) => (
+              <Card key={req.id} className="hover:border-primary/20 transition-all border border-slate-800 bg-slate-900/50">
                 <div className="flex flex-col md:flex-row justify-between gap-4">
                   <div className="flex items-start gap-4">
                     <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 flex-shrink-0">
-                      {req.users?.avatar
-                        ? <img src={req.users.avatar} className="w-full h-full rounded-full object-cover" alt="" />
-                        : <UserIcon size={24} />}
+                      {req.users?.avatar ? <img src={req.users.avatar} className="w-full h-full rounded-full object-cover" alt="" /> : <UserIcon size={24} />}
                     </div>
                     <div>
-                      <h3 className="font-bold text-white">{req.requester_name}</h3>
-                      <p className="text-primary text-sm font-medium">{req.assets?.name || `Activo #${req.asset_id}`}</p>
-                      <p className="text-slate-400 text-xs mt-1 italic">"{req.motive || 'Sin motivo especificado'}"</p>
+                      <h3 className="font-bold text-white flex items-center gap-2">
+                        {req.requester_name}
+                      </h3>
+                      
+                      {/* Detectar visualmente si es Combo o Individual */}
+                      <p className="text-primary text-sm font-medium flex items-center gap-1">
+                        {req.is_bundle ? <Package size={14} /> : <Box size={14} />}
+                        {req.is_bundle ? `Combo: ${req.motive.split(']')[0].replace('[COMBO: ', '')} (${req.bundle_items} equipos)` : req.assets?.name}
+                      </p>
+                      
+                      <p className="text-slate-400 text-xs mt-1 italic">
+                        "{req.is_bundle ? req.motive.split('] ')[1] || 'Sin motivo adicional' : req.motive || 'Sin motivo especificado'}"
+                      </p>
+                      
                       <div className="flex gap-3 mt-2 text-[11px] text-slate-500 font-mono">
-                        {/* Se actualizó requester_dept a requester_disciplina */}
                         <span className="flex items-center gap-1"><Clock size={10} /> {req.days_requested === 0 ? 'Mismo día' : `${req.days_requested} días`}</span>
                         <span>{req.requester_disciplina}</span>
                       </div>
@@ -230,7 +260,7 @@ export function ManagerInbox() {
                   <div className="flex flex-row md:flex-col gap-2 justify-end flex-shrink-0">
                     <Button
                       onClick={() => user && approveRequest(req.id, user.id, user.name)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs border-0"
                     >
                       <Check size={14} className="mr-1" /> Aprobar
                     </Button>
@@ -246,7 +276,7 @@ export function ManagerInbox() {
                       <Button
                         variant="danger"
                         onClick={() => setRejectionModal({ reqId: req.id, type: 'reject' })}
-                        className="flex-1 text-xs"
+                        className="flex-1 text-xs border-rose-500/30 hover:bg-rose-500/10 text-rose-500"
                         title="Rechazar definitivamente"
                       >
                         <X size={13} />
@@ -271,23 +301,28 @@ export function ManagerInbox() {
                 <Plus size={14} className="mr-1" /> Auto-solicitar
               </Button>
             </div>
-            {myRequests.length === 0 ? (
+            
+            {myActiveLoans.length === 0 ? (
               <div className="text-center py-12 text-slate-500 border border-dashed border-slate-800 rounded-xl">
                 <p className="text-sm">No tienes préstamos activos.</p>
               </div>
             ) : (
-              myRequests.map(req => (
+              myActiveLoans.map((req: any) => (
                 <Card key={req.id} className="flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="text-white font-bold">{req.assets?.name}</h3>
-                    <p className="text-xs text-slate-500 font-mono">{req.assets?.tag}</p>
+                    <h3 className="text-white font-bold">
+                      {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name}
+                    </h3>
+                    <p className="text-xs text-slate-500 font-mono">
+                      {req.is_bundle ? 'Solicitud Grupal' : req.assets?.tag}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-[10px] font-bold text-cyan-400 bg-cyan-500/10 border border-cyan-500/20 px-2 py-1 rounded">
                       {req.status}
                     </span>
                     {req.status === 'APPROVED' && (
-                      <Button size="sm" variant="neon" onClick={() => setLeaderQRReq(req)} className="text-xs">
+                      <Button size="sm" variant="neon" onClick={() => setLeaderQRReq(req)} className="text-xs h-8">
                         <QrCode size={12} className="mr-1" /> QR
                       </Button>
                     )}

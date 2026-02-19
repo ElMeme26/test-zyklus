@@ -3,10 +3,7 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import {
-  Search, LogOut, Clock, Info, Package, ChevronRight,
-  QrCode, RotateCcw, X, CheckCircle, MessageSquare, Building2
-} from 'lucide-react';
+import { Search, LogOut, Clock, Package, ChevronRight, QrCode, X, CheckCircle, MessageSquare, Building2, Info } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import QRCode from 'react-qr-code';
 import { format } from 'date-fns';
@@ -38,14 +35,21 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── MY LOANS VIEW ────────────────────────────────────────────
 function MyLoansView({ onShowQR, onFeedback }: {
-  onShowQR: (req: Request) => void;
-  onFeedback: (req: Request) => void;
+  onShowQR: (req: any) => void;
+  onFeedback: (req: any) => void;
 }) {
-  const { getUserRequests, renewRequest } = useData();
+  const { getUserRequests, requests } = useData();
   const { user } = useAuth();
+  const [bundleDetailsId, setBundleDetailsId] = useState<string | null>(null);
+
   const userReqs = getUserRequests(user?.id || '');
   const active = userReqs.filter(r => ['PENDING', 'ACTION_REQUIRED', 'APPROVED', 'ACTIVE', 'OVERDUE'].includes(r.status));
   const history = userReqs.filter(r => ['RETURNED', 'MAINTENANCE', 'REJECTED', 'CANCELLED'].includes(r.status));
+
+  // Función para obtener los nombres de los activos de un combo específico
+  const getBundleAssets = (bundleGroupId: string) => {
+    return requests.filter(r => r.bundle_group_id === bundleGroupId).map(r => r.assets?.name);
+  };
 
   return (
     <div className="space-y-6">
@@ -67,10 +71,13 @@ function MyLoansView({ onShowQR, onFeedback }: {
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-bold truncate">{req.assets?.name || `Activo #${req.asset_id}`}</h3>
-                      <span className="text-xs text-slate-500 font-mono flex-shrink-0">{req.assets?.tag}</span>
+                      {/* Mostrar si es combo o individual */}
+                      <h3 className="text-white font-bold truncate">
+                        {req.is_bundle ? `📦 Combo: ${req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Kit de equipos'}` : req.assets?.name || `Activo #${req.asset_id}`}
+                      </h3>
+                      {!req.is_bundle && <span className="text-xs text-slate-500 font-mono flex-shrink-0">{req.assets?.tag}</span>}
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mb-2">
                       <StatusBadge status={req.status} />
                       {req.expected_return_date && (
                         <span className={isOverdue ? 'text-rose-400' : 'text-slate-400'}>
@@ -79,10 +86,31 @@ function MyLoansView({ onShowQR, onFeedback }: {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Detalles del combo si aplica */}
+                    {req.is_bundle && (
+                      <div className="mt-2">
+                        {/* ✨ CORRECCIÓN AQUÍ: Se añade ?? null para evitar el error de TypeScript */}
+                        <button 
+                          onClick={() => setBundleDetailsId(bundleDetailsId === req.bundle_group_id ? null : (req.bundle_group_id ?? null))} 
+                          className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Info size={12} /> {bundleDetailsId === req.bundle_group_id ? 'Ocultar Contenido' : `Ver ${req.bundle_items} equipos incluidos`}
+                        </button>
+                        {bundleDetailsId === req.bundle_group_id && req.bundle_group_id && (
+                          <div className="mt-2 bg-slate-950 p-2 rounded border border-slate-800 text-[10px] text-slate-400 space-y-1">
+                            {getBundleAssets(req.bundle_group_id).map((name, i) => (
+                              <p key={i}>• {name}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* ACTION_REQUIRED: Mostrar feedback del líder */}
-                    {isActionRequired && req.feedback_log && (
+                    {isActionRequired && req.rejection_reason && (
                       <div className="mt-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-2">
-                        <p className="text-xs text-orange-300">💬 Líder dice: "{req.feedback_log}"</p>
+                        <p className="text-xs text-orange-300">💬 Líder dice: "{req.rejection_reason}"</p>
                       </div>
                     )}
                   </div>
@@ -91,12 +119,7 @@ function MyLoansView({ onShowQR, onFeedback }: {
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     {req.status === 'APPROVED' && (
                       <Button size="sm" variant="neon" onClick={() => onShowQR(req)} className="text-[11px] h-8">
-                        <QrCode size={12} className="mr-1" /> QR Salida
-                      </Button>
-                    )}
-                    {req.status === 'ACTIVE' && (
-                      <Button size="sm" variant="outline" onClick={() => renewRequest(req.id, 7)} className="text-[11px] h-8">
-                        <RotateCcw size={12} className="mr-1" /> +7 días
+                        <QrCode size={12} className="mr-1" /> {req.is_bundle ? 'QR Único' : 'QR Salida'}
                       </Button>
                     )}
                     {isActionRequired && (
@@ -117,13 +140,22 @@ function MyLoansView({ onShowQR, onFeedback }: {
         <div>
           <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Historial</h2>
           <div className="space-y-2">
-            {history.slice(0, 5).map(req => (
+            {history.slice(0, 10).map(req => (
               <div key={req.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
                 <div>
-                  <p className="text-slate-300 text-sm font-medium">{req.assets?.name || `Activo #${req.asset_id}`}</p>
+                  <p className="text-slate-300 text-sm font-medium">
+                    {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name || `Activo #${req.asset_id}`}
+                  </p>
                   <p className="text-slate-500 text-xs">{format(new Date(req.created_at), "d MMM yyyy", { locale: es })}</p>
                 </div>
-                <StatusBadge status={req.status} />
+                <div className="text-right">
+                   <StatusBadge status={req.status} />
+                   {req.status === 'REJECTED' && req.rejection_reason && (
+                      <p className="text-[9px] text-rose-400 mt-1 max-w-[150px] truncate">
+                        Motivo: {req.rejection_reason}
+                      </p>
+                   )}
+                </div>
               </div>
             ))}
           </div>
@@ -134,8 +166,13 @@ function MyLoansView({ onShowQR, onFeedback }: {
 }
 
 // ─── QR MODAL ────────────────────────────────────────────────
-function QRModal({ request, onClose }: { request: Request; onClose: () => void }) {
-  const qrData = JSON.stringify({ request_id: request.id, asset_id: request.asset_id, generated_at: new Date().toISOString() });
+function QRModal({ request, onClose }: { request: any; onClose: () => void }) {
+  const qrData = JSON.stringify({ 
+    request_id: request.id, 
+    bundle_group_id: request.bundle_group_id, 
+    asset_id: request.asset_id, 
+    generated_at: new Date().toISOString() 
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
@@ -156,9 +193,9 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
             <span className="text-slate-500">Solicitante</span>
             <span className="text-white font-medium">{request.requester_name}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Activo</span>
-            <span className="text-white font-medium">{request.assets?.name}</span>
+          <div className="flex justify-between text-xs text-primary font-bold">
+            <span>{request.is_bundle ? 'Combo (Kit)' : 'Activo'}</span>
+            <span className="text-right">{request.is_bundle ? `${request.bundle_items} equipos` : request.assets?.name}</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Retorno</span>
@@ -168,29 +205,25 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
                 : '—'}
             </span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Solicitud ID</span>
-            <span className="text-slate-400 font-mono">#{request.id}</span>
-          </div>
         </div>
 
-        <p className="text-[10px] text-slate-500 mt-3">Presenta este QR al guardia de seguridad.</p>
+        <p className="text-[10px] text-slate-500 mt-3">Presenta este {request.is_bundle ? 'ÚNICO ' : ''}QR al guardia de seguridad.</p>
       </Card>
     </div>
   );
 }
 
 // ─── FEEDBACK MODAL ──────────────────────────────────────────
-function FeedbackModal({ request, onClose }: { request: Request; onClose: () => void }) {
+function FeedbackModal({ request, onClose }: { request: any; onClose: () => void }) {
   const [text, setText] = useState('');
 
   const handleSubmit = async () => {
     const { supabase } = await import('../../supabaseClient');
-    await supabase.from('requests').update({
-      status: 'PENDING',
-      motive: text,
-      feedback_log: `Usuario respondió: ${text}`,
-    }).eq('id', request.id);
+    if(request.bundle_group_id) {
+       await supabase.from('requests').update({ status: 'PENDING', motive: text }).eq('bundle_group_id', request.bundle_group_id);
+    } else {
+       await supabase.from('requests').update({ status: 'PENDING', motive: text }).eq('id', request.id);
+    }
     onClose();
   };
 
@@ -202,7 +235,7 @@ function FeedbackModal({ request, onClose }: { request: Request; onClose: () => 
           <button onClick={onClose}><X size={18} className="text-slate-400" /></button>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-orange-300">"{request.feedback_log}"</p>
+          <p className="text-xs text-orange-300">"{request.rejection_reason}"</p>
         </div>
         <textarea
           value={text}
@@ -236,8 +269,8 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
 
   // QR + Feedback modals
-  const [qrRequest, setQRRequest] = useState<Request | null>(null);
-  const [feedbackRequest, setFeedbackRequest] = useState<Request | null>(null);
+  const [qrRequest, setQRRequest] = useState<any | null>(null);
+  const [feedbackRequest, setFeedbackRequest] = useState<any | null>(null);
 
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
@@ -254,7 +287,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
     if (selectedAsset) {
       await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
     } else if (selectedBundle) {
-      await createBatchRequest(selectedBundle.assets || [], user, days, motive, isManagerView);
+      await createBatchRequest(selectedBundle, user, days, motive, isManagerView);
     }
     setSelectedAsset(null);
     setSelectedBundle(null);
@@ -307,7 +340,6 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       <main className="p-4">
         {activeTab === 'catalog' ? (
           <>
-            {/* ✨ MEJORA: Recuadro centrado y buscador organizado */}
             <div className="flex flex-col gap-5 mb-8 mt-2 max-w-2xl mx-auto">
               <div className="flex bg-slate-900 rounded-xl p-1.5 border border-slate-800 shadow-inner w-full sm:max-w-md mx-auto">
                 <button 
@@ -342,7 +374,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
                     <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
                       <img src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" alt={asset.name} />
-                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">{asset.tag}</span>
+                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white keep-white border border-white/10">{asset.tag}</span>
                       {asset.category && <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">{asset.category}</span>}
                     </div>
                     <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
@@ -364,16 +396,19 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {bundles.map(bundle => (
                   <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => setSelectedBundle(bundle)}>
-                    <div className="flex items-center gap-4 mb-4">
+                    <div className="flex items-center gap-4 mb-3">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:scale-110 transition-transform">
                         <Package size={24} />
                       </div>
                       <div>
                         <h3 className="text-white font-bold text-lg">{bundle.name}</h3>
-                        <p className="text-slate-400 text-xs">{(bundle.assets || []).length} activos incluidos</p>
+                        <p className="text-slate-400 text-xs">{(bundle.assets || []).length} equipos incluidos</p>
                       </div>
                     </div>
-                    {bundle.description && <p className="text-xs text-slate-300 mb-4">{bundle.description}</p>}
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {bundle.assets?.slice(0, 3).map(a => <span key={a.id} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded">{a.name}</span>)}
+                      {(bundle.assets?.length || 0) > 3 && <span className="text-[10px] text-slate-500 flex items-center">+{bundle.assets!.length - 3} más</span>}
+                    </div>
                     <Button size="sm" variant="neon" className="w-full text-xs h-9 font-bold tracking-wider">
                       Solicitar Combo Completo
                     </Button>
@@ -393,7 +428,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         )}
       </main>
 
-      {/* Request Modal — Mismo Día Logic */}
+      {/* Request Modal */}
       {(selectedAsset || selectedBundle) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md space-y-6 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
