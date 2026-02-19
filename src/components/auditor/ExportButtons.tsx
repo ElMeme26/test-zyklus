@@ -58,20 +58,21 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
 
   return (
     <div className="relative">
+      {/* ✨ MEJORA: Contraste forzado para modo claro en el botón principal */}
       <Button 
         variant="outline" 
         size="sm" 
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2"
+        className="flex items-center gap-2 bg-slate-900 text-white hover:bg-slate-800 border-slate-700 shadow-sm"
         disabled={isExporting}
       >
         {isExporting ? (
           <Loader2 size={14} className="animate-spin" />
         ) : (
-          <Download size={14} />
+          <Download size={14} className="text-emerald-400" />
         )}
         Exportar
-        <ChevronDown size={12} className={`transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={12} className={`transition-transform text-slate-400 ${isOpen ? 'rotate-180' : ''}`} />
       </Button>
 
       {isOpen && (
@@ -81,7 +82,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
             onClick={() => setIsOpen(false)}
           />
           <div className="absolute right-0 top-full mt-2 w-64 z-50 animate-in fade-in slide-in-from-top-2">
-            <div className="bg-slate-900 dark:bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
               <div className="px-3 py-2 border-b border-slate-800">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   Reportes Disponibles
@@ -100,7 +101,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 >
                   <FileText size={16} className="text-emerald-400" />
                   <div>
-                    <p className="font-medium">CSV</p>
+                    <p className="font-medium text-white">CSV</p>
                     <p className="text-[10px] text-slate-500">{requests.length} registros</p>
                   </div>
                 </button>
@@ -112,7 +113,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 >
                   <FileText size={16} className="text-rose-400" />
                   <div>
-                    <p className="font-medium">PDF</p>
+                    <p className="font-medium text-white">PDF</p>
                     <p className="text-[10px] text-slate-500">Formato imprimible</p>
                   </div>
                 </button>
@@ -124,7 +125,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 >
                   <FileSpreadsheet size={16} className="text-emerald-500" />
                   <div>
-                    <p className="font-medium">Excel</p>
+                    <p className="font-medium text-white">Excel</p>
                     <p className="text-[10px] text-slate-500">Análisis avanzado</p>
                   </div>
                 </button>
@@ -140,7 +141,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 >
                   <FileText size={16} className="text-cyan-400" />
                   <div>
-                    <p className="font-medium">Inventario PDF</p>
+                    <p className="font-medium text-white">Inventario PDF</p>
                     <p className="text-[10px] text-slate-500">{assets.length} activos</p>
                   </div>
                 </button>
@@ -156,7 +157,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 >
                   <FileSpreadsheet size={16} className="text-purple-400" />
                   <div>
-                    <p className="font-medium">Audit Trail Excel</p>
+                    <p className="font-medium text-white">Audit Trail Excel</p>
                     <p className="text-[10px] text-slate-500">{auditLogs.length} registros</p>
                   </div>
                 </button>

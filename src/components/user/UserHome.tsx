@@ -3,16 +3,14 @@ import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import {
-  Search, LogOut, Clock, Info, Package, ChevronRight,
-  QrCode, RotateCcw, X, CheckCircle, AlertCircle, MessageSquare, Building2
-} from 'lucide-react';
+import { Search, LogOut, Clock, Package, ChevronRight, QrCode, X, CheckCircle, MessageSquare, Building2, Info } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import QRCode from 'react-qr-code';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { toast } from 'sonner';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -38,14 +36,21 @@ function StatusBadge({ status }: { status: string }) {
 
 // ─── MY LOANS VIEW ────────────────────────────────────────────
 function MyLoansView({ onShowQR, onFeedback }: {
-  onShowQR: (req: Request) => void;
-  onFeedback: (req: Request) => void;
+  onShowQR: (req: any) => void;
+  onFeedback: (req: any) => void;
 }) {
-  const { getUserRequests, renewRequest } = useData();
+  const { getUserRequests, requests } = useData();
   const { user } = useAuth();
+  const [bundleDetailsId, setBundleDetailsId] = useState<string | null>(null);
+
   const userReqs = getUserRequests(user?.id || '');
   const active = userReqs.filter(r => ['PENDING', 'ACTION_REQUIRED', 'APPROVED', 'ACTIVE', 'OVERDUE'].includes(r.status));
   const history = userReqs.filter(r => ['RETURNED', 'MAINTENANCE', 'REJECTED', 'CANCELLED'].includes(r.status));
+
+  // Función para obtener los nombres de los activos de un combo específico
+  const getBundleAssets = (bundleGroupId: string) => {
+    return requests.filter(r => r.bundle_group_id === bundleGroupId).map(r => r.assets?.name);
+  };
 
   return (
     <div className="space-y-6">
@@ -62,15 +67,22 @@ function MyLoansView({ onShowQR, onFeedback }: {
           {active.map(req => {
             const isOverdue = req.status === 'OVERDUE';
             const isActionRequired = req.status === 'ACTION_REQUIRED';
+
+            // ✨ Corrección: usamos los nombres exactos de la BD
+            const reasonText = req.rejection_feedback || req.feedback_log;
+
             return (
               <Card key={req.id} className={`border transition-all ${isOverdue ? 'border-rose-500/40' : isActionRequired ? 'border-orange-500/40' : 'border-white/5'}`}>
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <h3 className="text-white font-bold truncate">{req.assets?.name || `Activo #${req.asset_id}`}</h3>
-                      <span className="text-xs text-slate-500 font-mono flex-shrink-0">{req.assets?.tag}</span>
+                      {/* Mostrar si es combo o individual */}
+                      <h3 className="text-white font-bold truncate">
+                        {req.is_bundle ? `📦 Combo: ${req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Kit de equipos'}` : req.assets?.name || `Activo #${req.asset_id}`}
+                      </h3>
+                      {!req.is_bundle && <span className="text-xs text-slate-500 font-mono flex-shrink-0">{req.assets?.tag}</span>}
                     </div>
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                    <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mb-2">
                       <StatusBadge status={req.status} />
                       {req.expected_return_date && (
                         <span className={isOverdue ? 'text-rose-400' : 'text-slate-400'}>
@@ -79,10 +91,30 @@ function MyLoansView({ onShowQR, onFeedback }: {
                         </span>
                       )}
                     </div>
+                    
+                    {/* Detalles del combo si aplica */}
+                    {req.is_bundle && (
+                      <div className="mt-2">
+                        <button 
+                          onClick={() => setBundleDetailsId(bundleDetailsId === req.bundle_group_id ? null : (req.bundle_group_id ?? null))} 
+                          className="text-[10px] text-primary hover:underline flex items-center gap-1"
+                        >
+                          <Info size={12} /> {bundleDetailsId === req.bundle_group_id ? 'Ocultar Contenido' : `Ver ${req.bundle_items} equipos incluidos`}
+                        </button>
+                        {bundleDetailsId === req.bundle_group_id && req.bundle_group_id && (
+                          <div className="mt-2 bg-slate-950 p-2 rounded border border-slate-800 text-[10px] text-slate-400 space-y-1">
+                            {getBundleAssets(req.bundle_group_id).map((name, i) => (
+                              <p key={i}>• {name}</p>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* ACTION_REQUIRED: Mostrar feedback del líder */}
-                    {isActionRequired && req.feedback_log && (
+                    {isActionRequired && reasonText && (
                       <div className="mt-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-2">
-                        <p className="text-xs text-orange-300">💬 Líder dice: "{req.feedback_log}"</p>
+                        <p className="text-xs text-orange-300">💬 Líder dice: "{reasonText}"</p>
                       </div>
                     )}
                   </div>
@@ -91,12 +123,7 @@ function MyLoansView({ onShowQR, onFeedback }: {
                   <div className="flex flex-col gap-2 flex-shrink-0">
                     {req.status === 'APPROVED' && (
                       <Button size="sm" variant="neon" onClick={() => onShowQR(req)} className="text-[11px] h-8">
-                        <QrCode size={12} className="mr-1" /> QR Salida
-                      </Button>
-                    )}
-                    {req.status === 'ACTIVE' && (
-                      <Button size="sm" variant="outline" onClick={() => renewRequest(req.id, 7)} className="text-[11px] h-8">
-                        <RotateCcw size={12} className="mr-1" /> +7 días
+                        <QrCode size={12} className="mr-1" /> {req.is_bundle ? 'QR Único' : 'QR Salida'}
                       </Button>
                     )}
                     {isActionRequired && (
@@ -117,15 +144,29 @@ function MyLoansView({ onShowQR, onFeedback }: {
         <div>
           <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Historial</h2>
           <div className="space-y-2">
-            {history.slice(0, 5).map(req => (
-              <div key={req.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                <div>
-                  <p className="text-slate-300 text-sm font-medium">{req.assets?.name || `Activo #${req.asset_id}`}</p>
-                  <p className="text-slate-500 text-xs">{format(new Date(req.created_at), "d MMM yyyy", { locale: es })}</p>
+            {history.slice(0, 10).map(req => {
+              // ✨ Corrección: usamos los nombres exactos de la BD
+              const reasonText = req.rejection_feedback || req.feedback_log;
+              
+              return (
+                <div key={req.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+                  <div>
+                    <p className="text-slate-300 text-sm font-medium">
+                      {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name || `Activo #${req.asset_id}`}
+                    </p>
+                    <p className="text-slate-500 text-xs">{format(new Date(req.created_at), "d MMM yyyy", { locale: es })}</p>
+                  </div>
+                  <div className="text-right">
+                     <StatusBadge status={req.status} />
+                     {req.status === 'REJECTED' && reasonText && (
+                        <p className="text-[9px] text-rose-400 mt-1 max-w-[150px] truncate">
+                          Motivo: {reasonText}
+                        </p>
+                     )}
+                  </div>
                 </div>
-                <StatusBadge status={req.status} />
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -134,8 +175,13 @@ function MyLoansView({ onShowQR, onFeedback }: {
 }
 
 // ─── QR MODAL ────────────────────────────────────────────────
-function QRModal({ request, onClose }: { request: Request; onClose: () => void }) {
-  const qrData = JSON.stringify({ request_id: request.id, asset_id: request.asset_id, generated_at: new Date().toISOString() });
+function QRModal({ request, onClose }: { request: any; onClose: () => void }) {
+  const qrData = JSON.stringify({ 
+    request_id: request.id, 
+    bundle_group_id: request.bundle_group_id, 
+    asset_id: request.asset_id, 
+    generated_at: new Date().toISOString() 
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
@@ -156,9 +202,9 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
             <span className="text-slate-500">Solicitante</span>
             <span className="text-white font-medium">{request.requester_name}</span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Activo</span>
-            <span className="text-white font-medium">{request.assets?.name}</span>
+          <div className="flex justify-between text-xs text-primary font-bold">
+            <span>{request.is_bundle ? 'Combo (Kit)' : 'Activo'}</span>
+            <span className="text-right">{request.is_bundle ? `${request.bundle_items} equipos` : request.assets?.name}</span>
           </div>
           <div className="flex justify-between text-xs">
             <span className="text-slate-500">Retorno</span>
@@ -168,32 +214,37 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
                 : '—'}
             </span>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500">Solicitud ID</span>
-            <span className="text-slate-400 font-mono">#{request.id}</span>
-          </div>
         </div>
 
-        <p className="text-[10px] text-slate-500 mt-3">Presenta este QR al guardia de seguridad.</p>
+        <p className="text-[10px] text-slate-500 mt-3">Presenta este {request.is_bundle ? 'ÚNICO ' : ''}QR al guardia de seguridad.</p>
       </Card>
     </div>
   );
 }
 
 // ─── FEEDBACK MODAL ──────────────────────────────────────────
-function FeedbackModal({ request, onClose }: { request: Request; onClose: () => void }) {
+function FeedbackModal({ request, onClose, onRefresh }: { request: any; onClose: () => void; onRefresh: () => void }) {
   const [text, setText] = useState('');
-  const { updateAsset } = useData();
 
   const handleSubmit = async () => {
     const { supabase } = await import('../../supabaseClient');
-    await supabase.from('requests').update({
-      status: 'PENDING',
-      motive: text,
-      feedback_log: `Usuario respondió: ${text}`,
-    }).eq('id', request.id);
+    let res;
+    
+    // ✨ CORRECCIÓN: Actualizamos en el backend a estado PENDIENTE, y en lugar de motive mandamos a feedback_log
+    if(request.bundle_group_id) {
+       res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('bundle_group_id', request.bundle_group_id);
+    } else {
+       res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('id', request.id);
+    }
+    
+    if (res.error) { toast.error(`Error BD: ${res.error.message}`); return; }
+    
+    toast.success('Respuesta enviada al líder');
+    onRefresh();
     onClose();
   };
+
+  const reasonText = request.rejection_feedback || request.feedback_log;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
@@ -203,7 +254,7 @@ function FeedbackModal({ request, onClose }: { request: Request; onClose: () => 
           <button onClick={onClose}><X size={18} className="text-slate-400" /></button>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-orange-300">"{request.feedback_log}"</p>
+          <p className="text-xs text-orange-300">"{reasonText}"</p>
         </div>
         <textarea
           value={text}
@@ -221,26 +272,28 @@ function FeedbackModal({ request, onClose }: { request: Request; onClose: () => 
 }
 
 // ─── MAIN USER HOME ──────────────────────────────────────────
-export function UserHome() {
-  const { assets, createRequest, institutions } = useData();
+export function UserHome({ isManagerView = false, onBack }: { isManagerView?: boolean; onBack?: () => void }) {
+  const { assets, bundles, createRequest, createBatchRequest, institutions, fetchData } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
+  const [view, setView] = useState<'activos' | 'combos'>('activos');
   const [activeTab, setActiveTab] = useState<'catalog' | 'loans'>('catalog');
 
   // Request modal
   const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
-  const [days, setDays] = useState(7);
+  const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
+  const [days, setDays] = useState(0); 
   const [motive, setMotive] = useState('');
   const [isExternal, setIsExternal] = useState(false);
   const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
 
   // QR + Feedback modals
-  const [qrRequest, setQRRequest] = useState<Request | null>(null);
-  const [feedbackRequest, setFeedbackRequest] = useState<Request | null>(null);
+  const [qrRequest, setQRRequest] = useState<any | null>(null);
+  const [feedbackRequest, setFeedbackRequest] = useState<any | null>(null);
 
   const filteredAssets = useMemo(() =>
     assets.filter(a =>
-      a.status === 'Operativa' &&
+      a.status === 'Disponible' && 
       !a.maintenance_alert &&
       ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
         (a.tag?.toLowerCase() || '').includes(search.toLowerCase()) ||
@@ -249,223 +302,223 @@ export function UserHome() {
   );
 
   const handleSubmit = async () => {
-    if (!selectedAsset || !user) return;
-    await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined);
+    if (!user) return;
+    if (selectedAsset) {
+      await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
+    } else if (selectedBundle) {
+      await createBatchRequest(selectedBundle, user, days, motive, isManagerView);
+    }
     setSelectedAsset(null);
+    setSelectedBundle(null);
     setMotive('');
-    setDays(7);
+    setDays(0);
     setIsExternal(false);
     setSelectedInstitution(undefined);
-    setActiveTab('loans');
+    if (!isManagerView) setActiveTab('loans');
+    if (isManagerView && onBack) onBack();
   };
 
   return (
-    <div className="min-h-screen bg-background font-sans pb-24">
-      <ChatAssistant />
+    <div className={`min-h-screen ${isManagerView ? 'bg-transparent' : 'bg-background'} font-sans pb-24`}>
+      {!isManagerView && <ChatAssistant />}
       {qrRequest && <QRModal request={qrRequest} onClose={() => setQRRequest(null)} />}
-      {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} />}
+      
+      {/* ✨ Le pasamos la función fetchData al modal para que actualice la app al enviar feedback */}
+      {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} onRefresh={fetchData} />}
 
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
-        <div className="flex items-center justify-between px-4 py-3">
-          <div>
-            <h1 className="text-lg font-bold text-white">Hola, <span className="text-primary">{user?.name?.split(' ')[0]}</span></h1>
-            <p className="text-[11px] text-slate-500">{user?.dept}</p>
+      {!isManagerView && (
+        <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
+          <div className="flex items-center justify-between px-4 py-3">
+            <div>
+              <h1 className="text-lg font-bold text-white">Hola, <span className="text-primary">{user?.name?.split(' ')[0]}</span></h1>
+              <p className="text-[11px] text-slate-500">{user?.disciplina}</p>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotificationCenter />
+              <ThemeToggle />
+              <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <NotificationCenter />
-            <ThemeToggle />  {/* ← AGREGAR AQUÍ */}
-            <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
-          </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="flex border-t border-slate-800">
-          <button
-            onClick={() => setActiveTab('catalog')}
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-          >
-            Catálogo
-          </button>
-          <button
-            onClick={() => setActiveTab('loans')}
-            className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}
-          >
-            Mis Préstamos
-          </button>
-        </div>
-      </header>
+          <div className="flex border-t border-slate-800">
+            <button onClick={() => setActiveTab('catalog')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'catalog' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}>Catálogo</button>
+            <button onClick={() => setActiveTab('loans')} className={`flex-1 py-3 text-xs font-bold uppercase tracking-widest transition-colors ${activeTab === 'loans' ? 'text-primary border-b-2 border-primary' : 'text-slate-500'}`}>Mis Préstamos</button>
+          </div>
+        </header>
+      )}
+
+      {isManagerView && (
+        <header className="flex justify-between items-center mb-6">
+          <div>
+            <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
+            <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
+          </div>
+          <Button variant="outline" onClick={onBack}>Cancelar</Button>
+        </header>
+      )}
 
       <main className="p-4">
         {activeTab === 'catalog' ? (
           <>
-            {/* Search */}
-            <div className="relative mb-6">
-              <Search className="absolute left-4 top-3 text-slate-500 w-4 h-4" />
-              <Input
-                placeholder="¿Qué necesitas hoy?"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="pl-11 h-12 rounded-full shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)]"
-              />
+            <div className="flex flex-col gap-5 mb-8 mt-2 max-w-2xl mx-auto">
+              <div className="flex bg-slate-900 rounded-xl p-1.5 border border-slate-800 shadow-inner w-full sm:max-w-md mx-auto">
+                <button 
+                  onClick={() => setView('activos')} 
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${view === 'activos' ? 'bg-primary text-black shadow-md scale-105' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Activos Sueltos
+                </button>
+                <button 
+                  onClick={() => setView('combos')} 
+                  className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${view === 'combos' ? 'bg-primary text-black shadow-md scale-105' : 'text-slate-400 hover:text-white'}`}
+                >
+                  Combos (Kits)
+                </button>
+              </div>
+
+              <div className="relative w-full">
+                <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
+                <Input
+                  placeholder={view === 'activos' ? "¿Qué activo necesitas hoy?" : "¿Qué combo necesitas hoy?"}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
+                />
+              </div>
             </div>
 
             {/* Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredAssets.map(asset => (
-                <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
-                  <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
-                    <img
-                      src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`}
-                      className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity"
-                      alt={asset.name}
-                    />
-                    <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white border border-white/10">
-                      {asset.tag}
-                    </span>
-                    {asset.category && (
-                      <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">
-                        {asset.category}
-                      </span>
-                    )}
+            {view === 'activos' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                {filteredAssets.map(asset => (
+                  <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setSelectedAsset(asset)}>
+                    <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
+                      <img src={asset.image || `https://images.unsplash.com/photo-1550009158-9ebf69173e03?w=500`} className="w-full h-full object-cover opacity-70 group-hover:opacity-100 transition-opacity" alt={asset.name} />
+                      <span className="absolute top-2 right-2 bg-black/70 backdrop-blur px-2 py-0.5 rounded text-[10px] font-mono text-white keep-white border border-white/10">{asset.tag}</span>
+                      {asset.category && <span className="absolute bottom-2 left-2 bg-primary/20 text-primary text-[10px] font-bold px-2 py-0.5 rounded border border-primary/20">{asset.category}</span>}
+                    </div>
+                    <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
+                    <p className="text-secondary text-xs mb-3 truncate">{asset.description || 'Sin descripción'}</p>
+                    <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                      <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><CheckCircle size={10} /> Disponible</span>
+                      <Button size="sm" variant="neon" className="text-[11px] h-7">Solicitar <ChevronRight size={12} /></Button>
+                    </div>
+                  </Card>
+                ))}
+                {filteredAssets.length === 0 && (
+                  <div className="col-span-full text-center py-16 text-slate-500">
+                    <Package size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>No hay activos disponibles con ese filtro.</p>
                   </div>
-                  <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
-                  <p className="text-secondary text-xs mb-3 truncate">{asset.description || 'Sin descripción'}</p>
-                  <div className="flex justify-between items-center pt-2 border-t border-slate-800">
-                    <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
-                      <CheckCircle size={10} /> Disponible
-                    </span>
-                    <Button size="sm" variant="neon" className="text-[11px] h-7">
-                      Solicitar <ChevronRight size={12} />
+                )}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {bundles.map(bundle => (
+                  <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => setSelectedBundle(bundle)}>
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:scale-110 transition-transform">
+                        <Package size={24} />
+                      </div>
+                      <div>
+                        <h3 className="text-white font-bold text-lg">{bundle.name}</h3>
+                        <p className="text-slate-400 text-xs">{(bundle.assets || []).length} equipos incluidos</p>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-1 mb-4">
+                      {bundle.assets?.slice(0, 3).map(a => (
+                        <span key={a.id} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded">{a.name}</span>
+                      ))}
+                      {(bundle.assets?.length || 0) > 3 && (
+                        <span className="text-[10px] text-slate-500 flex items-center">+{bundle.assets!.length - 3} más</span>
+                      )}
+                    </div>
+                    <Button size="sm" variant="neon" className="w-full text-xs h-9 font-bold tracking-wider">
+                      Solicitar Combo Completo
                     </Button>
+                  </Card>
+                ))}
+                {bundles.length === 0 && (
+                  <div className="col-span-full text-center py-16 text-slate-500">
+                    <Package size={40} className="mx-auto mb-3 opacity-30" />
+                    <p>No hay combos configurados en el sistema.</p>
                   </div>
-                </Card>
-              ))}
-              {filteredAssets.length === 0 && (
-                <div className="col-span-3 text-center py-16 text-slate-500">
-                  <Package size={40} className="mx-auto mb-3 opacity-30" />
-                  <p>No hay activos disponibles con ese filtro.</p>
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </>
         ) : (
           <MyLoansView onShowQR={(req) => setQRRequest(req)} onFeedback={(req) => setFeedbackRequest(req)} />
         )}
       </main>
 
-      {/* Request Modal — MEJORADO */}
-      {selectedAsset && (
+      {/* Request Modal */}
+      {(selectedAsset || selectedBundle) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md space-y-6 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-white">Configura tu solicitud</h2>
-                <p className="text-primary text-sm mt-0.5">{selectedAsset.name}</p>
+                <p className="text-primary text-sm mt-0.5">
+                  {selectedAsset ? selectedAsset.name : `Combo: ${selectedBundle?.name}`}
+                </p>
               </div>
-              <button onClick={() => setSelectedAsset(null)} className="text-slate-400 hover:text-white">
+              <button onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }} className="text-slate-400 hover:text-white">
                 <X size={18} />
               </button>
             </div>
 
-            {/* ✨ SLIDER MEJORADO — MÁS GRANDE Y BONITO */}
             <div className="bg-gradient-to-br from-primary/5 to-primary/10 border border-primary/20 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-4">
-                <label className="text-sm font-bold text-white uppercase tracking-wider">Duración</label>
-                <div className="bg-primary text-black px-4 py-2 rounded-xl font-black text-2xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
-                  {days} <span className="text-sm font-medium">días</span>
+                <label className="text-sm font-bold text-white uppercase tracking-wider">Retorno</label>
+                <div className="bg-primary text-black px-4 py-2 rounded-xl font-black text-xl shadow-[0_0_20px_rgba(6,182,212,0.4)]">
+                  {days === 0 ? 'Mismo Día' : `${days} días`}
                 </div>
               </div>
               
               <div className="relative">
-                <input
-                  type="range"
-                  min="1"
-                  max="30"
-                  value={days}
-                  onChange={e => setDays(Number(e.target.value))}
+                <input type="range" min="0" max="30" value={days} onChange={e => setDays(Number(e.target.value))}
                   className="w-full h-3 bg-slate-800 rounded-full appearance-none cursor-pointer accent-primary
-                    [&::-webkit-slider-thumb]:appearance-none 
-                    [&::-webkit-slider-thumb]:w-6 
-                    [&::-webkit-slider-thumb]:h-6 
-                    [&::-webkit-slider-thumb]:rounded-full 
-                    [&::-webkit-slider-thumb]:bg-primary 
-                    [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
-                    [&::-webkit-slider-thumb]:cursor-pointer
-                    [&::-webkit-slider-thumb]:transition-transform
-                    [&::-webkit-slider-thumb]:hover:scale-110
-                    [&::-moz-range-thumb]:w-6 
-                    [&::-moz-range-thumb]:h-6 
-                    [&::-moz-range-thumb]:rounded-full 
-                    [&::-moz-range-thumb]:bg-primary 
-                    [&::-moz-range-thumb]:border-0
-                    [&::-moz-range-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
-                    [&::-moz-range-thumb]:cursor-pointer"
-                  style={{
-                    background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${((days - 1) / 29) * 100}%, rgb(30 41 59) ${((days - 1) / 29) * 100}%, rgb(30 41 59) 100%)`
-                  }}
+                    [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-6 [&::-webkit-slider-thumb]:h-6 
+                    [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:shadow-[0_0_15px_rgba(6,182,212,0.6)]
+                    [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-transform [&::-webkit-slider-thumb]:hover:scale-110"
+                  style={{ background: `linear-gradient(to right, #06b6d4 0%, #06b6d4 ${(days / 30) * 100}%, rgb(30 41 59) ${(days / 30) * 100}%, rgb(30 41 59) 100%)` }}
                 />
               </div>
               
               <div className="flex justify-between text-[10px] text-slate-500 mt-3 font-mono">
-                <span className={days === 1 ? 'text-primary font-bold' : ''}>1 día</span>
-                <span className={days === 7 ? 'text-primary font-bold' : ''}>1 semana</span>
-                <span className={days === 15 ? 'text-primary font-bold' : ''}>2 semanas</span>
-                <span className={days === 30 ? 'text-primary font-bold' : ''}>1 mes</span>
+                <span className={days === 0 ? 'text-primary font-bold' : ''}>Hoy (9pm)</span>
+                <span className={days === 7 ? 'text-primary font-bold' : ''}>1 sem</span>
+                <span className={days === 15 ? 'text-primary font-bold' : ''}>15 días</span>
+                <span className={days === 30 ? 'text-primary font-bold' : ''}>30 días</span>
               </div>
             </div>
 
-            {/* Motive */}
-            <Input
-              placeholder="Motivo del préstamo (opcional, ayuda a aprobar más rápido)"
-              value={motive}
-              onChange={e => setMotive(e.target.value)}
-            />
+            <Input placeholder="Motivo del préstamo (opcional)" value={motive} onChange={e => setMotive(e.target.value)} />
 
-            {/* ✨ CHECKBOX INSTITUCIÓN EXTERNA */}
             <div className="space-y-3">
               <label className="flex items-center gap-3 cursor-pointer group">
-                <input
-                  type="checkbox"
-                  checked={isExternal}
-                  onChange={e => setIsExternal(e.target.checked)}
-                  className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
-                />
+                <input type="checkbox" checked={isExternal} onChange={e => setIsExternal(e.target.checked)} className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all" />
                 <div className="flex items-center gap-2">
                   <Building2 size={16} className="text-slate-500 group-hover:text-primary transition-colors" />
-                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">
-                    Es para una institución externa
-                  </span>
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Es para una institución externa</span>
                 </div>
               </label>
 
               {isExternal && (
                 <div className="pl-8 animate-in slide-in-from-top-2">
-                  <select
-                    value={selectedInstitution}
-                    onChange={e => setSelectedInstitution(Number(e.target.value))}
-                    className="w-full h-11 bg-slate-950 border border-primary/30 rounded-lg px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  >
+                  <select value={selectedInstitution} onChange={e => setSelectedInstitution(Number(e.target.value))} className="w-full h-11 bg-slate-950 border border-primary/30 rounded-lg px-3 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50">
                     <option value="">Selecciona institución...</option>
-                    {institutions.map(inst => (
-                      <option key={inst.id} value={inst.id}>{inst.name}</option>
-                    ))}
+                    {institutions.map(inst => (<option key={inst.id} value={inst.id}>{inst.name}</option>))}
                   </select>
                 </div>
               )}
             </div>
 
-            {/* Zykla AI Suggestion */}
-            <div className="bg-primary/5 border border-primary/15 rounded-xl p-3 flex gap-3 items-start">
-              <Info size={16} className="text-primary flex-shrink-0 mt-0.5" />
-              <p className="text-xs text-slate-400">
-                <span className="text-primary font-bold">Zykla sugiere:</span> Si solicitas este equipo, considera agregar accesorios complementarios disponibles para optimizar tu proyecto.
-              </p>
-            </div>
-
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <Button variant="ghost" onClick={() => setSelectedAsset(null)}>Cancelar</Button>
-              <Button variant="neon" onClick={handleSubmit}>Enviar Solicitud</Button>
+              <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }}>Cancelar</Button>
+              <Button variant="neon" onClick={handleSubmit}>{isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud'}</Button>
             </div>
           </Card>
         </div>

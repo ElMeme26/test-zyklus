@@ -2,13 +2,9 @@ import React, { useState, useRef } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Card, Input } from '../ui/core';
-import {
-  ScanLine, LogOut, LogIn, AlertTriangle, CheckCircle,
-  X, PenLine, Trash2, User, Box, Clock, Camera
-} from 'lucide-react';
+import { ScanLine, LogOut, LogIn, AlertTriangle, CheckCircle, X, PenLine, Trash2, Box, Camera } from 'lucide-react';
 import { toast } from 'sonner';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
 // ─── SIGNATURE PAD ────────────────────────────────────────────
@@ -98,350 +94,265 @@ function SignaturePad({ onSign }: { onSign: (dataUrl: string) => void }) {
   );
 }
 
-// ─── RESULT CARD ─────────────────────────────────────────────
-function ResultCard({ success, message, data, onReset }: {
-  success: boolean;
-  message: string;
-  data?: Request;
-  onReset: () => void;
-}) {
-  return (
-    <Card className={`border-2 text-center animate-in fade-in slide-in-from-bottom-4 ${success ? 'border-emerald-500/40' : 'border-rose-500/40'}`}>
-      <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${success ? 'bg-emerald-500/10 text-emerald-400' : 'bg-rose-500/10 text-rose-400'}`}>
-        {success ? <CheckCircle size={32} /> : <AlertTriangle size={32} />}
-      </div>
-      <h3 className={`text-xl font-black mb-2 ${success ? 'text-emerald-400' : 'text-rose-400'}`}>
-        {success ? '✓ AUTORIZADO' : '✗ NO AUTORIZADO'}
-      </h3>
-      <p className="text-slate-300 text-sm mb-4">{message}</p>
-
-      {success && data && (
-        <div className="bg-slate-950 rounded-xl p-3 border border-slate-800 mb-4 text-left space-y-2">
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500 flex items-center gap-1"><User size={10} /> Persona</span>
-            <span className="text-white font-medium">{data.requester_name}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500 flex items-center gap-1"><Box size={10} /> Activo</span>
-            <span className="text-white font-medium">{data.assets?.name}</span>
-          </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-500 flex items-center gap-1"><Clock size={10} /> Días</span>
-            <span className="text-primary font-mono">{data.days_requested} días</span>
-          </div>
-        </div>
-      )}
-
-      <Button onClick={onReset} className="w-full mt-2" variant="outline">
-        Siguiente Escaneo
-      </Button>
-    </Card>
-  );
-}
-
-// ─── DAMAGE MODAL ────────────────────────────────────────────
-function DamageModal({ onConfirm }: { onConfirm: (isDamaged: boolean, notes: string) => void }) {
-  const [notes, setNotes] = useState('');
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
-      <Card className="w-full max-w-sm border-2 border-accent">
-        <div className="flex flex-col items-center text-center space-y-4">
-          <div className="p-3 bg-accent/10 rounded-full text-accent">
-            <AlertTriangle size={32} />
-          </div>
-          <h3 className="text-xl font-bold text-white">Inspección de Retorno</h3>
-          <p className="text-slate-300 text-sm">¿El activo presenta daños visibles, golpes o desgaste anormal?</p>
-
-          <Input
-            placeholder="Notas de daño (opcional)"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-            className="w-full text-sm"
-          />
-
-          <div className="grid grid-cols-2 gap-3 w-full">
-            <button
-              onClick={() => onConfirm(false, '')}
-              className="flex items-center justify-center gap-2 p-4 rounded-xl bg-slate-800 border border-slate-700 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-slate-300 hover:text-emerald-400 transition-all"
-            >
-              <CheckCircle size={20} className="text-emerald-500" />
-              Sin Daños
-            </button>
-            <button
-              onClick={() => onConfirm(true, notes)}
-              className="flex items-center justify-center gap-2 p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 text-rose-400 transition-all"
-            >
-              <X size={20} />
-              Con Daños
-            </button>
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-}
-
 // ─── MAIN GUARD SCANNER ──────────────────────────────────────
 export function GuardScanner() {
   const { processGuardScan } = useData();
   const { logout } = useAuth();
+  
   const [mode, setMode] = useState<'CHECKOUT' | 'CHECKIN'>('CHECKOUT');
-  const [step, setStep] = useState<1 | 2>(1);
-  const [qrInput, setQrInput] = useState('');
-  const [requestQR, setRequestQR] = useState('');
-  const [assetQR, setAssetQR] = useState('');
-  const [signature, setSignature] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [result, setResult] = useState<{ success: boolean; message: string; data?: Request } | null>(null);
-  const [showDamageModal, setShowDamageModal] = useState(false);
-  const [pendingQr, setPendingQr] = useState('');
   const [useCamera, setUseCamera] = useState(false);
+  
+  // Flujo Salida (Checkout)
+  const [step, setStep] = useState<1 | 2>(1); 
+  const [activeComboRequests, setActiveComboRequests] = useState<any[]>([]); 
+  const [scannedPhysicalAssets, setScannedPhysicalAssets] = useState<string[]>([]); 
+  const [signature, setSignature] = useState('');
+  
+  // Flujo Retorno (Checkin)
+  const [returnAssetData, setReturnAssetData] = useState<any>(null);
+  const [isDamaged, setIsDamaged] = useState(false);
+  const [damageNotes, setDamageNotes] = useState('');
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  const handleCameraScan = (detectedCodes: any) => {
+  const handleCameraScan = async (detectedCodes: any) => {
     const code = detectedCodes?.[0]?.rawValue;
     if (!code) return;
+    setUseCamera(false);
     
     if (mode === 'CHECKOUT') {
       if (step === 1) {
-        setRequestQR(code);
-        setQrInput(code);
-        toast.success('✓ Solicitud escaneada. Ahora escanea el activo físico.');
-        setStep(2);
-      } else {
-        setAssetQR(code);
-        setQrInput(code);
-        setUseCamera(false);
-        toast.success('✓ Activo escaneado. Listo para procesar.');
-      }
-    } else {
-      setQrInput(code);
-      setUseCamera(false);
-      toast.success('✓ QR escaneado');
-    }
-  };
-
-  const handleManualInput = () => {
-    if (!qrInput.trim()) { toast.warning('Ingresa un código QR'); return; }
-    
-    if (mode === 'CHECKOUT') {
-      if (step === 1) {
-        setRequestQR(qrInput);
-        toast.success('✓ Solicitud ingresada. Ahora escanea el activo físico.');
-        setStep(2);
-        setQrInput('');
-      } else {
-        setAssetQR(qrInput);
-        toast.success('✓ Activo ingresado. Listo para procesar.');
-      }
-    }
-  };
-
-  const handleScan = async () => {
-    if (mode === 'CHECKOUT') {
-      if (!requestQR || !assetQR) {
-        toast.error('Faltan escaneos. Completa ambos pasos.');
-        return;
-      }
-
-      try {
-        const reqData = JSON.parse(requestQR);
-        const assetData = JSON.parse(assetQR);
-        
-        if (reqData.asset_id !== assetData.id && reqData.asset_id !== assetData.asset_id) {
-          toast.error('⚠️ ERROR: El activo NO coincide con la solicitud');
-          return;
+        setIsProcessing(true);
+        const res = await processGuardScan(code, 'CHECKOUT');
+        if(res.success && res.data) {
+           setActiveComboRequests(res.data as any[]);
+           toast.success(`✓ Solicitud autorizada. Escanea los ${res.data.length} activos físicos.`);
+           setStep(2);
+        } else {
+           toast.error(res.message || 'Error en solicitud');
         }
-      } catch {
-        toast.error('Error validando QRs');
-        return;
+        setIsProcessing(false);
+      } else {
+        // PASO 2: Escanear Activo Físico
+        try {
+           const physicalData = JSON.parse(code);
+           const physicalId = physicalData.id || physicalData.asset_id;
+           const existsInCombo = activeComboRequests.find(req => req.asset_id === physicalId);
+           
+           if(existsInCombo) {
+              if(!scannedPhysicalAssets.includes(physicalId)) {
+                 const newScanned = [...scannedPhysicalAssets, physicalId];
+                 setScannedPhysicalAssets(newScanned);
+                 if(newScanned.length === activeComboRequests.length) {
+                   toast.success('Todos los activos verificados. Procede a firmar.');
+                 } else {
+                   toast.success(`Activo verificado (${newScanned.length}/${activeComboRequests.length})`);
+                 }
+              } else {
+                 toast.warning('Este activo ya fue verificado.');
+              }
+           } else {
+              toast.error('⚠️ Este activo físico NO pertenece a la solicitud autorizada.');
+           }
+        } catch {
+           toast.error('Código físico inválido');
+        }
       }
-
-      setIsProcessing(true);
-      const res = await processGuardScan(requestQR, 'CHECKOUT', signature || `sig_guard_${Date.now()}`);
-      setResult(res);
-      if (res.success) {
-        setRequestQR('');
-        setAssetQR('');
-        setQrInput('');
-        setStep(1);
-      }
-      setIsProcessing(false);
     } else {
-      if (!qrInput.trim()) { toast.warning('Ingresa o escanea un QR'); return; }
-      setPendingQr(qrInput);
-      setShowDamageModal(true);
+      // CHECKIN
+      setReturnAssetData(code);
     }
   };
 
-  const handleDamageConfirm = async (isDamaged: boolean, notes: string) => {
-    setShowDamageModal(false);
+  const handleFinalCheckout = async () => {
     setIsProcessing(true);
-    const res = await processGuardScan(pendingQr, 'CHECKIN', signature || `sig_guard_${Date.now()}`, isDamaged, notes);
-    setResult(res);
-    if (res.success) setQrInput('');
-    setPendingQr('');
+    // Mock del QR de solicitud original para enviar el ID a la función
+    const mockQr = JSON.stringify({ 
+      request_id: activeComboRequests[0].id, 
+      bundle_group_id: activeComboRequests[0].bundle_group_id 
+    });
+    
+    const res = await processGuardScan(mockQr, 'CHECKOUT', signature);
+    if(res.success) {
+       toast.success('Salida registrada con éxito. Puerta Abierta.');
+       setStep(1); setActiveComboRequests([]); setScannedPhysicalAssets([]); setSignature('');
+    } else {
+       toast.error(res.message);
+    }
     setIsProcessing(false);
-  };
+  }
 
-  const handleReset = () => {
-    setResult(null);
-    setQrInput('');
-    setRequestQR('');
-    setAssetQR('');
-    setSignature('');
-    setStep(1);
-  };
+  const handleFinalCheckin = async () => {
+    setIsProcessing(true);
+    const res = await processGuardScan(returnAssetData, 'CHECKIN', '', isDamaged, damageNotes);
+    if(res.success) {
+      setReturnAssetData(null); setIsDamaged(false); setDamageNotes('');
+    } else {
+      toast.error(res.message);
+    }
+    setIsProcessing(false);
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4 flex flex-col items-center justify-start pt-8 relative overflow-hidden">
-      <div className={`absolute top-0 left-0 w-full h-64 opacity-10 blur-[100px] pointer-events-none ${mode === 'CHECKOUT' ? 'bg-cyan-500' : 'bg-emerald-500'}`} />
-
-      {showDamageModal && <DamageModal onConfirm={handleDamageConfirm} />}
-
+    <div className="min-h-screen bg-background p-4 flex flex-col items-center pt-8">
+      
+      {/* Modal Scanner */}
       {useCamera && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95 backdrop-blur-sm">
-          <Card className="w-full max-w-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/95">
+          <Card className="w-full max-w-md border-primary/30">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-white font-bold flex items-center gap-2">
-                <Camera size={18} className="text-primary" />
-                {mode === 'CHECKOUT' && step === 1 && 'Escanea QR de Solicitud'}
-                {mode === 'CHECKOUT' && step === 2 && 'Escanea QR del Activo Físico'}
-                {mode === 'CHECKIN' && 'Escanea QR del Activo'}
-              </h3>
-              <button onClick={() => setUseCamera(false)} className="text-slate-400 hover:text-white">
-                <X size={18} />
-              </button>
+              <h3 className="text-white font-bold"><Camera className="inline mr-2 text-primary"/> Escáner</h3>
+              <button onClick={() => setUseCamera(false)}><X size={18} className="text-slate-400"/></button>
             </div>
-            <div className="aspect-square bg-slate-950 rounded-xl overflow-hidden">
-              <Scanner
-                onScan={handleCameraScan}
-                constraints={{ facingMode: 'environment' }}
-                styles={{
-                  container: { width: '100%', height: '100%' },
-                  video: { width: '100%', height: '100%', objectFit: 'cover' }
-                }}
-              />
+            <div className="aspect-square bg-slate-950 rounded-xl overflow-hidden border border-slate-800">
+              <Scanner onScan={handleCameraScan} />
             </div>
-            <p className="text-xs text-slate-500 text-center mt-3">
-              Coloca el código QR dentro del recuadro
-            </p>
           </Card>
         </div>
       )}
 
-      <div className="w-full max-w-md space-y-5 z-10">
-        {/* Header Corregido */}
+      <div className="w-full max-w-md space-y-5">
+        
+        {/* Header */}
         <div className="flex justify-between items-center">
-          <div className="text-center flex-1">
-            <div className={`inline-flex p-3 rounded-full border mb-2 ${mode === 'CHECKOUT' ? 'bg-cyan-500/10 border-cyan-500/30 shadow-[0_0_30px_rgba(6,182,212,0.3)]' : 'bg-emerald-500/10 border-emerald-500/30 shadow-[0_0_30px_rgba(16,185,129,0.3)]'}`}>
-              <ScanLine size={36} className={`${mode === 'CHECKOUT' ? 'text-primary' : 'text-emerald-400'} animate-pulse-slow`} />
-            </div>
-            <h1 className="text-2xl font-black text-white tracking-wider">GUARD SCAN</h1>
-            <p className="text-[11px] text-slate-500">Control de Acceso Digital</p>
+          <div className="text-left">
+            <h1 className="text-xl font-black text-white flex items-center gap-2">
+              <ScanLine className="text-primary"/> GUARD SCAN
+            </h1>
+            <p className="text-[10px] text-slate-500">Control de Acceso Patrimonial</p>
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <button onClick={logout} className="text-slate-500 hover:text-white p-2">
-              <LogOut size={18} />
-            </button>
+            <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
           </div>
         </div>
 
-        {!result ? (
-          <>
-            <div className="grid grid-cols-2 gap-1 bg-slate-900 p-1 rounded-xl border border-slate-800">
-              <button
-                onClick={() => { setMode('CHECKOUT'); setStep(1); setRequestQR(''); setAssetQR(''); setQrInput(''); }}
-                className={`flex items-center justify-center gap-2 py-3 rounded-lg transition-all font-bold text-sm ${mode === 'CHECKOUT' ? 'bg-primary text-black shadow-[0_0_20px_rgba(6,182,212,0.4)]' : 'text-slate-500 hover:text-white'}`}
-              >
-                <LogOut size={16} /> SALIDA
-              </button>
-              <button
-                onClick={() => { setMode('CHECKIN'); setStep(1); setRequestQR(''); setAssetQR(''); setQrInput(''); }}
-                className={`flex items-center justify-center gap-2 py-3 rounded-lg transition-all font-bold text-sm ${mode === 'CHECKIN' ? 'bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.4)]' : 'text-slate-500 hover:text-white'}`}
-              >
-                <LogIn size={16} /> ENTRADA
-              </button>
-            </div>
+        {/* Mode Switcher */}
+        <div className="flex bg-slate-900 rounded-xl p-1 border border-slate-800 shadow-inner">
+          <button 
+            onClick={() => {setMode('CHECKOUT'); setStep(1); setActiveComboRequests([]); setScannedPhysicalAssets([]);}} 
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mode === 'CHECKOUT' ? 'bg-primary text-black shadow-md' : 'text-slate-400'}`}
+          >
+            <LogOut size={14} className="inline mr-1"/> Salida
+          </button>
+          <button 
+            onClick={() => {setMode('CHECKIN'); setReturnAssetData(null);}} 
+            className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all ${mode === 'CHECKIN' ? 'bg-emerald-500 text-black shadow-md' : 'text-slate-400'}`}
+          >
+            <LogIn size={14} className="inline mr-1"/> Retorno
+          </button>
+        </div>
 
-            <Card className={`border ${mode === 'CHECKOUT' ? 'border-primary/20' : 'border-emerald-500/20'}`}>
-              <div className="space-y-4">
-                {mode === 'CHECKOUT' && (
-                  <div className="flex justify-center gap-2 mb-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-primary text-black' : requestQR ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-slate-500'}`}>
-                      {requestQR ? '✓' : '1'}
-                    </div>
-                    <div className={`flex-1 h-1 self-center rounded ${requestQR ? 'bg-primary' : 'bg-slate-800'}`} />
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-primary text-black' : assetQR ? 'bg-emerald-500 text-black' : 'bg-slate-800 text-slate-500'}`}>
-                      {assetQR ? '✓' : '2'}
-                    </div>
+        <Card className={`border ${mode === 'CHECKOUT' ? 'border-primary/20' : 'border-emerald-500/20'}`}>
+          
+          {/* VISTA DE CHECKOUT (SALIDA) */}
+          {mode === 'CHECKOUT' && (
+            <div className="space-y-4">
+               {/* Stepper */}
+               <div className="flex justify-center gap-2 mb-2">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step === 1 ? 'bg-primary text-black' : 'bg-emerald-500 text-black'}`}>
+                    {step > 1 ? '✓' : '1'}
                   </div>
-                )}
+                  <div className={`flex-1 h-1 self-center rounded ${step === 2 ? 'bg-primary' : 'bg-slate-800'}`} />
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${step === 2 ? 'bg-primary text-black' : 'bg-slate-800 text-slate-500'}`}>2</div>
+               </div>
 
-                <label className="text-[10px] uppercase font-bold text-slate-500 tracking-widest block">
-                  {mode === 'CHECKOUT' && step === 1 && '① Escanear Pase de Salida (QR Solicitud)'}
-                  {mode === 'CHECKOUT' && step === 2 && '② Escanear Activo Físico (Doble Factor)'}
-                  {mode === 'CHECKIN' && '① Escanear Activo que Retorna'}
-                </label>
+               <label className="text-[10px] uppercase font-bold text-slate-500 text-center block">
+                  {step === 1 ? 'Paso 1: Escanear QR del Usuario (Pase de Salida)' : `Paso 2: Escanear Físicos (${scannedPhysicalAssets.length}/${activeComboRequests.length})`}
+               </label>
 
-                <div className="flex gap-2">
-                  <Input
-                    value={qrInput}
-                    onChange={e => setQrInput(e.target.value)}
-                    placeholder="Código QR manual o usa cámara..."
-                    className={`font-mono text-sm flex-1 ${mode === 'CHECKOUT' ? 'border-primary/30 focus:border-primary' : 'border-emerald-500/30 focus:border-emerald-500'}`}
-                    onKeyDown={e => e.key === 'Enter' && (mode === 'CHECKOUT' ? handleManualInput() : handleScan())}
-                  />
-                  <Button
-                    onClick={() => setUseCamera(true)}
-                    variant="outline"
-                    size="icon"
-                    className={`${mode === 'CHECKOUT' ? 'border-primary/30 hover:bg-primary/10' : 'border-emerald-500/30 hover:bg-emerald-500/10'}`}
-                  >
-                    <Camera size={18} />
+               {/* Resumen de activos a verificar (Paso 2) */}
+               {step === 2 && (
+                 <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 space-y-2 max-h-40 overflow-y-auto">
+                   <p className="text-xs font-bold text-white mb-2">Activos a verificar:</p>
+                   {activeComboRequests.map(req => {
+                      const isScanned = scannedPhysicalAssets.includes(req.asset_id);
+                      return (
+                        <div key={req.id} className={`flex items-center justify-between p-2 rounded border ${isScanned ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900 border-slate-700'}`}>
+                           <span className="text-xs text-slate-300">{req.assets?.name}</span>
+                           {isScanned ? <CheckCircle size={14} className="text-emerald-400"/> : <Box size={14} className="text-slate-500"/>}
+                        </div>
+                      )
+                   })}
+                 </div>
+               )}
+
+               {/* Botón de Cámara Principal */}
+               {step === 1 || (step === 2 && scannedPhysicalAssets.length < activeComboRequests.length) ? (
+                 <Button onClick={() => setUseCamera(true)} disabled={isProcessing} className="w-full h-14 bg-slate-800 hover:bg-slate-700 border border-primary/30 text-white font-bold tracking-wider">
+                    {isProcessing ? 'Procesando...' : <><Camera size={20} className="mr-2 text-primary" /> ABRIR ESCÁNER</>}
+                 </Button>
+               ) : null}
+
+               {/* Firma se habilita cuando todos los activos se verificaron */}
+               {step === 2 && scannedPhysicalAssets.length === activeComboRequests.length && (
+                  <div className="animate-in fade-in slide-in-from-bottom-4 mt-6">
+                     <SignaturePad onSign={setSignature} />
+                     <Button 
+                        onClick={handleFinalCheckout} 
+                        className="w-full mt-4 bg-emerald-500 hover:bg-emerald-400 text-black font-black tracking-widest h-14" 
+                        disabled={!signature || isProcessing}
+                      >
+                        {isProcessing ? 'PROCESANDO...' : 'CONFIRMAR SALIDA'}
+                     </Button>
+                  </div>
+               )}
+            </div>
+          )}
+
+          {/* VISTA DE CHECKIN (RETORNO) */}
+          {mode === 'CHECKIN' && (
+            <div className="space-y-4">
+              {!returnAssetData ? (
+                <>
+                  <div className="text-center py-6 text-slate-500">
+                    <Box size={40} className="mx-auto mb-3 opacity-30 text-emerald-500" />
+                    <p className="text-sm mb-1">Para devoluciones, escanea el QR físico pegado al equipo.</p>
+                  </div>
+                  <Button onClick={() => setUseCamera(true)} className="w-full h-14 bg-slate-800 hover:bg-slate-700 border border-emerald-500/30 text-emerald-400 font-bold tracking-wider">
+                    <Camera size={20} className="mr-2" /> ESCANEAR ACTIVO
                   </Button>
+                </>
+              ) : (
+                <div className="animate-in fade-in slide-in-from-bottom-4">
+                  <h3 className="text-white font-bold text-lg mb-2 flex items-center gap-2">
+                    <AlertTriangle className="text-amber-500"/> Inspección Física
+                  </h3>
+                  <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-4">
+                    <label className="flex items-center gap-3 cursor-pointer p-2 hover:bg-slate-900 rounded">
+                      <input 
+                        type="checkbox" 
+                        checked={isDamaged} 
+                        onChange={e => setIsDamaged(e.target.checked)} 
+                        className="w-6 h-6 accent-rose-500 rounded cursor-pointer" 
+                      />
+                      <span className="text-sm font-medium text-slate-300">
+                        El equipo presenta daños visibles o desperfectos.
+                      </span>
+                    </label>
+
+                    {isDamaged && (
+                      <textarea 
+                        value={damageNotes} 
+                        onChange={e => setDamageNotes(e.target.value)} 
+                        placeholder="Describe los daños encontrados (Obligatorio)..." 
+                        className="w-full h-24 bg-slate-900 border border-rose-500/30 rounded-lg p-3 text-sm text-white placeholder:text-slate-500 focus:ring-1 focus:ring-rose-500 resize-none" 
+                      />
+                    )}
+
+                    <Button 
+                      onClick={handleFinalCheckin} 
+                      disabled={isProcessing || (isDamaged && !damageNotes.trim())} 
+                      className={`w-full h-12 font-black tracking-wide ${isDamaged ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-emerald-500 hover:bg-emerald-400 text-black'}`}
+                    >
+                       {isProcessing ? 'PROCESANDO...' : isDamaged ? 'REPORTAR DAÑO Y DEVOLVER' : 'ACEPTAR DEVOLUCIÓN LIMPIA'}
+                    </Button>
+                  </div>
                 </div>
+              )}
+            </div>
+          )}
 
-                {mode === 'CHECKOUT' && step === 1 && qrInput && (
-                  <Button onClick={handleManualInput} className="w-full" variant="outline">
-                    Confirmar Solicitud →
-                  </Button>
-                )}
-
-                {mode === 'CHECKOUT' && step === 2 && (
-                  <SignaturePad onSign={setSignature} />
-                )}
-
-                {((mode === 'CHECKOUT' && step === 2 && requestQR && assetQR) || mode === 'CHECKIN') && (
-                  <Button
-                    onClick={() => handleScan()}
-                    disabled={isProcessing || (mode === 'CHECKIN' && !qrInput.trim())}
-                    className={`w-full h-14 text-base font-black tracking-wider ${mode === 'CHECKIN' ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)]' : ''}`}
-                    variant={mode === 'CHECKOUT' ? 'neon' : 'default'}
-                  >
-                    {isProcessing
-                      ? 'Procesando...'
-                      : mode === 'CHECKOUT'
-                        ? '⚡ AUTORIZAR SALIDA'
-                        : '↩ REGISTRAR RETORNO'}
-                  </Button>
-                )}
-              </div>
-            </Card>
-
-            <p className="text-center text-[10px] text-slate-600">
-              Guardia: <span className="text-slate-400 font-mono">G-{Math.floor(Math.random() * 900) + 100}</span>
-              {' · '}Zona: <span className="text-slate-400">Acceso Principal</span>
-            </p>
-          </>
-        ) : (
-          <ResultCard
-            success={result.success}
-            message={result.message}
-            data={result.data}
-            onReset={handleReset}
-          />
-        )}
+        </Card>
       </div>
     </div>
   );
