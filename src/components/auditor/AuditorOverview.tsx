@@ -10,13 +10,12 @@ import {
 import {
   TrendingUp, AlertCircle, CheckCircle2, LogOut,
   Search, ShieldCheck, Wrench, Package, BrainCircuit, Loader2,
-  Clock, Flame
+  Flame
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
-import { ThemeProvider } from '../../context/ThemeContext';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
 import { toast } from 'sonner';
@@ -47,9 +46,9 @@ export function DashboardCharts() {
   const top8Assets = useMemo(() => {
     return Object.entries(
       requests.reduce((acc, req) => {
-        const name = req.assets?.name || 'Desconocido';
+        const name = req.assets?.name ?? 'Desconocido';
         const shortName = name.split(' ').slice(0, 2).join(' '); 
-        acc[shortName] = (acc[shortName] || 0) + 1;
+        acc[shortName] = (acc[shortName] ?? 0) + 1;
         return acc;
       }, {} as Record<string, number>)
     )
@@ -59,19 +58,19 @@ export function DashboardCharts() {
   }, [requests]);
 
   const disciplinas = useMemo(() => {
-    return Array.from(new Set(requests.map(r => r.requester_disciplina).filter(Boolean)));
+    return Array.from(new Set(requests.map(r => r.requester_disciplina).filter((d): d is string => Boolean(d))));
   }, [requests]);
 
-  const [selectedDisciplina, setSelectedDisciplina] = useState(disciplinas[0] || '');
+  const [selectedDisciplina, setSelectedDisciplina] = useState(disciplinas[0] ?? '');
 
   const disciplinaData = useMemo(() => {
     return Object.entries(
       requests
         .filter(r => r.requester_disciplina === selectedDisciplina)
         .reduce((acc, req) => {
-           const name = req.assets?.name || 'Desconocido';
+           const name = req.assets?.name ?? 'Desconocido';
            const shortName = name.split(' ').slice(0, 2).join(' ');
-           acc[shortName] = (acc[shortName] || 0) + 1;
+           acc[shortName] = (acc[shortName] ?? 0) + 1;
            return acc;
         }, {} as Record<string, number>)
     )
@@ -83,8 +82,8 @@ export function DashboardCharts() {
   const categoryData = useMemo(() =>
     Object.entries(
       assets.reduce((acc: Record<string, number>, a) => {
-        const cat = a.category || 'Sin Categoría';
-        acc[cat] = (acc[cat] || 0) + 1;
+        const cat = a.category ?? 'Sin Categoría';
+        acc[cat] = (acc[cat] ?? 0) + 1;
         return acc;
       }, {})
     ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6),
@@ -224,11 +223,11 @@ function OverdueList({ requests }: { requests: import('../../types').Request[] }
                   {idx > 0 && <span className="text-slate-600 text-[10px]">#{idx + 1}</span>}
                 </td>
                 <td className="p-3 font-medium text-white">
-                  {r.assets?.name || `Activo #${r.asset_id}`}
+                  {r.assets?.name ?? `Activo #${r.asset_id}`}
                   <span className="text-slate-500 text-[10px] font-mono ml-2">{r.assets?.tag}</span>
                 </td>
                 <td className="p-3">{r.requester_name}</td>
-                <td className="p-3 text-slate-500">{r.requester_disciplina || '—'}</td>
+                <td className="p-3 text-slate-500">{r.requester_disciplina ?? '—'}</td>
                 <td className="p-3 text-center">
                   <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${urgency}`}>
                     {r.daysLate}d
@@ -260,18 +259,12 @@ export function AuditorOverview() {
   const kpis = useMemo(() => {
     const total = assets.length;
     const disponible = assets.filter(a => a.status === 'Disponible').length;
-    const prestada = assets.filter(a => a.status === 'Prestada').length;
     const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
-    const baja = assets.filter(a => a.status === 'Dada de baja').length;
     const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
-    const activeLoans = requests.filter(r => r.status === 'ACTIVE').length;
     const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
-    const totalLoans30d = requests.filter(r => isAfter(new Date(r.created_at), subDays(new Date(), 30))).length;
 
-    return { total, disponible, prestada, mantenimiento, baja, disponibilidad, activeLoans, overdueLoans, totalLoans30d };
+    return { total, disponible, mantenimiento, disponibilidad, overdueLoans };
   }, [assets, requests]);
-
-  const activeLoansList = requests.filter(r => r.status === 'ACTIVE' || r.status === 'OVERDUE');
 
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
@@ -292,10 +285,10 @@ export function AuditorOverview() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
       });
-      const data = await response.json();
+      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
       setAiReport(data.candidates[0].content.parts[0].text);
       toast.success('Reporte generado exitosamente');
-    } catch(_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
   };
 
   return (
@@ -380,15 +373,15 @@ export function AuditorOverview() {
                 <tr><th className="p-3">Activo</th><th className="p-3">Usuario</th><th className="p-3">Retorno Esp.</th><th className="p-3">Estado</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {activeLoansList.filter(r => r.status === 'ACTIVE').map(r => (
+                {requests.filter(r => r.status === 'ACTIVE').map(r => (
                   <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
-                    <td className="p-3 font-medium text-white">{r.assets?.name || `Activo #${r.asset_id}`}</td>
+                    <td className="p-3 font-medium text-white">{r.assets?.name ?? `Activo #${r.asset_id}`}</td>
                     <td className="p-3">{r.requester_name}</td>
                     <td className="p-3 font-mono">{r.expected_return_date ? format(new Date(r.expected_return_date), 'dd/MM/yy') : '—'}</td>
                     <td className="p-3"><span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span></td>
                   </tr>
                 ))}
-                {activeLoansList.filter(r => r.status === 'ACTIVE').length === 0 && (
+                {requests.filter(r => r.status === 'ACTIVE').length === 0 && (
                   <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>
                 )}
               </tbody>
@@ -439,7 +432,7 @@ export function AuditorOverview() {
               </thead>
               <tbody className="divide-y divide-slate-800/50">
                 {filteredLogs.slice(0, 20).map(log => {
-                  const badge = actionBadge[log.action] || { label: log.action, style: 'text-slate-400 bg-slate-700' };
+                  const badge = actionBadge[log.action] ?? { label: log.action, style: 'text-slate-400 bg-slate-700' };
                   return (
                     <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
                       <td className="p-3 font-mono text-[10px] text-slate-500 whitespace-nowrap align-top">
@@ -450,9 +443,9 @@ export function AuditorOverview() {
                           {badge.label}
                         </span>
                       </td>
-                      <td className="p-3 text-slate-300 align-top">{log.actor_name || log.actor_id}</td>
+                      <td className="p-3 text-slate-300 align-top">{log.actor_name ?? log.actor_id}</td>
                       <td className="p-3 text-slate-400 min-w-[200px] whitespace-normal leading-relaxed break-words align-top">
-                        {log.details || '—'}
+                        {log.details ?? '—'}
                       </td>
                     </tr>
                   );

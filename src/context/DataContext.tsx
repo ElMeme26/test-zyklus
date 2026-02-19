@@ -110,7 +110,18 @@ const firePush = (title: string, body: string) => {
   try {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready
-        .then(reg => reg.showNotification(title, { body, icon: '/logo192.png', badge: '/badge72.png', vibrate: [150, 100, 150], tag: `zyklus-${Date.now()}` }))
+        .then(reg => {
+          // Cast the options to any or specifically to NotificationOptions extended with vibrate
+          const options = { 
+            body, 
+            icon: '/logo192.png', 
+            badge: '/badge72.png', 
+            vibrate: [150, 100, 150], 
+            tag: `zyklus-${Date.now()}` 
+          } as any; 
+          
+          reg.showNotification(title, options);
+        })
         .catch(() => { try { new Notification(title, { body, icon: '/logo192.png' }); } catch {} });
     } else {
       new Notification(title, { body, icon: '/logo192.png' });

@@ -1,7 +1,7 @@
 // src/components/guard/GuardScanner.tsx
 // Mobile-first. Flujo CHECKOUT y CHECKIN con soporte de combo (escaneo múltiple).
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { useData, ComboCheckinState } from '../../context/DataContext';
+import { useData, type ComboCheckinState } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/core';
 import {
