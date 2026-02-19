@@ -381,7 +381,13 @@ export function GuardScanner() {
     } else {
       result = await processGuardScan(rawQR, 'CHECKIN', '', isDamaged, damageNotes);
     }
-    if (result.success) { setStep('done'); }
+    if (result.success) { 
+      setStep('done');
+      // Auto-redirección después de 3 segundos solo para check-in
+      setTimeout(() => {
+        reset();
+      }, 3000);
+    }
     else toast.error(result.message);
   };
 
@@ -731,21 +737,34 @@ export function GuardScanner() {
         {/* ── DONE */}
         {step === 'done' && (
           <div className="text-center py-10 space-y-4">
-            <div className="w-24 h-24 rounded-3xl mx-auto flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
+            <div className="w-24 h-24 rounded-3xl mx-auto flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.2)] animate-pulse">
               <CheckCircle2 size={48} className="text-emerald-400" />
             </div>
             <div>
-              <h2 className="text-white font-black text-2xl">¡Listo!</h2>
+              <h2 className="text-white font-black text-2xl">
+                {mode === 'CHECKOUT' ? '¡Salida Registrada!' : '✓ Entrada Confirmada'}
+              </h2>
               <p className="text-slate-400 text-sm mt-1">
-                {mode === 'CHECKOUT' ? 'Salida registrada correctamente' : 'Devolución registrada correctamente'}
+                {mode === 'CHECKOUT' 
+                  ? 'Salida registrada correctamente' 
+                  : isDamaged 
+                    ? 'Devolución registrada con reporte de daño' 
+                    : 'Devolución registrada correctamente'}
               </p>
+              {mode === 'CHECKIN' && (
+                <p className="text-emerald-400 text-xs font-bold mt-2 animate-pulse">
+                  Redirigiendo automáticamente...
+                </p>
+              )}
             </div>
-            <button
-              onClick={reset}
-              className="mx-auto flex items-center gap-2 px-6 py-3 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold text-sm hover:bg-primary/20 transition-colors"
-            >
-              <Scan size={16} /> Escanear otro
-            </button>
+            {mode === 'CHECKOUT' && (
+              <button
+                onClick={reset}
+                className="mx-auto flex items-center gap-2 px-6 py-3 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold text-sm hover:bg-primary/20 transition-colors"
+              >
+                <Scan size={16} /> Escanear otro
+              </button>
+            )}
           </div>
         )}
       </main>
