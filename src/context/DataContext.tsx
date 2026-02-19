@@ -65,6 +65,11 @@ interface DataContextType {
 
 const DataContext = createContext<DataContextType | null>(null);
 
+// ✨ CORRECCIÓN CRÍTICA: Validador de UUID para evitar Crash en Postgres
+const isValidUUID = (uuid: string) => {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
+};
+
 // ─── HELPERS ─────────────────────────────────────────────────
 const logAudit = async (
   action: AuditLog['action'],
@@ -75,9 +80,11 @@ const logAudit = async (
   details?: string,
   metadata?: Record<string, unknown>
 ) => {
+  const finalActorId = isValidUUID(actorId) ? actorId : null;
+
   await supabase.from('audit_logs').insert({
     action,
-    actor_id: actorId,
+    actor_id: finalActorId,
     actor_name: actorName,
     target_id: targetId,
     target_type: targetType,
@@ -152,14 +159,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       setAssets((assetsRes.data || []) as Asset[]);
-      setRequests((reqRes.data || []) as Request[]);
+      
+      // ✨ CORRECCIÓN DE MAPEADO: Hacemos que la UI entienda la columna "rejection_feedback" de la BD
+      const mappedRequests = (reqRes.data || []).map((r: any) => ({
+        ...r,
+        rejection_reason: r.rejection_feedback || r.rejection_reason,
+      }));
+      setRequests(mappedRequests as Request[]);
+      
       setInstitutions((instRes.data || []) as Institution[]);
       setNotifications((notifRes.data || []) as Notification[]);
       setMaintenanceLogs((maintRes.data || []) as MaintenanceLog[]);
       setAuditLogs((auditRes.data || []) as AuditLog[]);
       setBundles((bundlesRes.data || []) as Bundle[]);
 
-      await checkOverdueRequests((reqRes.data || []) as Request[]);
+      await checkOverdueRequests(mappedRequests as Request[]);
 
     } catch (error) {
       console.error('fetchData error:', error);
@@ -168,7 +182,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  // ✨ CORRECCIÓN: Manejo seguro del WebSocket para evitar el error de React 18 Strict Mode
   useEffect(() => { 
     let isMounted = true;
 
@@ -233,7 +246,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       tag: asset.tag || getNextTag(),
       status: asset.status || 'Disponible',
       usage_count: 0,
-      maintenance_usage_threshold: asset.maintenance_usage_threshold || 10,
       maintenance_period_days: 180,
       next_maintenance_date: addDays(new Date(), 180).toISOString(),
     };
@@ -355,7 +367,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // ─── APROBACIONES ──────────────────────────────────────────
+  // ─── APROBACIONES Y RECHAZOS ───────────────────────────────
   const approveRequest = async (reqId: number, approverId: string, approverName: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
@@ -372,29 +384,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
+  // ✨ CORRECCIÓN DIRECTA: Se usa 'rejection_feedback' 
   const rejectRequest = async (reqId: number, reason: string) => {
     const req = requests.find(r => r.id === reqId);
-    if (req?.bundle_group_id) {
-       await supabase.from('requests').update({ status: 'REJECTED', rejection_reason: reason }).eq('bundle_group_id', req.bundle_group_id);
+    if (!req) return;
+
+    if (req.bundle_group_id) {
+       const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('bundle_group_id', req.bundle_group_id);
+       if (error) { console.error(error); toast.error('Error al rechazar combo'); return; }
        await logAudit('REJECT', 'system', 'Líder/Admin', req.bundle_group_id, 'REQUEST', `Combo rechazado. Motivo: ${reason}`);
     } else {
-       await supabase.from('requests').update({ status: 'REJECTED', rejection_reason: reason }).eq('id', reqId);
+       const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('id', reqId);
+       if (error) { console.error(error); toast.error('Error al rechazar solicitud'); return; }
        await logAudit('REJECT', 'system', 'Líder/Admin', String(reqId), 'REQUEST', `Solicitud rechazada. Motivo: ${reason}`);
     }
+    
     toast.error('Solicitud rechazada');
-    if (req?.user_id) await createNotification(req.user_id, '❌ Solicitud Rechazada', `Tu solicitud fue rechazada.`, 'ALERT', reqId);
+    if (req.user_id) await createNotification(req.user_id, '❌ Solicitud Rechazada', `Motivo: ${reason}`, 'ALERT', reqId);
     fetchData();
   };
 
+  // ✨ CORRECCIÓN DIRECTA: Se usa 'feedback_log'
   const returnRequestWithFeedback = async (reqId: number, feedback: string) => {
     const req = requests.find(r => r.id === reqId);
-    if (req?.bundle_group_id) {
-      await supabase.from('requests').update({ status: 'ACTION_REQUIRED', rejection_reason: feedback }).eq('bundle_group_id', req.bundle_group_id);
+    if (!req) return;
+
+    if (req.bundle_group_id) {
+      const { error } = await supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('bundle_group_id', req.bundle_group_id);
+      if (error) { console.error(error); toast.error('Error al devolver combo'); return; }
     } else {
-      await supabase.from('requests').update({ status: 'ACTION_REQUIRED', rejection_reason: feedback }).eq('id', reqId);
+      const { error } = await supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('id', reqId);
+      if (error) { console.error(error); toast.error('Error al devolver solicitud'); return; }
     }
-    toast.warning('📋 Devuelta al usuario');
-    if (req?.user_id) await createNotification(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más información.`, 'WARNING', reqId);
+    
+    toast.warning('📋 Devuelta al usuario para corrección');
+    if (req.user_id) await createNotification(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más información.`, 'WARNING', reqId);
     fetchData();
   };
 
@@ -410,7 +434,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Array.from(grouped.values());
   };
 
-  // ─── SOLICITUDES USUARIO ───────────────────────────────────
   const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
     if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) { toast.error('🔧 Este activo requiere mantenimiento.'); return; }
     if (asset.status !== 'Disponible') { toast.error(`El activo no está disponible`); return; }
@@ -449,7 +472,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return Array.from(grouped.values());
   };
 
-  // ─── GUARDIA ───────────────────────────────────────────────
   const processGuardScan = async (qrData: string, type: 'CHECKOUT' | 'CHECKIN', signature = '', isDamaged = false, damageNotes = ''): Promise<{ success: boolean; message: string; data?: any }> => {
     try {
       let parsedData: any;
@@ -473,7 +495,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
            for (const req of reqsToProcess) {
              await supabase.from('requests').update({ status: 'ACTIVE', checkout_at: new Date().toISOString(), digital_signature: signature }).eq('id', req.id);
              await supabase.from('assets').update({ status: 'Prestada', usage_count: (req.assets?.usage_count || 0) + 1 }).eq('id', req.asset_id);
-             // ✨ REGISTRO EN AUDITORÍA
              await logAudit('CHECKOUT', 'guard', 'Guardia', String(req.id), 'REQUEST', `Salida confirmada: ${req.assets?.name || 'Activo'}`);
            }
            fetchData();
@@ -495,15 +516,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         await supabase.from('requests').update({ status: newReqStatus, checkin_at: new Date().toISOString(), is_damaged: isDamaged, damage_notes: damageNotes }).eq('id', req.id);
         await supabase.from('assets').update({ status: newAssetStatus }).eq('id', req.asset_id);
 
-        // ✨ REGISTRO EN AUDITORÍA
         await logAudit('CHECKIN', 'guard', 'Guardia', String(req.id), 'REQUEST', `Devolución registrada: ${req.assets?.name || 'Activo'}`);
 
         if (isDamaged) {
           await supabase.from('maintenance_logs').insert({ asset_id: req.asset_id, reported_by_user_id: req.user_id, issue_description: damageNotes || 'Daños en devolución', status: 'OPEN' });
           const { data: admins } = await supabase.from('users').select('id').eq('role', 'ADMIN_PATRIMONIAL').limit(1);
           if (admins && admins[0]) await createNotification(admins[0].id, '🔧 Daño Reportado', `Equipo reportado con daños en retorno.`, 'ALERT');
-          
-          // ✨ REGISTRO EN AUDITORÍA
           await logAudit('MAINTENANCE', 'guard', 'Guardia', req.asset_id, 'ASSET', `Enviado a mantenimiento por daños en devolución`);
         }
         
@@ -513,7 +531,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) { return { success: false, message: 'Error procesando QR' }; }
   };
 
-  // ─── NOTIFICACIONES ────────────────────────────────────────
   const markNotificationRead = async (notifId: string) => {
     await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
     setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
@@ -525,7 +542,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     toast.success('Todas leídas');
   };
 
-  // ─── MANTENIMIENTO ─────────────────────────────────────────
   const reportMaintenance = async (assetId: string, userId: string, description: string) => {
     await supabase.from('maintenance_logs').insert({
       asset_id: assetId, reported_by_user_id: userId,
@@ -533,7 +549,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     await supabase.from('assets').update({ status: 'En mantenimiento', maintenance_alert: true }).eq('id', assetId);
     
-    // ✨ REGISTRO EN AUDITORÍA
     await logAudit('MAINTENANCE', userId, 'Sistema', assetId, 'ASSET', `Marcado para mantenimiento: ${description}`);
     
     toast.warning('🔧 Activo marcado para mantenimiento');
@@ -545,14 +560,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.from('maintenance_logs').update({ status: 'RESOLVED', resolved_at: new Date().toISOString(), cost }).eq('id', logId);
     if (log?.asset_id) await supabase.from('assets').update({ status: 'Disponible', maintenance_alert: false }).eq('id', log.asset_id);
     
-    // ✨ REGISTRO EN AUDITORÍA
     await logAudit('UPDATE', 'admin', 'Admin', log?.asset_id || '', 'ASSET', `Mantenimiento resuelto exitosamente`);
     
     toast.success('✅ Mantenimiento resuelto');
     fetchData();
   };
 
-  // ─── AUDIT ─────────────────────────────────────────────────
   const getAssetHistory = (assetId: string) =>
     auditLogs.filter(l => l.target_id === assetId || (l.metadata as Record<string, unknown>)?.asset_id === assetId);
 
