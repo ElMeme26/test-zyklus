@@ -1,5 +1,6 @@
 // src/components/ui/NotificationCenter.tsx
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Bell, BellOff, X, CheckCheck, Info, AlertTriangle, AlertCircle, Zap } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -49,6 +50,16 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    setIsMobile(mq.matches);
+    const handler = () => setIsMobile(mq.matches);
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, []);
 
   useEffect(() => {
     if ('Notification' in window) setPushEnabled(Notification.permission === 'granted');
@@ -56,7 +67,10 @@ export function NotificationCenter() {
 
   useEffect(() => {
     const handler = (e: MouseEvent | TouchEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const isInsideButton = panelRef.current?.contains(target);
+      const isInsidePortal = portalRef.current?.contains(target);
+      if (!isInsideButton && !isInsidePortal) setOpen(false);
     };
     if (open) {
       document.addEventListener('mousedown', handler);
@@ -66,6 +80,19 @@ export function NotificationCenter() {
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
     };
+  }, [open]);
+
+  // Bloquear scroll del body cuando el panel está abierto en móvil
+  useEffect(() => {
+    if (open && typeof window !== 'undefined') {
+      const isMobile = window.matchMedia('(max-width: 639px)').matches;
+      if (isMobile) {
+        document.body.style.overflow = 'hidden';
+      }
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
   }, [open]);
 
   if (!user) return null;
@@ -126,109 +153,112 @@ export function NotificationCenter() {
         )}
       </button>
 
-      {/* NOTIFICATION PANEL — mobile-first, respects screen edges */}
-      {canSeePanel && open && (
-        <>
-          {/* Backdrop for mobile */}
-          <div
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm sm:hidden"
-            onClick={() => setOpen(false)}
-          />
+      {/* NOTIFICATION PANEL — en móvil usa Portal (z-index alto); en desktop dropdown normal */}
+      {canSeePanel && open && (() => {
+        const panelContent = (
+          <>
+            {/* Backdrop móvil */}
+            <div
+              className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-sm sm:hidden"
+              onClick={() => setOpen(false)}
+              aria-hidden="true"
+            />
 
-          <div className={`
-            fixed z-50 bg-slate-950 border border-slate-800 shadow-2xl
-            /* Mobile: full bottom sheet */
-            bottom-0 left-0 right-0 rounded-t-3xl max-h-[80vh]
-            /* Desktop: dropdown anchored to button */
-            sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-12
-            sm:w-96 sm:rounded-2xl sm:max-h-[75vh] sm:fixed-none
-            flex flex-col
-            animate-in slide-in-from-bottom-4 sm:slide-in-from-top-2
-            duration-200
-          `}>
-            {/* Handle bar — mobile only */}
-            <div className="flex justify-center pt-3 pb-1 sm:hidden">
-              <div className="w-10 h-1 bg-slate-700 rounded-full" />
-            </div>
-
-            {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 flex-shrink-0">
-              <div>
-                <h3 className="text-white font-bold text-sm">Notificaciones</h3>
-                {panelUnread > 0 && (
-                  <p className="text-primary text-[10px] font-bold">{panelUnread} sin leer</p>
-                )}
+            <div
+              className={`
+                fixed z-[9999] bg-slate-950 border border-slate-800 shadow-2xl
+                bottom-0 left-0 right-0 rounded-t-3xl h-[90vh] min-h-[400px] max-h-[90dvh]
+                sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-12 sm:h-auto
+                sm:z-50 sm:w-96 sm:rounded-2xl sm:max-h-[75vh] sm:min-h-0
+                flex flex-col
+                animate-in slide-in-from-bottom-4 sm:slide-in-from-top-2
+                duration-200
+              `}
+              role="dialog"
+              aria-label="Panel de notificaciones"
+            >
+              <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                <div className="w-10 h-1 bg-slate-700 rounded-full" />
               </div>
-              <div className="flex items-center gap-2">
-                {panelUnread > 0 && (
+
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 flex-shrink-0">
+                <div>
+                  <h3 className="text-white font-bold text-sm">Notificaciones</h3>
+                  {panelUnread > 0 && (
+                    <p className="text-primary text-[10px] font-bold">{panelUnread} sin leer</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {panelUnread > 0 && (
+                    <button
+                      onClick={handleMarkAll}
+                      className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                    >
+                      <CheckCheck size={12} /> Todas leídas
+                    </button>
+                  )}
+                  {!pushEnabled && 'Notification' in window && (
+                    <button
+                      onClick={handleEnablePush}
+                      className="flex items-center gap-1 text-[10px] font-bold text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    >
+                      <Bell size={10} /> Activar
+                    </button>
+                  )}
+                  {pushEnabled && (
+                    <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
+                      <Bell size={10} /> Activas
+                    </span>
+                  )}
                   <button
-                    onClick={handleMarkAll}
-                    className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                    onClick={() => setOpen(false)}
+                    className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
                   >
-                    <CheckCheck size={12} /> Todas leídas
+                    <X size={16} />
                   </button>
-                )}
-                {!pushEnabled && 'Notification' in window && (
+                </div>
+              </div>
+
+              {!pushEnabled && 'Notification' in window && Notification.permission === 'default' && (
+                <div className="mx-3 mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 flex-shrink-0">
+                  <BellOff size={16} className="text-amber-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-amber-300 text-xs font-bold">Activa notificaciones del sistema</p>
+                    <p className="text-amber-500 text-[10px]">Recibe alertas aunque la app esté cerrada</p>
+                  </div>
                   <button
                     onClick={handleEnablePush}
-                    className="flex items-center gap-1 text-[10px] font-bold text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    className="text-[10px] font-black text-black bg-amber-400 hover:bg-amber-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0"
                   >
-                    <Bell size={10} /> Activar
+                    Activar
                   </button>
-                )}
-                {pushEnabled && (
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
-                    <Bell size={10} /> Activas
-                  </span>
-                )}
-                <button
-                  onClick={() => setOpen(false)}
-                  className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-
-            {/* Push permission banner */}
-            {!pushEnabled && 'Notification' in window && Notification.permission === 'default' && (
-              <div className="mx-3 mt-3 p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl flex items-center gap-3 flex-shrink-0">
-                <BellOff size={16} className="text-amber-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-amber-300 text-xs font-bold">Activa notificaciones del sistema</p>
-                  <p className="text-amber-500 text-[10px]">Recibe alertas aunque la app esté cerrada</p>
                 </div>
-                <button
-                  onClick={handleEnablePush}
-                  className="text-[10px] font-black text-black bg-amber-400 hover:bg-amber-300 px-2 py-1.5 rounded-lg transition-colors flex-shrink-0"
-                >
-                  Activar
-                </button>
-              </div>
-            )}
-
-            {/* Notification list — scrollable */}
-            <div className="overflow-y-auto flex-1 p-3 space-y-2">
-              {panelNotifs.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-3">
-                    <Bell size={22} className="text-slate-600" />
-                  </div>
-                  <p className="text-slate-400 text-sm font-medium">Sin notificaciones</p>
-                  <p className="text-slate-600 text-xs mt-1">Estás al día 👍</p>
-                </div>
-              ) : (
-                panelNotifs.map(n => (
-                  <NotifItem key={n.id} notif={n} onRead={markNotificationRead} />
-                ))
               )}
-            </div>
 
-            {/* Safe area spacer for mobile home indicator */}
-            <div className="h-safe-bottom sm:hidden" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
-          </div>
-        </>
-      )}
+              <div className="overflow-y-auto flex-1 p-3 space-y-2 min-h-0">
+                {panelNotifs.length === 0 ? (
+                  <div className="text-center py-12">
+                    <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-3">
+                      <Bell size={22} className="text-slate-600" />
+                    </div>
+                    <p className="text-slate-400 text-sm font-medium">Sin notificaciones</p>
+                    <p className="text-slate-600 text-xs mt-1">Estás al día 👍</p>
+                  </div>
+                ) : (
+                  panelNotifs.map(n => (
+                    <NotifItem key={n.id} notif={n} onRead={markNotificationRead} />
+                  ))
+                )}
+              </div>
+
+              <div className="sm:hidden" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+            </div>
+          </>
+        );
+        return isMobile && typeof document !== 'undefined'
+          ? createPortal(<div ref={portalRef}>{panelContent}</div>, document.body)
+          : panelContent;
+      })()}
     </div>
   );
 }
