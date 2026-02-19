@@ -8,7 +8,7 @@ import {
   LogOut, Database, Plus, Search, Edit, Trash2, X,
   Upload, CheckSquare, Square, LayoutGrid, Building2,
   ScanLine, Wrench, Shield, CheckCircle,
-  QrCode, Printer, PieChart, User, Calendar, Tag, Clock
+  QrCode, Printer, PieChart, User, Calendar, Tag, Clock, Package
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
@@ -304,13 +304,20 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
               <div
                 key={log.id}
                 className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl cursor-pointer hover:border-amber-500/30 hover:bg-slate-900 transition-all"
-                onClick={() => setSelectedLog(log)}
               >
                 <div>
                   <p className="text-white text-sm font-medium">{log.assets?.name || `#${log.asset_id}`}</p>
                   <p className="text-slate-500 text-xs">{log.issue_description}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedLog(log)}
+                    className="text-[11px] border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                  >
+                    Open
+                  </Button>
                   {log.status === 'OPEN' && (
                     <Button
                       size="sm"
@@ -570,7 +577,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
 // ─── MAIN ADMIN DASHBOARD ────────────────────────────────────
 export function AdminDashboard() {
   const { logout } = useAuth();
-  const { processQRScan, assets } = useData();
+  const { processQRScan, assets, requests } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance'>('inventory');
 
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
@@ -674,6 +681,91 @@ export function AdminDashboard() {
               <PieChart className="text-primary" size={20} /> Analíticas del Sistema
             </h2>
             <DashboardCharts />
+
+            {/* Listas rápidas similares al panel de auditor */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Préstamos vencidos */}
+              <div>
+                <h3 className="text-white font-bold flex items-center gap-2 mb-3 text-sm">
+                  <Clock className="text-rose-400" size={16} /> Préstamos Vencidos
+                </h3>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-400 min-w-[520px]">
+                    <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+                      <tr>
+                        <th className="p-3">Activo</th>
+                        <th className="p-3">Solicitante</th>
+                        <th className="p-3">Disciplina</th>
+                        <th className="p-3">Retorno esp.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {requests.filter(r => r.status === 'OVERDUE').map(r => (
+                        <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 font-medium text-white">
+                            {r.assets?.name ?? `Activo #${r.asset_id}`}
+                          </td>
+                          <td className="p-3">{r.requester_name}</td>
+                          <td className="p-3 text-slate-500">{r.requester_disciplina ?? '—'}</td>
+                          <td className="p-3 font-mono text-slate-500">
+                            {r.expected_return_date
+                              ? format(new Date(r.expected_return_date), 'dd/MM/yy', { locale: es })
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                      {requests.filter(r => r.status === 'OVERDUE').length === 0 && (
+                        <tr>
+                          <td colSpan={4} className="p-8 text-center text-slate-600">
+                            Sin préstamos vencidos.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Activos actualmente prestados */}
+              <div>
+                <h3 className="text-white font-bold flex items-center gap-2 mb-3 text-sm">
+                  <Package className="text-emerald-400" size={16} /> Activos Actualmente Prestados
+                </h3>
+                <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-400 min-w-[520px]">
+                    <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+                      <tr>
+                        <th className="p-3">Activo</th>
+                        <th className="p-3">Solicitante</th>
+                        <th className="p-3">Retorno esp.</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/50">
+                      {requests.filter(r => r.status === 'ACTIVE').map(r => (
+                        <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 font-medium text-white">
+                            {r.assets?.name ?? `Activo #${r.asset_id}`}
+                          </td>
+                          <td className="p-3">{r.requester_name}</td>
+                          <td className="p-3 font-mono text-slate-500">
+                            {r.expected_return_date
+                              ? format(new Date(r.expected_return_date), 'dd/MM/yy', { locale: es })
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                      {requests.filter(r => r.status === 'ACTIVE').length === 0 && (
+                        <tr>
+                          <td colSpan={3} className="p-8 text-center text-slate-600">
+                            No hay activos prestados actualmente.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
         )}
         {currentView === 'external' && <InstitutionsManager />}

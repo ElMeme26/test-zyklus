@@ -38,29 +38,8 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
     let active = true;
     hasScanned.current = false;
 
-    const startCamera = async () => {
-      try {
-        const constraints = {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
-        streamRef.current = stream;
-        if (videoRef.current && active) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          requestAnimationFrame(scan);
-        }
-      } catch (err) {
-        console.error('Camera error:', err);
-        toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
-        onClose();
-      }
-    };
-
+    // Definimos primero la función de escaneo para evitar errores
+    // de "Temporal Dead Zone" al usarla dentro de startCamera.
     const scan = () => {
       if (!active || hasScanned.current) return;
       const video = videoRef.current;
@@ -84,13 +63,37 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
 
       if (code && code.data) {
         hasScanned.current = true;
-        // Stop tracks
+        // Detenemos todas las pistas de la cámara
         streamRef.current?.getTracks().forEach(t => t.stop());
         onCode(code.data);
         return;
       }
 
       rafRef.current = requestAnimationFrame(scan);
+    };
+
+    const startCamera = async () => {
+      try {
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        streamRef.current = stream;
+        if (videoRef.current && active) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+          // Iniciamos el bucle de escaneo ya con "scan" definido
+          rafRef.current = requestAnimationFrame(scan);
+        }
+      } catch (err) {
+        console.error('Camera error:', err);
+        toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
+        onClose();
+      }
     };
 
     startCamera();
