@@ -12,7 +12,8 @@ export type AssetState =
   | 'Fuera de servicio'
   | 'En tránsito'
   | 'Requiere Calibración'
-  | 'Requiere Mantenimiento';
+  | 'Requiere Mantenimiento'
+  | 'En trámite';  // Solicitud en proceso — bloqueado para nuevas solicitudes
 
 export type RequestStatus =
   | 'PENDING'
