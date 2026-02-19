@@ -1,12 +1,11 @@
 // src/components/guard/GuardScanner.tsx
-// Mobile-first. Flujo CHECKOUT y CHECKIN con soporte de combo (escaneo múltiple).
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useData, type ComboCheckinState } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
-  ArrowRight, CheckCircle2, Loader2, Scan, RefreshCcw,
+  CheckCircle2, Loader2, Scan, RefreshCcw,
   ChevronRight, QrCode, User as UserIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,15 +16,14 @@ import { es } from 'date-fns/locale';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
 
-// ─── TYPE ─────────────────────────────────────────────────────
 type ScanMode = 'CHECKOUT' | 'CHECKIN';
 type Step =
   | 'idle'
   | 'scanning'
-  | 'verifying'         // CHECKOUT step 1: activo encontrado, mostrar info
-  | 'signing'           // CHECKOUT step 2: firma digital
-  | 'combo_checkin'     // CHECKIN: escaneando activos del combo uno a uno
-  | 'damage_check'      // CHECKIN: ¿hubo daño?
+  | 'verifying'
+  | 'signing'
+  | 'combo_checkin'
+  | 'damage_check'
   | 'done';
 
 // ─── CAMERA QR SCANNER ───────────────────────────────────────
@@ -34,40 +32,64 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const rafRef = useRef<number>(0);
   const streamRef = useRef<MediaStream | null>(null);
+  const hasScanned = useRef(false);
 
   useEffect(() => {
     let active = true;
+    hasScanned.current = false;
 
     const startCamera = async () => {
       try {
-        // Preferir cámara trasera en móvil
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
+        const constraints = {
+          video: {
+            facingMode: { ideal: 'environment' },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          }
+        };
+        const stream = await navigator.mediaDevices.getUserMedia(constraints);
         streamRef.current = stream;
         if (videoRef.current && active) {
           videoRef.current.srcObject = stream;
-          videoRef.current.play();
-          scan();
+          await videoRef.current.play();
+          requestAnimationFrame(scan);
         }
-      } catch {
+      } catch (err) {
+        console.error('Camera error:', err);
         toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
         onClose();
       }
     };
 
     const scan = () => {
-      if (!active || !videoRef.current || !canvasRef.current) return;
+      if (!active || hasScanned.current) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) { rafRef.current = requestAnimationFrame(scan); return; }
+      if (!video || !canvas) return;
+
+      if (video.readyState < video.HAVE_ENOUGH_DATA) {
+        rafRef.current = requestAnimationFrame(scan);
+        return;
+      }
+
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d')!;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-      if (code) { onCode(code.data); return; }
+      const code = jsQR(imageData.data, imageData.width, imageData.height, {
+        inversionAttempts: 'dontInvert'
+      });
+
+      if (code && code.data) {
+        hasScanned.current = true;
+        // Stop tracks
+        streamRef.current?.getTracks().forEach(t => t.stop());
+        onCode(code.data);
+        return;
+      }
+
       rafRef.current = requestAnimationFrame(scan);
     };
 
@@ -88,46 +110,68 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
         </button>
       </div>
 
-      <div className="flex-1 relative">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted />
+      <div className="flex-1 relative overflow-hidden">
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          playsInline
+          muted
+          autoPlay
+        />
         <canvas ref={canvasRef} className="hidden" />
 
         {/* Viewfinder overlay */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="relative w-64 h-64">
+          {/* Dark overlay with cutout */}
+          <div className="absolute inset-0 bg-black/50" style={{
+            clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(50% - 110px) calc(50% - 110px), calc(50% - 110px) calc(50% + 110px), calc(50% + 110px) calc(50% + 110px), calc(50% + 110px) calc(50% - 110px), calc(50% - 110px) calc(50% - 110px))'
+          }} />
+          <div className="relative w-56 h-56">
             {/* Corner markers */}
-            {[
-              'top-0 left-0 border-t-4 border-l-4 rounded-tl-xl',
-              'top-0 right-0 border-t-4 border-r-4 rounded-tr-xl',
-              'bottom-0 left-0 border-b-4 border-l-4 rounded-bl-xl',
-              'bottom-0 right-0 border-b-4 border-r-4 rounded-br-xl',
-            ].map((cls, i) => (
-              <div key={i} className={`absolute w-10 h-10 border-primary ${cls}`} />
-            ))}
-            {/* Scan line */}
-            <div className="absolute left-2 right-2 top-0 h-0.5 bg-primary/80 animate-scan-line shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-primary rounded-tl-xl" />
+            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-primary rounded-tr-xl" />
+            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-primary rounded-bl-xl" />
+            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-primary rounded-br-xl" />
+            {/* Animated scan line */}
+            <div
+              className="absolute left-2 right-2 h-0.5 bg-primary/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
+              style={{
+                animation: 'scanLine 2s linear infinite',
+                top: '0%',
+              }}
+            />
           </div>
         </div>
       </div>
 
       <div className="px-4 py-4 bg-black/80 text-center">
-        <p className="text-slate-400 text-xs">Apunta la cámara al código QR</p>
+        <p className="text-slate-400 text-xs">Apunta la cámara al código QR del activo o solicitud</p>
       </div>
+
+      <style>{`
+        @keyframes scanLine {
+          0% { transform: translateY(0); }
+          50% { transform: translateY(220px); }
+          100% { transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 }
 
-// ─── STATUS PILL ──────────────────────────────────────────────
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     APPROVED: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
     ACTIVE:   'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
     OVERDUE:  'text-rose-400 bg-rose-500/10 border-rose-500/20',
   };
-  return <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${map[status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>{status}</span>;
+  return (
+    <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${map[status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>
+      {status}
+    </span>
+  );
 }
 
-// ─── MAIN SCANNER ─────────────────────────────────────────────
 export function GuardScanner() {
   const { processGuardScan, confirmComboCheckin } = useData();
   const { user, logout } = useAuth();
@@ -136,16 +180,13 @@ export function GuardScanner() {
   const [step, setStep] = useState<Step>('idle');
   const [scanning, setScanning] = useState(false);
 
-  // Checkout state
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown>[] | null>(null);
   const [rawQR, setRawQR] = useState('');
   const sigRef = useRef<SignatureCanvas>(null);
 
-  // Checkin state
   const [comboState, setComboState] = useState<ComboCheckinState | null>(null);
   const [isDamaged, setIsDamaged] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
-  const [checkinReady, setCheckinReady] = useState(false); // checkin individual listo para confirmar
 
   const reset = useCallback(() => {
     setStep('idle');
@@ -155,15 +196,14 @@ export function GuardScanner() {
     setComboState(null);
     setIsDamaged(false);
     setDamageNotes('');
-    setCheckinReady(false);
     sigRef.current?.clear();
   }, []);
 
   // ─── QR CODE HANDLER ────────────────────────────────────────
   const handleQR = useCallback(async (code: string) => {
-    if (step === 'scanning') return; // already processing
     setScanning(false);
     setStep('verifying');
+    setRawQR(code);
 
     const result = await processGuardScan(code, mode);
 
@@ -173,32 +213,25 @@ export function GuardScanner() {
       return;
     }
 
-    setRawQR(code);
-
     if (mode === 'CHECKOUT') {
       setVerifiedData(result.data as Record<string, unknown>[]);
       setStep('verifying');
     } else {
-      // CHECKIN
       if (result.comboState) {
-        // Es combo — iniciar flujo multi-escaneo
         setComboState(result.comboState);
         setStep('combo_checkin');
         toast.success('Primer activo del combo escaneado ✓');
       } else {
-        // Individual — pasar directo a damage_check
-        setCheckinReady(true);
         setStep('damage_check');
       }
     }
-  }, [mode, step, processGuardScan]);
+  }, [mode, processGuardScan]);
 
-  // ─── COMBO: escanear siguiente activo ───────────────────────
+  // ─── COMBO: scan next asset ──────────────────────────────────
   const handleNextComboScan = useCallback(async (code: string) => {
     if (!comboState) return;
     setScanning(false);
 
-    // Verificar que este QR corresponde a un activo pendiente del combo
     let parsed: Record<string, unknown>;
     try { parsed = JSON.parse(code); } catch { toast.error('QR inválido'); return; }
 
@@ -219,12 +252,11 @@ export function GuardScanner() {
     toast.success(`✓ ${isPending.name} escaneado`);
 
     if (newPending.length === 0) {
-      // Todos escaneados — pasar a damage_check
       setStep('damage_check');
     }
   }, [comboState]);
 
-  // ─── CHECKOUT FINAL ──────────────────────────────────────────
+  // ─── CHECKOUT CONFIRM ────────────────────────────────────────
   const handleCheckoutConfirm = async () => {
     if (!sigRef.current || sigRef.current.isEmpty()) { toast.error('Firma digital requerida'); return; }
     const sig = sigRef.current.toDataURL();
@@ -233,27 +265,25 @@ export function GuardScanner() {
     else toast.error(result.message);
   };
 
-  // ─── CHECKIN FINAL ───────────────────────────────────────────
+  // ─── CHECKIN CONFIRM ─────────────────────────────────────────
   const handleCheckinConfirm = async () => {
     if (isDamaged && !damageNotes.trim()) { toast.error('Describe el daño'); return; }
     let result;
     if (comboState) {
       result = await confirmComboCheckin(comboState, isDamaged, damageNotes);
     } else {
-      // Activo individual — el rawQR ya fue procesado; solo confirmar
       result = await processGuardScan(rawQR, 'CHECKIN', '', isDamaged, damageNotes);
     }
     if (result.success) { setStep('done'); }
     else toast.error(result.message);
   };
 
-  // ─── RENDER ──────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-background pb-24">
       {scanning && (
         <CameraScanner
           onCode={step === 'combo_checkin' ? handleNextComboScan : handleQR}
-          onClose={() => setScanning(false)}
+          onClose={() => { setScanning(false); if (step === 'scanning') setStep('idle'); }}
         />
       )}
 
@@ -294,7 +324,7 @@ export function GuardScanner() {
 
       <main className="px-4 py-6 max-w-lg mx-auto space-y-4">
 
-        {/* ── IDLE ──────────────────────────────────────────── */}
+        {/* ── IDLE */}
         {step === 'idle' && (
           <div className="space-y-4">
             <div className="text-center py-10">
@@ -305,19 +335,21 @@ export function GuardScanner() {
                 {mode === 'CHECKOUT' ? 'Registrar Salida' : 'Registrar Entrada'}
               </h2>
               <p className="text-slate-500 text-sm">
-                {mode === 'CHECKOUT' ? 'Escanea el QR del solicitante' : 'Escanea el QR físico del activo'}
+                {mode === 'CHECKOUT'
+                  ? 'Escanea el QR del solicitante (generado desde la app)'
+                  : 'Escanea el QR físico del activo (etiqueta en el equipo)'}
               </p>
             </div>
             <button
               onClick={() => { setStep('scanning'); setScanning(true); }}
               className="w-full py-5 rounded-2xl bg-primary text-black font-black text-base flex items-center justify-center gap-3 shadow-lg shadow-primary/30 active:scale-[0.97] transition-all"
             >
-              <ScanLine size={22} /> Abrir Escáner
+              <ScanLine size={22} /> Abrir Escáner de Cámara
             </button>
           </div>
         )}
 
-        {/* ── VERIFYING (loading) ──────────────────────────── */}
+        {/* ── VERIFYING (loading) */}
         {step === 'verifying' && !verifiedData && (
           <div className="text-center py-16">
             <Loader2 size={40} className="text-primary animate-spin mx-auto mb-4" />
@@ -325,7 +357,7 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── CHECKOUT: Ver info antes de firmar ───────────── */}
+        {/* ── CHECKOUT: show info before signing */}
         {step === 'verifying' && verifiedData && mode === 'CHECKOUT' && (
           <div className="space-y-4">
             <Card className="border-emerald-500/30">
@@ -358,6 +390,12 @@ export function GuardScanner() {
                 <UserIcon size={12} />
                 <span>{(verifiedData[0] as { requester_name?: string })?.requester_name || 'Solicitante'}</span>
               </div>
+
+              {verifiedData[0] && (verifiedData[0] as { expected_return_date?: string }).expected_return_date && (
+                <div className="mt-2 text-xs text-slate-500">
+                  Retorno: {format(new Date((verifiedData[0] as { expected_return_date: string }).expected_return_date), "d MMM yyyy", { locale: es })}
+                </div>
+              )}
             </Card>
 
             <div className="flex gap-3">
@@ -369,7 +407,7 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── CHECKOUT: Firma digital ──────────────────────── */}
+        {/* ── SIGNING */}
         {step === 'signing' && (
           <div className="space-y-4">
             <h2 className="text-white font-bold text-lg">Firma Digital</h2>
@@ -394,7 +432,7 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── COMBO CHECKIN: Escaneo múltiple ─────────────── */}
+        {/* ── COMBO CHECKIN */}
         {step === 'combo_checkin' && comboState && (
           <div className="space-y-4">
             <Card className="border-cyan-500/30">
@@ -408,7 +446,6 @@ export function GuardScanner() {
                 </div>
               </div>
 
-              {/* Progress */}
               <div className="w-full h-2 bg-slate-800 rounded-full mb-4 overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all duration-500"
@@ -416,7 +453,6 @@ export function GuardScanner() {
                 />
               </div>
 
-              {/* Activos escaneados ✓ */}
               {comboState.allRequests.filter(r => comboState.scannedAssetIds.includes(r.asset_id)).map(r => (
                 <div key={r.asset_id} className="flex items-center gap-3 py-2 border-b border-slate-800">
                   <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
@@ -425,7 +461,6 @@ export function GuardScanner() {
                 </div>
               ))}
 
-              {/* Activos pendientes */}
               {comboState.pendingAssets.map(a => (
                 <div key={a.id} className="flex items-center gap-3 py-2 border-b border-slate-800 last:border-0">
                   <div className="w-4 h-4 rounded-full border-2 border-dashed border-slate-600 flex-shrink-0" />
@@ -454,7 +489,7 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── DAMAGE CHECK ─────────────────────────────────── */}
+        {/* ── DAMAGE CHECK */}
         {step === 'damage_check' && (
           <div className="space-y-4">
             <Card>
@@ -503,7 +538,7 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── DONE ──────────────────────────────────────────── */}
+        {/* ── DONE */}
         {step === 'done' && (
           <div className="text-center py-10 space-y-4">
             <div className="w-24 h-24 rounded-3xl mx-auto flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
