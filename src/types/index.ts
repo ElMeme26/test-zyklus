@@ -12,7 +12,7 @@ export type AssetState =
   | 'Fuera de servicio'
   | 'En tránsito'
   | 'Requiere Calibración'
-  | 'Requiere Mantenimiento'; // Bloqueo automático por mantenimiento preventivo
+  | 'Requiere Mantenimiento'; 
 
 export type RequestStatus =
   | 'PENDING'
@@ -60,12 +60,11 @@ export interface Asset {
   status: AssetState;
   image?: string;
   location?: string;
-  // Mantenimiento Preventivo
-  maintenance_period_days?: number;     // Cada cuántos días → mantenimiento
-  next_maintenance_date?: string;       // Próxima fecha calculada
-  usage_count?: number;                 // Contador de préstamos para regla por uso
-  maintenance_usage_threshold?: number; // Umbral de uso para trigger
-  maintenance_alert?: boolean;          // Bandera visual de alerta
+  maintenance_period_days?: number;     
+  next_maintenance_date?: string;       
+  usage_count?: number;                 
+  maintenance_usage_threshold?: number; 
+  maintenance_alert?: boolean;          
   bundle_id?: string;
   created_at: string;
 }
@@ -88,7 +87,7 @@ export interface Bundle {
   description?: string;
   image_url?: string;
   created_at?: string;
-  assets?: Asset[]; // Joined
+  assets?: Asset[]; 
 }
 
 // ─── REQUEST (PRÉSTAMO) ──────────────────────────────────────
@@ -102,11 +101,15 @@ export interface Request {
   days_requested: number;
   motive?: string;
   status: RequestStatus;
-  // QR — vinculado al request_id, no al activo
-  qr_code?: string;          // URL/data del QR único
-  qr_expires_at?: string;    // Caduca al hacer check-in
+  
+  // ✨ CORRECCIÓN AQUÍ: Propiedades para Combos (Bundles)
+  bundle_group_id?: string;
+  is_bundle?: boolean;     
+  bundle_items?: number;    
 
-  // Trazabilidad
+  qr_code?: string;          
+  qr_expires_at?: string;    
+
   created_at: string;
   approved_at?: string;
   checkout_at?: string;
@@ -114,19 +117,16 @@ export interface Request {
   returned_at?: string;
   checkin_at?: string;
 
-  // Feedback
   rejection_reason?: string;
   feedback_log?: string;
   return_condition?: string;
 
-  // Guardia
   security_check_step?: number;
   security_notes?: string;
-  digital_signature?: string; // Base64 o URL — evidencia legal
+  digital_signature?: string; 
   is_damaged?: boolean;
   damage_notes?: string;
 
-  // Relaciones (joins)
   assets?: Asset;
   users?: User;
   institutions?: Institution;
@@ -142,7 +142,6 @@ export interface MaintenanceLog {
   status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
   created_at: string;
   resolved_at?: string;
-  // Joins
   assets?: Asset;
   users?: User;
 }
@@ -168,23 +167,20 @@ export interface AuditLog {
   action: AuditAction;
   actor_id: string;
   actor_name?: string;
-  target_id: string;        // request_id o asset_id
+  target_id: string;        
   target_type: 'REQUEST' | 'ASSET' | 'USER' | 'INSTITUTION';
   details?: string;
   metadata?: Record<string, unknown>;
 }
 
-// ─── MAINTENANCE RULE ────────────────────────────────────────
 export interface MaintenanceRule {
   asset_id: string;
   trigger_type: 'TIME' | 'USAGE' | 'BOTH';
-  period_days?: number;    // Cada N días
-  usage_threshold?: number; // Después de N préstamos
-  auto_block: boolean;     // Bloquear solicitudes automáticamente
+  period_days?: number;    
+  usage_threshold?: number; 
+  auto_block: boolean;     
 }
 
-// ─── QR PAYLOAD ──────────────────────────────────────────────
-// Estructura del contenido embebido en el QR de salida
 export interface QRPayload {
   request_id: number;
   asset_id: string;
@@ -194,10 +190,9 @@ export interface QRPayload {
   checkout_date: string;
   expected_return: string;
   generated_at: string;
-  is_valid: boolean; // false después de check-in
+  is_valid: boolean; 
 }
 
-// ─── QR TYPES ────────────────────────────────────────────────
 export type QRType = 'REQUEST' | 'ASSET_PHYSICAL';
 
 export interface QRRequestPayload {
@@ -210,7 +205,7 @@ export interface QRRequestPayload {
 
 export interface QRAssetPayload {
   type: 'ASSET_PHYSICAL';
-  id: string; // asset_id
+  id: string; 
   tag: string;
   name: string;
 }

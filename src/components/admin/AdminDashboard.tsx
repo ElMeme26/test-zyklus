@@ -194,7 +194,8 @@ function InventoryView({ onPrintSelected, onPrintSingle }: { onPrintSelected: (i
   const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
   
   const filteredAssets = assets.filter(a =>
-    (a.name?.toLowerCase() || '').includes(search.toLowerCase()) &&
+    ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) || 
+     (a.tag?.toLowerCase() || '').includes(search.toLowerCase())) &&
     (catFilter === 'Todas' || a.category === catFilter)
   );
 

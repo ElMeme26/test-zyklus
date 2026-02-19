@@ -25,7 +25,7 @@ interface DataContextType {
 
   // Bundles / Combos
   createBundle: (name: string, description: string, assetIds: string[]) => Promise<void>;
-  createBatchRequest: (assets: Asset[], user: User, days: number, motive: string, autoApprove?: boolean) => Promise<void>;
+  createBatchRequest: (bundle: Bundle, user: User, days: number, motive: string, autoApprove?: boolean) => Promise<void>;
 
   // Instituciones Externas
   addInstitution: (inst: Partial<Institution>) => Promise<void>;
@@ -57,7 +57,7 @@ interface DataContextType {
     signature?: string,
     isDamaged?: boolean,
     damageNotes?: string
-  ) => Promise<{ success: boolean; message: string; data?: Request }>;
+  ) => Promise<{ success: boolean; message: string; data?: any }>;
 
   // Notificaciones
   markNotificationRead: (notifId: string) => Promise<void>;
@@ -98,6 +98,14 @@ const logAudit = async (
   });
 };
 
+const requestNativeNotificationPermission = async () => {
+  if ('Notification' in window && navigator.serviceWorker) {
+    if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      await Notification.requestPermission();
+    }
+  }
+};
+
 const createNotification = async (
   userId: string,
   title: string,
@@ -115,6 +123,10 @@ const createNotification = async (
     type,
     is_read: false,
   });
+
+  if ('Notification' in window && Notification.permission === 'granted') {
+    new Notification(title, { body: message, icon: '/logo.png' });
+  }
 };
 
 // ─── PROVIDER ────────────────────────────────────────────────
@@ -129,6 +141,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLoading, setIsLoading] = useState(true);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
+
+  useEffect(() => { requestNativeNotificationPermission(); }, []);
 
   // ─── FETCH ─────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -269,25 +283,21 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
-  const createBatchRequest = async (selectedAssets: Asset[], user: User, days: number, motive: string, autoApprove = false) => {
-    let returnDate;
-    if (days === 0) {
-      const d = new Date(); d.setHours(21, 0, 0, 0); returnDate = d.toISOString();
-    } else {
-      returnDate = addDays(new Date(), days).toISOString();
-    }
-
+  const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
+    if (!bundle.assets || bundle.assets.length === 0) return;
+    let returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
     const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
     const finalApproveDate = autoApprove ? new Date().toISOString() : null;
+    const bundleGroupId = `BNDL-${Date.now()}`;
 
-    const rows = selectedAssets.map(a => ({
-      asset_id: a.id, user_id: user.id, requester_name: user.name,
-      requester_disciplina: user.disciplina, days_requested: days,
-      motive: `[COMBO] ${motive}`, status: finalStatus,
-      approved_at: finalApproveDate, expected_return_date: returnDate,
+    const rows = bundle.assets.map(a => ({
+      asset_id: a.id, user_id: user.id, requester_name: user.name, requester_disciplina: user.disciplina,
+      days_requested: days, motive: `[COMBO: ${bundle.name}] ${motive}`, status: finalStatus,
+      approved_at: finalApproveDate, expected_return_date: returnDate, bundle_group_id: bundleGroupId
     }));
+
     const { error } = await supabase.from('requests').insert(rows);
-    if (!error) { toast.success(`Combo de ${rows.length} activos solicitado`); fetchData(); }
+    if (!error) { toast.success(`Combo "${bundle.name}" solicitado`); fetchData(); }
   };
 
   // ─── INSTITUCIONES ─────────────────────────────────────────
@@ -308,37 +318,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const payload = {
       type: 'REQUEST', 
       request_id: requestId,
+      bundle_group_id: req.bundle_group_id,
       asset_id: req.asset_id,
       asset_name: req.assets?.name || '',
       requester_name: req.requester_name,
       checkout_date: new Date().toISOString(),
-      expected_return: req.expected_return_date || '',
-      generated_at: new Date().toISOString(),
     };
     return JSON.stringify(payload);
   };
 
   const getQRPayload = (requestId: number): object | null => {
-    const req = requests.find(r => r.id === requestId);
-    if (!req || req.status !== 'APPROVED') return null;
-    return {
-      request_id: requestId,
-      requester: req.requester_name,
-      asset: req.assets?.name,
-      tag: req.assets?.tag,
-      days: req.days_requested,
-      expected_return: req.expected_return_date,
-      approver: req.users?.manager_id || 'Auto',
-    };
+    return null;
   };
 
   const processQRScan = async (qrData: string): Promise<{ asset?: Asset; request?: Request } | null> => {
     try {
       const json = JSON.parse(qrData);
-      const assetId = json.asset_id || json.id;
-      const asset = assets.find(a => a.id === assetId || a.tag === assetId);
-      const relatedRequest = requests.find(r => r.id === json.request_id || r.asset_id === assetId);
-      return { asset: asset || undefined, request: relatedRequest };
+      const asset = assets.find(a => a.id === (json.asset_id || json.id) || a.tag === (json.asset_id || json.id));
+      const request = requests.find(r => r.id === json.request_id || r.asset_id === asset?.id);
+      return { asset, request };
     } catch {
       toast.error('Formato QR inválido');
       return null;
@@ -349,187 +347,143 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const approveRequest = async (reqId: number, approverId: string, approverName: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
-    const expectedReturn = addDays(new Date(), req.days_requested).toISOString();
-    const { error } = await supabase.from('requests').update({
-      status: 'APPROVED',
-      approved_at: new Date().toISOString(),
-      expected_return_date: expectedReturn,
-    }).eq('id', reqId);
-    if (!error) {
+    if (req.bundle_group_id) {
+      await supabase.from('requests').update({ status: 'APPROVED', approved_at: new Date().toISOString() }).eq('bundle_group_id', req.bundle_group_id);
+      toast.success('✅ Combo completo aprobado');
+    } else {
+      await supabase.from('requests').update({ status: 'APPROVED', approved_at: new Date().toISOString() }).eq('id', reqId);
       toast.success('✅ Solicitud aprobada');
-      await createNotification(req.user_id, '✅ Solicitud Aprobada', `Tu solicitud para "${req.assets?.name}" fue aprobada.`, 'INFO', reqId);
-      await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado para ${req.requester_name}`);
-      fetchData();
     }
+    await createNotification(req.user_id, '✅ Solicitud Aprobada', `Tu solicitud fue aprobada.`, 'INFO', reqId);
+    fetchData();
   };
 
   const rejectRequest = async (reqId: number, reason: string) => {
     const req = requests.find(r => r.id === reqId);
-    const { error } = await supabase.from('requests').update({
-      status: 'REJECTED',
-      rejection_reason: reason,
-    }).eq('id', reqId);
-    if (!error) {
-      toast.error('Solicitud rechazada');
-      if (req?.user_id) await createNotification(req.user_id, '❌ Solicitud Rechazada', `Tu solicitud fue rechazada. Razón: ${reason}`, 'ALERT', reqId);
-      fetchData();
+    if (req?.bundle_group_id) {
+       await supabase.from('requests').update({ status: 'REJECTED', rejection_reason: reason }).eq('bundle_group_id', req.bundle_group_id);
+    } else {
+       await supabase.from('requests').update({ status: 'REJECTED', rejection_reason: reason }).eq('id', reqId);
     }
+    toast.error('Solicitud rechazada');
+    if (req?.user_id) await createNotification(req.user_id, '❌ Solicitud Rechazada', `Tu solicitud fue rechazada.`, 'ALERT', reqId);
+    fetchData();
   };
 
   const returnRequestWithFeedback = async (reqId: number, feedback: string) => {
     const req = requests.find(r => r.id === reqId);
-    const { error } = await supabase.from('requests').update({
-      status: 'ACTION_REQUIRED',
-      rejection_reason: feedback,
-    }).eq('id', reqId);
-    if (!error) {
-      toast.warning('📋 Devuelta al usuario');
-      if (req?.user_id) await createNotification(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más información: "${feedback}"`, 'WARNING', reqId);
-      fetchData();
+    if (req?.bundle_group_id) {
+      await supabase.from('requests').update({ status: 'ACTION_REQUIRED', rejection_reason: feedback }).eq('bundle_group_id', req.bundle_group_id);
+    } else {
+      await supabase.from('requests').update({ status: 'ACTION_REQUIRED', rejection_reason: feedback }).eq('id', reqId);
     }
+    toast.warning('📋 Devuelta al usuario');
+    if (req?.user_id) await createNotification(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más información.`, 'WARNING', reqId);
+    fetchData();
   };
 
-  const getTeamRequests = (managerId: string) =>
-    requests.filter(r => r.users?.manager_id === managerId);
+  const getTeamRequests = (managerId: string) => {
+    const teamReqs = requests.filter(r => r.users?.manager_id === managerId);
+    const grouped = new Map();
+    teamReqs.forEach(r => {
+      if(r.bundle_group_id) {
+        if(!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, {...r, is_bundle: true, bundle_items: 1});
+        else grouped.get(r.bundle_group_id).bundle_items++;
+      } else { grouped.set(r.id, r); }
+    });
+    return Array.from(grouped.values());
+  };
 
   // ─── SOLICITUDES USUARIO ───────────────────────────────────
   const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
-    if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) {
-      toast.error('🔧 Este activo requiere mantenimiento.');
-      return;
-    }
-    if (asset.status !== 'Disponible') {
-      toast.error(`El activo no está disponible (${asset.status})`);
-      return;
-    }
-
-    let returnDate;
-    if (days === 0) {
-      const d = new Date(); d.setHours(21, 0, 0, 0); returnDate = d.toISOString();
-    } else {
-      returnDate = addDays(new Date(), days).toISOString();
-    }
-
+    if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) { toast.error('🔧 Este activo requiere mantenimiento.'); return; }
+    if (asset.status !== 'Disponible') { toast.error(`El activo no está disponible`); return; }
+    let returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
     const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
-    const finalApproveDate = autoApprove ? new Date().toISOString() : null;
-
+    
     const { error } = await supabase.from('requests').insert({
-      asset_id: asset.id,
-      user_id: user.id,
-      institution_id: institutionId || null,
-      requester_name: user.name,
-      requester_disciplina: user.disciplina,
-      days_requested: days,
-      motive,
-      status: finalStatus,
-      approved_at: finalApproveDate,
-      expected_return_date: returnDate,
+      asset_id: asset.id, user_id: user.id, institution_id: institutionId || null, requester_name: user.name, requester_disciplina: user.disciplina, days_requested: days, motive, status: finalStatus, approved_at: autoApprove ? new Date().toISOString() : null, expected_return_date: returnDate,
     });
-    if (!error) { toast.success(autoApprove ? '✅ Auto-Aprobado' : '📤 Solicitud enviada al Líder'); fetchData(); }
-    else toast.error(error.message);
+    if (!error) { toast.success(autoApprove ? '✅ Auto-Aprobado' : '📤 Solicitud enviada'); fetchData(); }
   };
 
-  const cancelRequest = async (reqId: number) => {
-    const { error } = await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId);
-    if (!error) { toast.success('Solicitud cancelada'); fetchData(); }
-  };
+  const cancelRequest = async (reqId: number) => { await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId); fetchData(); };
 
   const renewRequest = async (reqId: number, additionalDays: number) => {
-    const req = requests.find(r => r.id === reqId);
-    if (!req?.expected_return_date) return;
+    const req = requests.find(r => r.id === reqId); if (!req?.expected_return_date) return;
     const newDate = addDays(new Date(req.expected_return_date), additionalDays).toISOString();
-    const { error } = await supabase.from('requests').update({
-      expected_return_date: newDate,
-      days_requested: req.days_requested + additionalDays,
-      status: 'ACTIVE',
-    }).eq('id', reqId);
-    if (!error) { toast.success(`Renovado por ${additionalDays} días más`); fetchData(); }
+    await supabase.from('requests').update({ expected_return_date: newDate, days_requested: req.days_requested + additionalDays, status: 'ACTIVE' }).eq('id', reqId);
+    toast.success(`Renovado por ${additionalDays} días`); fetchData();
   };
 
-  const getUserRequests = (userId: string) =>
-    requests.filter(r => r.user_id === userId);
+  const getUserRequests = (userId: string) => {
+    const userReqs = requests.filter(r => r.user_id === userId);
+    const grouped = new Map();
+    userReqs.forEach(r => {
+      if(r.bundle_group_id) {
+        if(!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, {...r, is_bundle: true, bundle_items: 1});
+        else grouped.get(r.bundle_group_id).bundle_items++;
+      } else { grouped.set(r.id, r); }
+    });
+    return Array.from(grouped.values());
+  };
 
   // ─── GUARDIA ───────────────────────────────────────────────
-  const processGuardScan = async (
-    qrData: string,
-    type: 'CHECKOUT' | 'CHECKIN',
-    signature = '',
-    isDamaged = false,
-    damageNotes = ''
-  ): Promise<{ success: boolean; message: string; data?: Request }> => {
+  const processGuardScan = async (qrData: string, type: 'CHECKOUT' | 'CHECKIN', signature = '', isDamaged = false, damageNotes = ''): Promise<{ success: boolean; message: string; data?: any }> => {
     try {
-      let parsedData: { request_id?: number; id?: number };
-      try {
-        parsedData = JSON.parse(qrData);
-      } catch {
-        return { success: false, message: '⚠️ QR inválido. Formato no reconocido.' };
-      }
+      let parsedData: any;
+      try { parsedData = JSON.parse(qrData); } catch { return { success: false, message: '⚠️ QR inválido.' }; }
 
       const reqId = parsedData.request_id || parsedData.id;
-      if (!reqId) return { success: false, message: '⚠️ QR inválido. No contiene ID de solicitud.' };
-
-      const { data: req } = await supabase.from('requests').select(`*, assets:asset_id(*), users:user_id(*)`).eq('id', reqId).single();
-      if (!req) return { success: false, message: '⚠️ Solicitud no encontrada en el sistema.' };
+      const bundleId = parsedData.bundle_group_id;
 
       if (type === 'CHECKOUT') {
-        if (req.status !== 'APPROVED') {
-          return { success: false, message: `⛔ Salida no autorizada. Estado actual: ${req.status}` };
+        let reqsToProcess = [];
+        if (bundleId) {
+          const { data } = await supabase.from('requests').select(`*, assets:asset_id(*)`).eq('bundle_group_id', bundleId).eq('status', 'APPROVED');
+          reqsToProcess = data || [];
+          if (reqsToProcess.length === 0) return { success: false, message: '⚠️ Combo no aprobado.' };
+        } else {
+          const { data } = await supabase.from('requests').select(`*, assets:asset_id(*)`).eq('id', reqId).eq('status', 'APPROVED').single();
+          if (data) reqsToProcess = [data]; else return { success: false, message: '⚠️ Solicitud no aprobada.' };
         }
-        
-        const { data: assetData } = await supabase.from('assets').select('*').eq('id', req.asset_id).single();
-          
-        if (assetData?.status === 'Requiere Mantenimiento') {
-          return { success: false, message: '🔧 Activo bloqueado por mantenimiento pendiente.' };
+
+        if (signature) {
+           for (const req of reqsToProcess) {
+             await supabase.from('requests').update({ status: 'ACTIVE', checkout_at: new Date().toISOString(), digital_signature: signature }).eq('id', req.id);
+             await supabase.from('assets').update({ status: 'Prestada', usage_count: (req.assets?.usage_count || 0) + 1 }).eq('id', req.asset_id);
+             await logAudit('CHECKOUT', 'guard', 'Guardia', String(req.id), 'REQUEST', `Salida autorizada`);
+           }
+           fetchData();
+           return { success: true, message: 'Salida exitosa.' };
         }
 
-        const { error: reqError } = await supabase
-          .from('requests')
-          .update({
-            status: 'ACTIVE',
-            checkout_at: new Date().toISOString(),
-            digital_signature: signature,
-          })
-          .eq('id', reqId);
+        return { success: true, message: 'Verificado', data: reqsToProcess };
 
-        if (reqError) return { success: false, message: `Error solicitud: ${reqError.message}` };
-
-        await supabase.from('assets').update({ status: 'Prestada', usage_count: (assetData?.usage_count || 0) + 1 }).eq('id', req.asset_id);
-
-        await logAudit('CHECKOUT', 'guard', 'Guardia', String(reqId), 'REQUEST', `Salida autorizada: ${req.requester_name}`, { signature });
-        await fetchData();
-        return { success: true, message: 'Salida exitosa', data: req };
       } else {
-        if (!['ACTIVE', 'OVERDUE'].includes(req.status)) {
-          return { success: false, message: `⚠️ Activo no marcado como salido.` };
-        }
+        const assetId = parsedData.id || parsedData.asset_id; 
+        const { data: reqs } = await supabase.from('requests').select('*').eq('asset_id', assetId).in('status', ['ACTIVE', 'OVERDUE']).order('checkout_at', {ascending: false}).limit(1);
+        const req = reqs?.[0];
+
+        if (!req) return { success: false, message: `⚠️ Activo no está prestado.` };
 
         const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
         const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
 
-        await supabase.from('requests').update({
-          status: newReqStatus, checkin_at: new Date().toISOString(),
-          is_damaged: isDamaged, damage_notes: damageNotes,
-        }).eq('id', reqId);
-
+        await supabase.from('requests').update({ status: newReqStatus, checkin_at: new Date().toISOString(), is_damaged: isDamaged, damage_notes: damageNotes }).eq('id', req.id);
         await supabase.from('assets').update({ status: newAssetStatus }).eq('id', req.asset_id);
 
         if (isDamaged) {
-          await supabase.from('maintenance_logs').insert({
-            asset_id: req.asset_id, reported_by_user_id: req.user_id,
-            issue_description: damageNotes || 'Daños en devolución', status: 'OPEN',
-          });
-          toast.warning(`🔧 Activo a mantenimiento: ${req.assets?.name}`);
-        } else {
-          toast.success(`✅ Retorno registrado`);
+          await supabase.from('maintenance_logs').insert({ asset_id: req.asset_id, reported_by_user_id: req.user_id, issue_description: damageNotes || 'Daños en devolución', status: 'OPEN' });
+          const { data: admins } = await supabase.from('users').select('id').eq('role', 'ADMIN_PATRIMONIAL').limit(1);
+          if (admins && admins[0]) await createNotification(admins[0].id, '🔧 Daño Reportado', `Equipo reportado con daños en retorno.`, 'ALERT');
         }
-
-        await logAudit('CHECKIN', 'guard', 'Guardia', String(reqId), 'REQUEST', `Retorno: ${req.requester_name}`);
+        
+        await logAudit('CHECKIN', 'guard', 'Guardia', String(req.id), 'REQUEST', `Retorno completado`);
         fetchData();
-        return { success: true, message: isDamaged ? 'Activo enviado a mantenimiento' : 'Retorno exitoso', data: req };
+        return { success: true, message: isDamaged ? 'A mantenimiento' : 'Devuelto' };
       }
-    } catch (err) {
-      return { success: false, message: 'Error procesando QR' };
-    }
+    } catch (err) { return { success: false, message: 'Error procesando QR' }; }
   };
 
   // ─── NOTIFICACIONES ────────────────────────────────────────
