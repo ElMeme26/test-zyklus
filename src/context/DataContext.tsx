@@ -46,6 +46,7 @@ interface DataContextType {
   getTeamRequests: (managerId: string) => Request[];
 
   createRequest: (asset: Asset, user: User, days: number, motive?: string, institutionId?: number, autoApprove?: boolean) => Promise<void>;
+  createMultipleRequests: (assets: Asset[], user: User, days: number, motive?: string, institutionId?: number, autoApprove?: boolean) => Promise<void>;
   cancelRequest: (reqId: number) => Promise<void>;
   renewRequest: (reqId: number, additionalDays: number) => Promise<void>;
   getUserRequests: (userId: string) => Request[];
@@ -441,6 +442,41 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
+  const createMultipleRequests = async (assetList: Asset[], user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
+    if (!assetList.length) { toast.error('No hay activos en el carrito'); return; }
+    const unavail = assetList.filter(a => a.status !== 'Disponible' || a.maintenance_alert || a.status === 'Requiere Mantenimiento');
+    if (unavail.length) {
+      const msgs: Record<string, string> = { 'Prestada': 'Ya prestado', 'En trámite': 'Ya tiene solicitud', 'En mantenimiento': 'En mantenimiento', 'Dada de baja': 'Dado de baja' };
+      toast.error(`No disponibles: ${unavail.map(a => `${a.name} (${msgs[a.status] || a.status})`).join(', ')}`);
+      return;
+    }
+    const returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
+    const rows = assetList.map(a => ({
+      asset_id: a.id, user_id: user.id, institution_id: institutionId || null,
+      requester_name: user.name, requester_disciplina: user.disciplina,
+      days_requested: days, motive, status: autoApprove ? 'APPROVED' : 'PENDING',
+      approved_at: autoApprove ? new Date().toISOString() : null, expected_return_date: returnDate,
+    }));
+    const { data: createdRequests, error } = await supabase
+      .from('requests')
+      .insert(rows)
+      .select('id, asset_id');
+    if (error) { toast.error(error.message); return; }
+    await supabase.from('assets').update({ status: autoApprove ? 'Prestada' : 'En trámite' }).in('id', assetList.map(a => a.id));
+    if (!autoApprove) {
+      const names = assetList.map(a => a.name).join(', ');
+      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud (múltiple)', `${user.name} solicita ${assetList.length} activos: ${names}${institutionId ? ' — institución externa' : ''}.`, 'INFO');
+      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud (múltiple)', `${user.name} solicita ${assetList.length} activos: ${names}.`, 'INFO', undefined, undefined);
+    } else {
+      const nameByAssetId = new Map(assetList.map(a => [a.id, a.name] as const));
+      for (const r of (createdRequests || [])) {
+        await logAudit('APPROVE', user.id, user.name, String(r.id), 'REQUEST', `Auto-aprobado: ${nameByAssetId.get(r.asset_id) || r.asset_id}`);
+      }
+    }
+    toast.success(autoApprove ? `✅ ${assetList.length} activos auto-aprobados` : `📤 ${assetList.length} solicitudes enviadas`);
+    fetchData();
+  };
+
   const cancelRequest = async (reqId: number) => {
     const req = requests.find(r => r.id === reqId);
     const { error } = await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId);
@@ -661,7 +697,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       addAsset, updateAsset, deleteAsset, importAssets, getNextTag, validateMaintenanceAsset,
       createBundle, createBatchRequest, addInstitution, deleteInstitution,
       processQRScan, approveRequest, rejectRequest, returnRequestWithFeedback, getTeamRequests,
-      createRequest, cancelRequest, renewRequest, getUserRequests,
+      createRequest, createMultipleRequests, cancelRequest, renewRequest, getUserRequests,
       generateQRCode, getQRPayload, processGuardScan, confirmComboCheckin,
       markNotificationRead, markAllRead, reportMaintenance, resolveMaintenance,
       getAssetHistory, fetchData,
