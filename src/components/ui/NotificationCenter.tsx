@@ -137,16 +137,18 @@ export function NotificationCenter() {
 
           <div className={`
             fixed z-50 bg-slate-950 border border-slate-800 shadow-2xl
-            /* Mobile: full bottom sheet - mejor posicionamiento */
-            bottom-0 left-0 right-0 rounded-t-3xl max-h-[85vh]
+            /* Mobile: full bottom sheet - posicionamiento perfecto */
+            bottom-0 left-0 right-0 rounded-t-3xl max-h-[90vh]
             /* Desktop: dropdown anchored to button */
             sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-12
             sm:w-96 sm:rounded-2xl sm:max-h-[75vh]
             flex flex-col
             animate-in slide-in-from-bottom-4 sm:slide-in-from-top-2
             duration-200
-            /* Asegurar que no se corte en móvil */
-            mx-0 sm:mx-auto
+            /* Asegurar que no se corte en móvil - sin márgenes que causen problemas */
+            w-full
+            /* Safe area para dispositivos con notch */
+            pb-safe sm:pb-0
           `}>
             {/* Handle bar — mobile only */}
             <div className="flex justify-center pt-3 pb-1 sm:hidden">
@@ -154,40 +156,41 @@ export function NotificationCenter() {
             </div>
 
             {/* Header */}
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 flex-shrink-0">
-              <div>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800/80 flex-shrink-0 safe-area-top">
+              <div className="flex-1 min-w-0">
                 <h3 className="text-white font-bold text-sm">Notificaciones</h3>
                 {panelUnread > 0 && (
                   <p className="text-primary text-[10px] font-bold">{panelUnread} sin leer</p>
                 )}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 flex-shrink-0">
                 {panelUnread > 0 && (
                   <button
                     onClick={handleMarkAll}
-                    className="flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
+                    className="hidden xs:flex items-center gap-1 text-[10px] font-bold text-slate-400 hover:text-white px-2 py-1 rounded-lg hover:bg-slate-800 transition-colors"
                   >
-                    <CheckCheck size={12} /> Todas leídas
+                    <CheckCheck size={12} /> <span className="hidden sm:inline">Todas leídas</span>
                   </button>
                 )}
                 {!pushEnabled && 'Notification' in window && (
                   <button
                     onClick={handleEnablePush}
-                    className="flex items-center gap-1 text-[10px] font-bold text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
+                    className="hidden sm:flex items-center gap-1 text-[10px] font-bold text-amber-400 border border-amber-500/30 px-2 py-1 rounded-lg hover:bg-amber-500/10 transition-colors"
                   >
-                    <Bell size={10} /> Activar
+                    <Bell size={10} /> <span className="hidden md:inline">Activar</span>
                   </button>
                 )}
                 {pushEnabled && (
-                  <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
-                    <Bell size={10} /> Activas
+                  <span className="hidden sm:flex items-center gap-1 text-[10px] text-emerald-400 font-bold">
+                    <Bell size={10} /> <span className="hidden md:inline">Activas</span>
                   </span>
                 )}
                 <button
                   onClick={() => setOpen(false)}
-                  className="text-slate-500 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors"
+                  className="text-slate-500 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors flex-shrink-0"
+                  aria-label="Cerrar notificaciones"
                 >
-                  <X size={16} />
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -210,7 +213,7 @@ export function NotificationCenter() {
             )}
 
             {/* Notification list — scrollable */}
-            <div className="overflow-y-auto flex-1 p-3 space-y-2">
+            <div className="overflow-y-auto flex-1 p-3 space-y-2 overscroll-contain">
               {panelNotifs.length === 0 ? (
                 <div className="text-center py-12">
                   <div className="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto mb-3">
@@ -226,8 +229,14 @@ export function NotificationCenter() {
               )}
             </div>
 
-            {/* Safe area spacer for mobile home indicator */}
-            <div className="h-safe-bottom sm:hidden" style={{ height: 'env(safe-area-inset-bottom, 0px)' }} />
+            {/* Safe area spacer for mobile home indicator - mejorado */}
+            <div 
+              className="sm:hidden" 
+              style={{ 
+                height: 'max(env(safe-area-inset-bottom, 0px), 8px)',
+                minHeight: '8px'
+              }} 
+            />
           </div>
         </>
       )}
