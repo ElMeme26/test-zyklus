@@ -41,7 +41,7 @@ function KPICard({ label, value, color, icon, sublabel }: {
     </Card>
   );
 }
-
+// test
 // ─── ACTION BADGE ────────────────────────────────────────────────
 const actionBadge: Record<string, { label: string; style: string }> = {
   CREATE:      { label: 'Alta',          style: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
