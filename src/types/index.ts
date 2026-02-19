@@ -12,7 +12,7 @@ export type AssetState =
   | 'Fuera de servicio'
   | 'En tránsito'
   | 'Requiere Calibración'
-  | 'Requiere Mantenimiento'; 
+  | 'Requiere Mantenimiento';
 
 export type RequestStatus =
   | 'PENDING'
@@ -60,11 +60,11 @@ export interface Asset {
   status: AssetState;
   image?: string;
   location?: string;
-  maintenance_period_days?: number;     
-  next_maintenance_date?: string;       
-  usage_count?: number;                 
-  maintenance_usage_threshold?: number; 
-  maintenance_alert?: boolean;          
+  maintenance_period_days?: number;
+  next_maintenance_date?: string;
+  usage_count?: number;
+  maintenance_usage_threshold?: number;
+  maintenance_alert?: boolean;
   bundle_id?: string;
   created_at: string;
 }
@@ -87,7 +87,7 @@ export interface Bundle {
   description?: string;
   image_url?: string;
   created_at?: string;
-  assets?: Asset[]; 
+  assets?: Asset[];
 }
 
 // ─── REQUEST (PRÉSTAMO) ──────────────────────────────────────
@@ -97,18 +97,21 @@ export interface Request {
   user_id: string;
   institution_id?: number;
   requester_name: string;
+  // BD usa requester_disciplina; requester_dept es alias para compatibilidad de exportación
   requester_disciplina?: string;
+  /** @deprecated usar requester_disciplina — se mantiene para compatibilidad de export */
+  requester_dept?: string;
   days_requested: number;
   motive?: string;
   status: RequestStatus;
-  
-  // Propiedades para Combos (Bundles)
-  bundle_group_id?: string;
-  is_bundle?: boolean;     
-  bundle_items?: number;    
 
-  qr_code?: string;          
-  qr_expires_at?: string;    
+  // Propiedades para Combos (Bundles) — calculadas en cliente, no en BD
+  bundle_group_id?: string;
+  is_bundle?: boolean;
+  bundle_items?: number;
+
+  qr_code?: string;
+  qr_expires_at?: string;
 
   created_at: string;
   approved_at?: string;
@@ -117,17 +120,18 @@ export interface Request {
   returned_at?: string;
   checkin_at?: string;
 
-  // ✨ CORRECCIÓN: Nombres exactos de la Base de Datos
+  // Nombres exactos de la BD
   rejection_feedback?: string;
   feedback_log?: string;
   return_condition?: string;
 
   security_check_step?: number;
   security_notes?: string;
-  digital_signature?: string; 
+  digital_signature?: string;
   is_damaged?: boolean;
   damage_notes?: string;
 
+  // Joined relations (via Supabase select con alias)
   assets?: Asset;
   users?: User;
   institutions?: Institution;
@@ -166,9 +170,10 @@ export interface AuditLog {
   id: string;
   timestamp: string;
   action: AuditAction;
-  actor_id: string;
+  // actor_id es uuid nullable en BD
+  actor_id: string | null;
   actor_name?: string;
-  target_id: string;        
+  target_id: string;
   target_type: 'REQUEST' | 'ASSET' | 'USER' | 'INSTITUTION';
   details?: string;
   metadata?: Record<string, unknown>;
@@ -177,9 +182,9 @@ export interface AuditLog {
 export interface MaintenanceRule {
   asset_id: string;
   trigger_type: 'TIME' | 'USAGE' | 'BOTH';
-  period_days?: number;    
-  usage_threshold?: number; 
-  auto_block: boolean;     
+  period_days?: number;
+  usage_threshold?: number;
+  auto_block: boolean;
 }
 
 export interface QRPayload {
@@ -191,7 +196,7 @@ export interface QRPayload {
   checkout_date: string;
   expected_return: string;
   generated_at: string;
-  is_valid: boolean; 
+  is_valid: boolean;
 }
 
 export type QRType = 'REQUEST' | 'ASSET_PHYSICAL';
@@ -206,7 +211,7 @@ export interface QRRequestPayload {
 
 export interface QRAssetPayload {
   type: 'ASSET_PHYSICAL';
-  id: string; 
+  id: string;
   tag: string;
   name: string;
 }
