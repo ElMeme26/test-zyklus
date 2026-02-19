@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { toast } from 'sonner';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -66,6 +67,10 @@ function MyLoansView({ onShowQR, onFeedback }: {
           {active.map(req => {
             const isOverdue = req.status === 'OVERDUE';
             const isActionRequired = req.status === 'ACTION_REQUIRED';
+
+            // ✨ Corrección: usamos los nombres exactos de la BD
+            const reasonText = req.rejection_feedback || req.feedback_log;
+
             return (
               <Card key={req.id} className={`border transition-all ${isOverdue ? 'border-rose-500/40' : isActionRequired ? 'border-orange-500/40' : 'border-white/5'}`}>
                 <div className="flex items-center justify-between gap-4">
@@ -90,7 +95,6 @@ function MyLoansView({ onShowQR, onFeedback }: {
                     {/* Detalles del combo si aplica */}
                     {req.is_bundle && (
                       <div className="mt-2">
-                        {/* ✨ CORRECCIÓN AQUÍ: Se añade ?? null para evitar el error de TypeScript */}
                         <button 
                           onClick={() => setBundleDetailsId(bundleDetailsId === req.bundle_group_id ? null : (req.bundle_group_id ?? null))} 
                           className="text-[10px] text-primary hover:underline flex items-center gap-1"
@@ -108,9 +112,9 @@ function MyLoansView({ onShowQR, onFeedback }: {
                     )}
 
                     {/* ACTION_REQUIRED: Mostrar feedback del líder */}
-                    {isActionRequired && req.rejection_reason && (
+                    {isActionRequired && reasonText && (
                       <div className="mt-2 bg-orange-500/10 border border-orange-500/20 rounded-lg p-2">
-                        <p className="text-xs text-orange-300">💬 Líder dice: "{req.rejection_reason}"</p>
+                        <p className="text-xs text-orange-300">💬 Líder dice: "{reasonText}"</p>
                       </div>
                     )}
                   </div>
@@ -140,24 +144,29 @@ function MyLoansView({ onShowQR, onFeedback }: {
         <div>
           <h2 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">Historial</h2>
           <div className="space-y-2">
-            {history.slice(0, 10).map(req => (
-              <div key={req.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
-                <div>
-                  <p className="text-slate-300 text-sm font-medium">
-                    {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name || `Activo #${req.asset_id}`}
-                  </p>
-                  <p className="text-slate-500 text-xs">{format(new Date(req.created_at), "d MMM yyyy", { locale: es })}</p>
+            {history.slice(0, 10).map(req => {
+              // ✨ Corrección: usamos los nombres exactos de la BD
+              const reasonText = req.rejection_feedback || req.feedback_log;
+              
+              return (
+                <div key={req.id} className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl">
+                  <div>
+                    <p className="text-slate-300 text-sm font-medium">
+                      {req.is_bundle ? `📦 Combo (${req.bundle_items} equipos)` : req.assets?.name || `Activo #${req.asset_id}`}
+                    </p>
+                    <p className="text-slate-500 text-xs">{format(new Date(req.created_at), "d MMM yyyy", { locale: es })}</p>
+                  </div>
+                  <div className="text-right">
+                     <StatusBadge status={req.status} />
+                     {req.status === 'REJECTED' && reasonText && (
+                        <p className="text-[9px] text-rose-400 mt-1 max-w-[150px] truncate">
+                          Motivo: {reasonText}
+                        </p>
+                     )}
+                  </div>
                 </div>
-                <div className="text-right">
-                   <StatusBadge status={req.status} />
-                   {req.status === 'REJECTED' && req.rejection_reason && (
-                      <p className="text-[9px] text-rose-400 mt-1 max-w-[150px] truncate">
-                        Motivo: {req.rejection_reason}
-                      </p>
-                   )}
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
       )}
@@ -214,18 +223,28 @@ function QRModal({ request, onClose }: { request: any; onClose: () => void }) {
 }
 
 // ─── FEEDBACK MODAL ──────────────────────────────────────────
-function FeedbackModal({ request, onClose }: { request: any; onClose: () => void }) {
+function FeedbackModal({ request, onClose, onRefresh }: { request: any; onClose: () => void; onRefresh: () => void }) {
   const [text, setText] = useState('');
 
   const handleSubmit = async () => {
     const { supabase } = await import('../../supabaseClient');
+    let res;
+    
+    // ✨ CORRECCIÓN: Actualizamos en el backend a estado PENDIENTE, y en lugar de motive mandamos a feedback_log
     if(request.bundle_group_id) {
-       await supabase.from('requests').update({ status: 'PENDING', motive: text }).eq('bundle_group_id', request.bundle_group_id);
+       res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('bundle_group_id', request.bundle_group_id);
     } else {
-       await supabase.from('requests').update({ status: 'PENDING', motive: text }).eq('id', request.id);
+       res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('id', request.id);
     }
+    
+    if (res.error) { toast.error(`Error BD: ${res.error.message}`); return; }
+    
+    toast.success('Respuesta enviada al líder');
+    onRefresh();
     onClose();
   };
+
+  const reasonText = request.rejection_feedback || request.feedback_log;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
@@ -235,7 +254,7 @@ function FeedbackModal({ request, onClose }: { request: any; onClose: () => void
           <button onClick={onClose}><X size={18} className="text-slate-400" /></button>
         </div>
         <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-3 mb-4">
-          <p className="text-xs text-orange-300">"{request.rejection_reason}"</p>
+          <p className="text-xs text-orange-300">"{reasonText}"</p>
         </div>
         <textarea
           value={text}
@@ -254,7 +273,7 @@ function FeedbackModal({ request, onClose }: { request: any; onClose: () => void
 
 // ─── MAIN USER HOME ──────────────────────────────────────────
 export function UserHome({ isManagerView = false, onBack }: { isManagerView?: boolean; onBack?: () => void }) {
-  const { assets, bundles, createRequest, createBatchRequest, institutions } = useData();
+  const { assets, bundles, createRequest, createBatchRequest, institutions, fetchData } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'activos' | 'combos'>('activos');
@@ -303,7 +322,9 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
     <div className={`min-h-screen ${isManagerView ? 'bg-transparent' : 'bg-background'} font-sans pb-24`}>
       {!isManagerView && <ChatAssistant />}
       {qrRequest && <QRModal request={qrRequest} onClose={() => setQRRequest(null)} />}
-      {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} />}
+      
+      {/* ✨ Le pasamos la función fetchData al modal para que actualice la app al enviar feedback */}
+      {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} onRefresh={fetchData} />}
 
       {/* Header */}
       {!isManagerView && (
@@ -396,7 +417,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {bundles.map(bundle => (
                   <Card key={bundle.id} className="border-primary/20 hover:border-primary/50 transition-colors cursor-pointer group" onClick={() => setSelectedBundle(bundle)}>
-                    <div className="flex items-center gap-4 mb-3">
+                    <div className="flex items-center gap-4 mb-4">
                       <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center border border-primary/20 text-primary group-hover:scale-110 transition-transform">
                         <Package size={24} />
                       </div>
@@ -406,8 +427,12 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       </div>
                     </div>
                     <div className="flex flex-wrap gap-1 mb-4">
-                      {bundle.assets?.slice(0, 3).map(a => <span key={a.id} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded">{a.name}</span>)}
-                      {(bundle.assets?.length || 0) > 3 && <span className="text-[10px] text-slate-500 flex items-center">+{bundle.assets!.length - 3} más</span>}
+                      {bundle.assets?.slice(0, 3).map(a => (
+                        <span key={a.id} className="bg-slate-800 text-slate-300 text-[10px] px-2 py-1 rounded">{a.name}</span>
+                      ))}
+                      {(bundle.assets?.length || 0) > 3 && (
+                        <span className="text-[10px] text-slate-500 flex items-center">+{bundle.assets!.length - 3} más</span>
+                      )}
                     </div>
                     <Button size="sm" variant="neon" className="w-full text-xs h-9 font-bold tracking-wider">
                       Solicitar Combo Completo

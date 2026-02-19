@@ -102,7 +102,7 @@ export interface Request {
   motive?: string;
   status: RequestStatus;
   
-  // ✨ CORRECCIÓN AQUÍ: Propiedades para Combos (Bundles)
+  // Propiedades para Combos (Bundles)
   bundle_group_id?: string;
   is_bundle?: boolean;     
   bundle_items?: number;    
@@ -117,7 +117,8 @@ export interface Request {
   returned_at?: string;
   checkin_at?: string;
 
-  rejection_reason?: string;
+  // ✨ CORRECCIÓN: Nombres exactos de la Base de Datos
+  rejection_feedback?: string;
   feedback_log?: string;
   return_condition?: string;
 

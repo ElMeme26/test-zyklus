@@ -246,7 +246,7 @@ export function ManagerInbox() {
                       </p>
                       
                       <p className="text-slate-400 text-xs mt-1 italic">
-                        "{req.is_bundle ? req.motive.split('] ')[1] || 'Sin motivo adicional' : req.motive || 'Sin motivo especificado'}"
+                        "{req.is_bundle ? (req.motive.split('] ')[1] || 'Sin motivo adicional') : (req.motive || 'Sin motivo especificado')}"
                       </p>
                       
                       <div className="flex gap-3 mt-2 text-[11px] text-slate-500 font-mono">

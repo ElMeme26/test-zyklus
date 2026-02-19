@@ -159,21 +159,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       ]);
 
       setAssets((assetsRes.data || []) as Asset[]);
-      
-      // ✨ CORRECCIÓN DE MAPEADO: Hacemos que la UI entienda la columna "rejection_feedback" de la BD
-      const mappedRequests = (reqRes.data || []).map((r: any) => ({
-        ...r,
-        rejection_reason: r.rejection_feedback || r.rejection_reason,
-      }));
-      setRequests(mappedRequests as Request[]);
-      
+      setRequests((reqRes.data || []) as Request[]);
       setInstitutions((instRes.data || []) as Institution[]);
       setNotifications((notifRes.data || []) as Notification[]);
       setMaintenanceLogs((maintRes.data || []) as MaintenanceLog[]);
       setAuditLogs((auditRes.data || []) as AuditLog[]);
       setBundles((bundlesRes.data || []) as Bundle[]);
 
-      await checkOverdueRequests(mappedRequests as Request[]);
+      await checkOverdueRequests((reqRes.data || []) as Request[]);
 
     } catch (error) {
       console.error('fetchData error:', error);
@@ -384,18 +377,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
-  // ✨ CORRECCIÓN DIRECTA: Se usa 'rejection_feedback' 
   const rejectRequest = async (reqId: number, reason: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
 
     if (req.bundle_group_id) {
        const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('bundle_group_id', req.bundle_group_id);
-       if (error) { console.error(error); toast.error('Error al rechazar combo'); return; }
+       if (error) { toast.error(`Error BD: ${error.message}`); return; }
        await logAudit('REJECT', 'system', 'Líder/Admin', req.bundle_group_id, 'REQUEST', `Combo rechazado. Motivo: ${reason}`);
     } else {
        const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('id', reqId);
-       if (error) { console.error(error); toast.error('Error al rechazar solicitud'); return; }
+       if (error) { toast.error(`Error BD: ${error.message}`); return; }
        await logAudit('REJECT', 'system', 'Líder/Admin', String(reqId), 'REQUEST', `Solicitud rechazada. Motivo: ${reason}`);
     }
     
@@ -404,17 +396,16 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     fetchData();
   };
 
-  // ✨ CORRECCIÓN DIRECTA: Se usa 'feedback_log'
   const returnRequestWithFeedback = async (reqId: number, feedback: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
 
     if (req.bundle_group_id) {
       const { error } = await supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('bundle_group_id', req.bundle_group_id);
-      if (error) { console.error(error); toast.error('Error al devolver combo'); return; }
+      if (error) { toast.error(`Error BD: ${error.message}`); return; }
     } else {
       const { error } = await supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('id', reqId);
-      if (error) { console.error(error); toast.error('Error al devolver solicitud'); return; }
+      if (error) { toast.error(`Error BD: ${error.message}`); return; }
     }
     
     toast.warning('📋 Devuelta al usuario para corrección');
