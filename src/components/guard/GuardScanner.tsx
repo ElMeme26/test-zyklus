@@ -21,10 +21,37 @@ type Step =
   | 'idle'
   | 'scanning'
   | 'verifying'
+  | 'asset_verification'  // Nuevo paso para verificar activos físicos en checkout
   | 'signing'
   | 'combo_checkin'
   | 'damage_check'
   | 'done';
+
+// ─── FUNCIÓN PARA REPRODUCIR PITIDO ──────────────────────────────
+function playBeep() {
+  try {
+    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    oscillator.frequency.value = 800; // Frecuencia del pitido (Hz)
+    oscillator.type = 'sine';
+    
+    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+    
+    oscillator.start(audioContext.currentTime);
+    oscillator.stop(audioContext.currentTime + 0.1);
+  } catch (error) {
+    // Fallback: usar vibración si el audio no está disponible
+    if (navigator.vibrate) {
+      navigator.vibrate(50);
+    }
+  }
+}
 
 // ─── CAMERA QR SCANNER ───────────────────────────────────────
 function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
@@ -63,6 +90,8 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
 
       if (code && code.data) {
         hasScanned.current = true;
+        // Reproducir pitido al escanear
+        playBeep();
         // Detenemos todas las pistas de la cámara
         streamRef.current?.getTracks().forEach(t => t.stop());
         onCode(code.data);
@@ -190,6 +219,10 @@ export function GuardScanner() {
   const [comboState, setComboState] = useState<ComboCheckinState | null>(null);
   const [isDamaged, setIsDamaged] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
+  
+  // Estado para verificación de activos en checkout
+  const [scannedAssets, setScannedAssets] = useState<Set<string>>(new Set());
+  const [expectedAssetIds, setExpectedAssetIds] = useState<string[]>([]);
 
   const reset = useCallback(() => {
     setStep('idle');
@@ -199,6 +232,8 @@ export function GuardScanner() {
     setComboState(null);
     setIsDamaged(false);
     setDamageNotes('');
+    setScannedAssets(new Set());
+    setExpectedAssetIds([]);
     sigRef.current?.clear();
   }, []);
 
@@ -221,7 +256,13 @@ export function GuardScanner() {
         // Verificar que hay datos antes de continuar
         if (result.data && Array.isArray(result.data) && result.data.length > 0) {
           setVerifiedData(result.data as Record<string, unknown>[]);
-          setStep('verifying');
+          // Extraer los IDs de activos esperados de la solicitud
+          const assetIds = (result.data as Array<{ asset_id?: string }>)
+            .map(req => req.asset_id)
+            .filter((id): id is string => Boolean(id));
+          setExpectedAssetIds(assetIds);
+          setScannedAssets(new Set());
+          setStep('asset_verification'); // Ir a verificación de activos físicos
         } else {
           toast.error('No se encontraron solicitudes aprobadas para este QR');
           setStep('idle');
@@ -243,10 +284,60 @@ export function GuardScanner() {
     }
   }, [mode, processGuardScan]);
 
+  // ─── VERIFICAR ACTIVO FÍSICO EN CHECKOUT ────────────────────────
+  const handleAssetVerification = useCallback(async (code: string) => {
+    setScanning(false);
+    playBeep(); // Pitido al escanear
+    
+    let parsed: Record<string, unknown>;
+    try { 
+      parsed = JSON.parse(code); 
+    } catch { 
+      toast.error('QR inválido'); 
+      return; 
+    }
+
+    const scannedId = (parsed.id || parsed.asset_id) as string;
+    if (!scannedId) { 
+      toast.error('QR sin ID de activo'); 
+      return; 
+    }
+
+    // Verificar que el activo escaneado esté en la lista esperada
+    if (!expectedAssetIds.includes(scannedId)) {
+      toast.error('⚠️ Este activo no corresponde a la solicitud');
+      return;
+    }
+
+    // Verificar que no se haya escaneado ya
+    if (scannedAssets.has(scannedId)) {
+      toast.warning('Este activo ya fue escaneado');
+      return;
+    }
+
+    // Agregar a la lista de escaneados
+    const newScanned = new Set(scannedAssets);
+    newScanned.add(scannedId);
+    setScannedAssets(newScanned);
+
+    // Encontrar el nombre del activo para mostrar feedback
+    const assetInfo = verifiedData?.find(req => (req as { asset_id?: string }).asset_id === scannedId);
+    const assetName = (assetInfo as { assets?: { name?: string } })?.assets?.name || scannedId;
+    
+    toast.success(`✓ ${assetName} verificado`);
+
+    // Si todos los activos están escaneados, continuar a firma
+    if (newScanned.size === expectedAssetIds.length) {
+      toast.success('Todos los activos verificados ✓');
+      setStep('signing');
+    }
+  }, [scannedAssets, expectedAssetIds, verifiedData]);
+
   // ─── COMBO: scan next asset ──────────────────────────────────
   const handleNextComboScan = useCallback(async (code: string) => {
     if (!comboState) return;
     setScanning(false);
+    playBeep(); // Pitido al escanear
 
     let parsed: Record<string, unknown>;
     try { parsed = JSON.parse(code); } catch { toast.error('QR inválido'); return; }
@@ -298,7 +389,11 @@ export function GuardScanner() {
     <div className="min-h-screen bg-background pb-24">
       {scanning && (
         <CameraScanner
-          onCode={step === 'combo_checkin' ? handleNextComboScan : handleQR}
+          onCode={
+            step === 'combo_checkin' ? handleNextComboScan :
+            step === 'asset_verification' ? handleAssetVerification :
+            handleQR
+          }
           onClose={() => { setScanning(false); if (step === 'scanning') setStep('idle'); }}
         />
       )}
@@ -373,7 +468,86 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── CHECKOUT: show info before signing */}
+        {/* ── CHECKOUT: VERIFICACIÓN DE ACTIVOS FÍSICOS */}
+        {step === 'asset_verification' && verifiedData && mode === 'CHECKOUT' && (
+          <div className="space-y-4">
+            <Card className="border-amber-500/30">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+                  <ScanLine size={20} className="text-amber-400" />
+                </div>
+                <div>
+                  <h2 className="text-white font-bold">Verificar Activos Físicos</h2>
+                  <p className="text-amber-400 text-xs font-bold">
+                    {scannedAssets.size}/{expectedAssetIds.length} activos escaneados
+                  </p>
+                </div>
+              </div>
+
+              <div className="w-full h-2 bg-slate-800 rounded-full mb-4 overflow-hidden">
+                <div
+                  className="h-full bg-amber-500 rounded-full transition-all duration-500"
+                  style={{ width: `${(scannedAssets.size / expectedAssetIds.length) * 100}%` }}
+                />
+              </div>
+
+              <p className="text-slate-400 text-sm mb-4">
+                Escanea el QR físico de cada activo que se va a retirar para verificar que coincida con la solicitud.
+              </p>
+
+              {/* Lista de activos esperados */}
+              <div className="space-y-2 max-h-48 overflow-y-auto">
+                {verifiedData.map((req, i) => {
+                  const r = req as { asset_id?: string; assets?: { name?: string; tag?: string } };
+                  const assetId = r.asset_id || '';
+                  const isScanned = scannedAssets.has(assetId);
+                  
+                  return (
+                    <div 
+                      key={i} 
+                      className={`flex items-center justify-between py-2 px-3 rounded-lg border ${
+                        isScanned 
+                          ? 'bg-emerald-500/10 border-emerald-500/30' 
+                          : 'bg-slate-900/50 border-slate-800'
+                      }`}
+                    >
+                      <div className="flex-1">
+                        <p className={`text-sm font-bold ${isScanned ? 'text-emerald-300' : 'text-white'}`}>
+                          {r.assets?.name || `Activo #${assetId}`}
+                        </p>
+                        <p className="text-slate-500 text-xs font-mono">{r.assets?.tag}</p>
+                      </div>
+                      {isScanned ? (
+                        <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0" />
+                      ) : (
+                        <div className="w-5 h-5 rounded-full border-2 border-dashed border-slate-600 flex-shrink-0" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
+
+            {scannedAssets.size < expectedAssetIds.length ? (
+              <button
+                onClick={() => setScanning(true)}
+                className="w-full py-4 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-black flex items-center justify-center gap-3 shadow-lg shadow-amber-500/30 active:scale-[0.97] transition-all"
+              >
+                <ScanLine size={20} /> Escanear Activo Físico
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep('signing')}
+                className="w-full py-4 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-black flex items-center justify-center gap-3"
+              >
+                <Check size={20} /> Todos verificados — Continuar a Firma
+              </button>
+            )}
+            <button onClick={reset} className="w-full text-xs text-slate-600 py-1">Cancelar</button>
+          </div>
+        )}
+
+        {/* ── CHECKOUT: show info before signing (ya no se usa, pero lo dejo por compatibilidad) */}
         {step === 'verifying' && verifiedData && mode === 'CHECKOUT' && (
           <div className="space-y-4">
             <Card className="border-emerald-500/30">
