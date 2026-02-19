@@ -1,3 +1,4 @@
+// src/components/auditor/AuditorOverview.tsx
 import React, { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
@@ -8,12 +9,14 @@ import {
 } from 'recharts';
 import {
   TrendingUp, AlertCircle, CheckCircle2, LogOut,
-  Search, ShieldCheck, Wrench, Package, BrainCircuit, Loader2
+  Search, ShieldCheck, Wrench, Package, BrainCircuit, Loader2,
+  Clock, Flame
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import { format, subDays, isAfter } from 'date-fns';
+import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { ThemeProvider } from '../../context/ThemeContext';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
 import { toast } from 'sonner';
@@ -100,7 +103,7 @@ export function DashboardCharts() {
                 <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
                 <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff'}} cursor={{fill: '#1e293b', opacity: 0.4}}/>
                 <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} barSize={20}>
-                  {top8Assets.map((entry, index) => (
+                  {top8Assets.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Bar>
@@ -174,13 +177,83 @@ const actionBadge: Record<string, { label: string; style: string }> = {
   ALERT:       { label: 'Alerta',        style: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
 };
 
+// ─── OVERDUE RANKING LIST ───────────────────────────────────
+function OverdueList({ requests }: { requests: import('../../types').Request[] }) {
+  const now = new Date();
+  const overdueList = requests
+    .filter(r => r.status === 'OVERDUE' && r.expected_return_date)
+    .map(r => ({
+      ...r,
+      daysLate: differenceInDays(now, new Date(r.expected_return_date!)),
+    }))
+    .sort((a, b) => b.daysLate - a.daysLate);
+
+  if (overdueList.length === 0) {
+    return (
+      <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl text-slate-500">
+        <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500/40" />
+        <p className="text-sm">Sin préstamos vencidos 🎉</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto w-full">
+      <table className="w-full text-left text-xs text-slate-400 min-w-[580px]">
+        <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+          <tr>
+            <th className="p-3 w-10">#</th>
+            <th className="p-3">Activo</th>
+            <th className="p-3">Solicitante</th>
+            <th className="p-3">Disciplina</th>
+            <th className="p-3 text-center">Días Vencido</th>
+            <th className="p-3">Debió Retornar</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800/50">
+          {overdueList.map((r, idx) => {
+            const urgency =
+              r.daysLate >= 7 ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+              r.daysLate >= 3 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                                'text-amber-400 bg-amber-500/10 border-amber-500/20';
+
+            return (
+              <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                <td className="p-3 font-black text-slate-600">
+                  {idx === 0 && <Flame size={14} className="text-red-400 inline" />}
+                  {idx > 0 && <span className="text-slate-600 text-[10px]">#{idx + 1}</span>}
+                </td>
+                <td className="p-3 font-medium text-white">
+                  {r.assets?.name || `Activo #${r.asset_id}`}
+                  <span className="text-slate-500 text-[10px] font-mono ml-2">{r.assets?.tag}</span>
+                </td>
+                <td className="p-3">{r.requester_name}</td>
+                <td className="p-3 text-slate-500">{r.requester_disciplina || '—'}</td>
+                <td className="p-3 text-center">
+                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${urgency}`}>
+                    {r.daysLate}d
+                  </span>
+                </td>
+                <td className="p-3 font-mono text-slate-500">
+                  {r.expected_return_date
+                    ? format(new Date(r.expected_return_date), 'dd/MM/yy', { locale: es })
+                    : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function AuditorOverview() {
   const { assets, requests, auditLogs, maintenanceLogs } = useData();
   const { logout } = useAuth();
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
   
-  // IA Report State
   const [aiReport, setAiReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -191,7 +264,6 @@ export function AuditorOverview() {
     const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
     const baja = assets.filter(a => a.status === 'Dada de baja').length;
     const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
-
     const activeLoans = requests.filter(r => r.status === 'ACTIVE').length;
     const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
     const totalLoans30d = requests.filter(r => isAfter(new Date(r.created_at), subDays(new Date(), 30))).length;
@@ -201,7 +273,6 @@ export function AuditorOverview() {
 
   const activeLoansList = requests.filter(r => r.status === 'ACTIVE' || r.status === 'OVERDUE');
 
-  // ✨ FILTRO MEJORADO DE TRAZABILIDAD
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
       l.action !== 'CREATE' && 
@@ -224,8 +295,8 @@ export function AuditorOverview() {
       const data = await response.json();
       setAiReport(data.candidates[0].content.parts[0].text);
       toast.success('Reporte generado exitosamente');
-    } catch(e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
-  }
+    } catch(_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+  };
 
   return (
     <div className="min-h-screen bg-background font-sans pb-20">
@@ -239,7 +310,12 @@ export function AuditorOverview() {
           <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Trazabilidad total del patrimonio</p>
         </div>
         <div className="flex items-center gap-2">
-          <ExportButtons requests={requests} assets={assets} auditLogs={auditLogs} />
+          <ExportButtons
+            requests={requests}
+            assets={assets}
+            auditLogs={auditLogs}
+            maintenanceLogs={maintenanceLogs}
+          />
           <NotificationCenter />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
@@ -247,6 +323,8 @@ export function AuditorOverview() {
       </header>
 
       <main className="p-6 space-y-8 max-w-7xl mx-auto">
+
+        {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <KPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
           <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
@@ -254,7 +332,7 @@ export function AuditorOverview() {
           <KPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
         </div>
 
-        {/* 🧠 MÓDULO IA PREDICTIVA */}
+        {/* 🧠 IA PREDICTIVA */}
         <Card className="border-purple-500/30 bg-gradient-to-br from-slate-900 to-purple-900/10 shadow-[0_0_25px_rgba(147,51,234,0.1)]">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h3 className="text-white font-bold flex items-center gap-2">
@@ -275,10 +353,26 @@ export function AuditorOverview() {
 
         <DashboardCharts />
 
-        {/* 📦 ARTÍCULOS PRESTADOS */}
+        {/* 🚨 PRÉSTAMOS VENCIDOS — RANKING POR TIEMPO */}
+        <div>
+          <h3 className="text-white font-bold flex items-center gap-2 mb-4">
+            <Flame className="text-rose-400" size={18} />
+            Préstamos Vencidos
+            {kpis.overdueLoans > 0 && (
+              <span className="ml-1 text-[11px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full">
+                {kpis.overdueLoans}
+              </span>
+            )}
+            <span className="text-slate-500 text-xs font-normal ml-1">— Ordenados por mayor tiempo sin devolver</span>
+          </h3>
+          <OverdueList requests={requests} />
+        </div>
+
+        {/* 📦 ARTÍCULOS ACTUALMENTE PRESTADOS */}
         <div>
           <h3 className="text-white font-bold flex items-center gap-2 mb-4">
             <Package className="text-emerald-400" size={18} /> Artículos Actualmente Prestados
+            <span className="text-slate-500 text-xs font-normal ml-1">— Solo activos (sin vencidos)</span>
           </h3>
           <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto">
             <table className="w-full text-left text-xs text-slate-400 min-w-[600px]">
@@ -286,15 +380,17 @@ export function AuditorOverview() {
                 <tr><th className="p-3">Activo</th><th className="p-3">Usuario</th><th className="p-3">Retorno Esp.</th><th className="p-3">Estado</th></tr>
               </thead>
               <tbody className="divide-y divide-slate-800/50">
-                {activeLoansList.map(r => (
+                {activeLoansList.filter(r => r.status === 'ACTIVE').map(r => (
                   <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
                     <td className="p-3 font-medium text-white">{r.assets?.name || `Activo #${r.asset_id}`}</td>
                     <td className="p-3">{r.requester_name}</td>
                     <td className="p-3 font-mono">{r.expected_return_date ? format(new Date(r.expected_return_date), 'dd/MM/yy') : '—'}</td>
-                    <td className="p-3"><span className={`px-2 py-0.5 rounded text-[10px] font-bold ${r.status === 'OVERDUE' ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>{r.status}</span></td>
+                    <td className="p-3"><span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span></td>
                   </tr>
                 ))}
-                {activeLoansList.length === 0 && <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>}
+                {activeLoansList.filter(r => r.status === 'ACTIVE').length === 0 && (
+                  <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>
+                )}
               </tbody>
             </table>
           </div>
@@ -359,7 +455,7 @@ export function AuditorOverview() {
                         {log.details || '—'}
                       </td>
                     </tr>
-                  )
+                  );
                 })}
                 {filteredLogs.length === 0 && (
                   <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay registros con ese filtro</td></tr>

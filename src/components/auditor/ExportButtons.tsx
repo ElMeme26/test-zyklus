@@ -1,28 +1,40 @@
 // src/components/auditor/ExportButtons.tsx
 import React, { useState } from 'react';
 import { Button } from '../ui/core';
-import { Download, FileText, FileSpreadsheet, Loader2, ChevronDown } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, Loader2, ChevronDown, Users, Wrench } from 'lucide-react';
 import { 
   exportRequestsToCSV, 
   exportRequestsToPDF, 
   exportRequestsToExcel,
   exportInventoryToPDF,
-  exportAuditLogsToExcel 
+  exportAuditLogsToExcel,
+  exportRequestsByUser,
+  exportMaintenanceReport,
 } from '../../lib/exportUtils';
-import type { Request, Asset, AuditLog } from '../../types';
+import type { Request, Asset, AuditLog, MaintenanceLog } from '../../types';
 import { toast } from 'sonner';
 
 interface ExportButtonsProps {
   requests: Request[];
   assets: Asset[];
   auditLogs: AuditLog[];
+  maintenanceLogs?: MaintenanceLog[];
 }
 
-export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProps) {
+export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [] }: ExportButtonsProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  const handleExport = async (type: 'requests_csv' | 'requests_pdf' | 'requests_excel' | 'inventory_pdf' | 'audit_excel') => {
+  type ExportType =
+    | 'requests_csv'
+    | 'requests_pdf'
+    | 'requests_excel'
+    | 'inventory_pdf'
+    | 'audit_excel'
+    | 'by_user_excel'
+    | 'maintenance_excel';
+
+  const handleExport = async (type: ExportType) => {
     setIsExporting(true);
     try {
       switch (type) {
@@ -46,6 +58,14 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
           exportAuditLogsToExcel(auditLogs);
           toast.success('✅ Audit Trail exportado');
           break;
+        case 'by_user_excel':
+          exportRequestsByUser(requests);
+          toast.success('✅ Reporte por usuario generado');
+          break;
+        case 'maintenance_excel':
+          exportMaintenanceReport(maintenanceLogs, assets);
+          toast.success('✅ Reporte de mantenimiento generado');
+          break;
       }
     } catch (error) {
       console.error('Export error:', error);
@@ -58,7 +78,6 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
 
   return (
     <div className="relative">
-      {/* ✨ MEJORA: Contraste forzado para modo claro en el botón principal */}
       <Button 
         variant="outline" 
         size="sm" 
@@ -77,11 +96,8 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
 
       {isOpen && (
         <>
-          <div 
-            className="fixed inset-0 z-40" 
-            onClick={() => setIsOpen(false)}
-          />
-          <div className="absolute right-0 top-full mt-2 w-64 z-50 animate-in fade-in slide-in-from-top-2">
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          <div className="absolute right-0 top-full mt-2 w-72 z-50 animate-in fade-in slide-in-from-top-2">
             <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
               <div className="px-3 py-2 border-b border-slate-800">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
@@ -90,6 +106,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
               </div>
               
               <div className="p-2 space-y-1">
+
                 {/* Solicitudes */}
                 <div className="px-2 py-1">
                   <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">Solicitudes</p>
@@ -130,8 +147,40 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                   </div>
                 </button>
 
+                {/* Por Usuario / Centro de Costo */}
+                <div className="px-2 py-1 mt-2 border-t border-slate-800/50 pt-2">
+                  <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">Por Usuario / Centro de Costo</p>
+                </div>
+                <button
+                  onClick={() => handleExport('by_user_excel')}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-3 text-sm text-slate-300"
+                  disabled={isExporting}
+                >
+                  <Users size={16} className="text-blue-400" />
+                  <div>
+                    <p className="font-medium text-white">Préstamos por Usuario</p>
+                    <p className="text-[10px] text-slate-500">Resumen + detalle + disciplinas</p>
+                  </div>
+                </button>
+
+                {/* Mantenimiento */}
+                <div className="px-2 py-1 mt-2 border-t border-slate-800/50 pt-2">
+                  <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">Incidencias y Mantenimiento</p>
+                </div>
+                <button
+                  onClick={() => handleExport('maintenance_excel')}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-3 text-sm text-slate-300"
+                  disabled={isExporting}
+                >
+                  <Wrench size={16} className="text-amber-400" />
+                  <div>
+                    <p className="font-medium text-white">Reporte de Mantenimiento</p>
+                    <p className="text-[10px] text-slate-500">Incidencias + ranking + alertas</p>
+                  </div>
+                </button>
+
                 {/* Inventario */}
-                <div className="px-2 py-1 mt-2">
+                <div className="px-2 py-1 mt-2 border-t border-slate-800/50 pt-2">
                   <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">Inventario</p>
                 </div>
                 <button
@@ -147,7 +196,7 @@ export function ExportButtons({ requests, assets, auditLogs }: ExportButtonsProp
                 </button>
 
                 {/* Audit Trail */}
-                <div className="px-2 py-1 mt-2">
+                <div className="px-2 py-1 mt-2 border-t border-slate-800/50 pt-2">
                   <p className="text-[9px] text-slate-600 uppercase font-bold mb-1">Trazabilidad</p>
                 </div>
                 <button
