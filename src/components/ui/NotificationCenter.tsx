@@ -137,14 +137,16 @@ export function NotificationCenter() {
 
           <div className={`
             fixed z-50 bg-slate-950 border border-slate-800 shadow-2xl
-            /* Mobile: full bottom sheet */
-            bottom-0 left-0 right-0 rounded-t-3xl max-h-[80vh]
+            /* Mobile: full bottom sheet - mejor posicionamiento */
+            bottom-0 left-0 right-0 rounded-t-3xl max-h-[85vh]
             /* Desktop: dropdown anchored to button */
             sm:absolute sm:bottom-auto sm:left-auto sm:right-0 sm:top-12
-            sm:w-96 sm:rounded-2xl sm:max-h-[75vh] sm:fixed-none
+            sm:w-96 sm:rounded-2xl sm:max-h-[75vh]
             flex flex-col
             animate-in slide-in-from-bottom-4 sm:slide-in-from-top-2
             duration-200
+            /* Asegurar que no se corte en móvil */
+            mx-0 sm:mx-auto
           `}>
             {/* Handle bar — mobile only */}
             <div className="flex justify-center pt-3 pb-1 sm:hidden">

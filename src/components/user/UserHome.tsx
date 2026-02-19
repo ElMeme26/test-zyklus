@@ -524,51 +524,51 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               </div>
 
               {view === 'activos' && (
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Search */}
-                  <div className="relative flex-1">
-                    <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
-                    <Input
-                      placeholder="¿Qué activo necesitas hoy?"
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
-                    />
+                <>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    {/* Search */}
+                    <div className="relative flex-1">
+                      <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
+                      <Input
+                        placeholder="¿Qué activo necesitas hoy?"
+                        value={search}
+                        onChange={e => setSearch(e.target.value)}
+                        className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
+                      />
+                    </div>
+
+                    {/* Display mode toggle */}
+                    <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 self-center">
+                      <button
+                        onClick={() => setDisplayMode('grid')}
+                        className={`p-2 rounded-lg transition-all ${displayMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
+                        title="Vista en cuadrícula"
+                      >
+                        <LayoutGrid size={16} />
+                      </button>
+                      <button
+                        onClick={() => setDisplayMode('list')}
+                        className={`p-2 rounded-lg transition-all ${displayMode === 'list' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
+                        title="Vista en lista"
+                      >
+                        <List size={16} />
+                      </button>
+                    </div>
                   </div>
 
-                  {/* Display mode toggle */}
-                  <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 self-center">
-                    <button
-                      onClick={() => setDisplayMode('grid')}
-                      className={`p-2 rounded-lg transition-all ${displayMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
-                      title="Vista en cuadrícula"
-                    >
-                      <LayoutGrid size={16} />
-                    </button>
-                    <button
-                      onClick={() => setDisplayMode('list')}
-                      className={`p-2 rounded-lg transition-all ${displayMode === 'list' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
-                      title="Vista en lista"
-                    >
-                      <List size={16} />
-                    </button>
+                  {/* Category filters - junto al buscador como administrador */}
+                  <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
+                    {categories.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setCatFilter(String(cat))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
                   </div>
-                </div>
-              )}
-
-              {/* Category filters (only for assets) */}
-              {view === 'activos' && (
-                <div className="flex gap-2 flex-wrap overflow-x-auto pb-1">
-                  {categories.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setCatFilter(String(cat))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
-                </div>
+                </>
               )}
             </div>
 

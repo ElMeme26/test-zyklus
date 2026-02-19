@@ -208,25 +208,38 @@ export function GuardScanner() {
     setStep('verifying');
     setRawQR(code);
 
-    const result = await processGuardScan(code, mode);
+    try {
+      const result = await processGuardScan(code, mode);
 
-    if (!result.success && !result.comboState) {
-      toast.error(result.message);
-      setStep('idle');
-      return;
-    }
-
-    if (mode === 'CHECKOUT') {
-      setVerifiedData(result.data as Record<string, unknown>[]);
-      setStep('verifying');
-    } else {
-      if (result.comboState) {
-        setComboState(result.comboState);
-        setStep('combo_checkin');
-        toast.success('Primer activo del combo escaneado ✓');
-      } else {
-        setStep('damage_check');
+      if (!result.success && !result.comboState) {
+        toast.error(result.message || 'Error al procesar el QR');
+        setStep('idle');
+        return;
       }
+
+      if (mode === 'CHECKOUT') {
+        // Verificar que hay datos antes de continuar
+        if (result.data && Array.isArray(result.data) && result.data.length > 0) {
+          setVerifiedData(result.data as Record<string, unknown>[]);
+          setStep('verifying');
+        } else {
+          toast.error('No se encontraron solicitudes aprobadas para este QR');
+          setStep('idle');
+        }
+      } else {
+        // CHECKIN mode
+        if (result.comboState) {
+          setComboState(result.comboState);
+          setStep('combo_checkin');
+          toast.success('Primer activo del combo escaneado ✓');
+        } else {
+          setStep('damage_check');
+        }
+      }
+    } catch (error) {
+      console.error('Error procesando QR:', error);
+      toast.error('Error al procesar el código QR');
+      setStep('idle');
     }
   }, [mode, processGuardScan]);
 
