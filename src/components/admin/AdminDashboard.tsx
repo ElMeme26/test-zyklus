@@ -21,8 +21,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
 
 // ─── KPI CARD ────────────────────────────────────────────────────
 function KPICard({ label, value, color, icon, sublabel }: {
@@ -447,6 +446,226 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
   );
 }
 
+
+// ─── BUNDLE MANAGER PANEL ───────────────────────────────────
+function BundleManagerPanel({ onClose }: { onClose: () => void }) {
+  const { bundles, assets } = useData();
+  const [editingBundle, setEditingBundle] = useState<typeof bundles[0] | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editAssetIds, setEditAssetIds] = useState<Set<string>>(new Set());
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleEditOpen = (bundle: typeof bundles[0]) => {
+    setEditingBundle(bundle);
+    setEditName(bundle.name);
+    setEditDesc(bundle.description || '');
+    setEditAssetIds(new Set((bundle.assets || []).map(a => a.id)));
+    setShowEditModal(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editingBundle) return;
+    const { supabase } = await import('../../supabaseClient');
+    const { error: bErr } = await supabase
+      .from('bundles')
+      .update({ name: editName, description: editDesc })
+      .eq('id', editingBundle.id);
+    if (bErr) { toast.error(bErr.message); return; }
+    const currentIds = (editingBundle.assets || []).map(a => a.id);
+    if (currentIds.length > 0) {
+      await supabase.from('assets').update({ bundle_id: null }).in('id', currentIds);
+    }
+    if (editAssetIds.size > 0) {
+      await supabase.from('assets')
+        .update({ bundle_id: editingBundle.id })
+        .in('id', Array.from(editAssetIds));
+    }
+    toast.success(`Combo "${editName}" actualizado`);
+    setShowEditModal(false);
+    window.location.reload();
+  };
+
+  const handleDelete = async (bundleId: string, bundleName: string) => {
+    const { supabase } = await import('../../supabaseClient');
+    await supabase.from('assets').update({ bundle_id: null }).eq('bundle_id', bundleId);
+    const { error } = await supabase.from('bundles').delete().eq('id', bundleId);
+    if (error) { toast.error(error.message); return; }
+    toast.success(`Combo "${bundleName}" eliminado`);
+    setDeletingId(null);
+    window.location.reload();
+  };
+
+  const toggleAsset = (assetId: string) => {
+    const n = new Set(editAssetIds);
+    n.has(assetId) ? n.delete(assetId) : n.add(assetId);
+    setEditAssetIds(n);
+  };
+
+  const editingBundleAssetIds = new Set((editingBundle?.assets || []).map(a => a.id));
+  const availableForEdit = assets.filter(a => !a.bundle_id || editingBundleAssetIds.has(a.id));
+
+  return (
+    <>
+      {/* Edit Modal */}
+      {showEditModal && editingBundle && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-lg border-primary/30 max-h-[85vh] flex flex-col p-0 overflow-hidden">
+            <div className="flex justify-between items-center p-5 border-b border-slate-800">
+              <h3 className="text-white font-bold text-lg">Editar Combo</h3>
+              <button onClick={() => setShowEditModal(false)}><X size={18} className="text-slate-400" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-5 space-y-4">
+              <div className="space-y-3">
+                <Input placeholder="Nombre del combo *" value={editName} onChange={e => setEditName(e.target.value)} />
+                <Input placeholder="Descripción breve" value={editDesc} onChange={e => setEditDesc(e.target.value)} />
+              </div>
+              <div>
+                <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  Activos del Combo ({editAssetIds.size})
+                </p>
+                <div className="space-y-1.5 max-h-52 overflow-y-auto border border-slate-800 rounded-xl p-2">
+                  {availableForEdit.map(a => (
+                    <button
+                      key={a.id}
+                      onClick={() => toggleAsset(a.id)}
+                      className={`w-full flex items-center gap-3 p-2 rounded-lg text-left transition-all ${
+                        editAssetIds.has(a.id)
+                          ? 'bg-primary/10 border border-primary/30'
+                          : 'hover:bg-slate-800/50 border border-transparent'
+                      }`}
+                    >
+                      {editAssetIds.has(a.id)
+                        ? <CheckSquare size={14} className="text-primary flex-shrink-0" />
+                        : <Square size={14} className="text-slate-600 flex-shrink-0" />}
+                      <span className="text-sm text-white">{a.name}</span>
+                      <span className="text-xs text-slate-500 font-mono ml-auto">{a.tag}</span>
+                    </button>
+                  ))}
+                  {availableForEdit.length === 0 && (
+                    <p className="text-xs text-slate-500 text-center py-4">No hay activos disponibles</p>
+                  )}
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 p-5 border-t border-slate-800">
+              <Button variant="secondary" className="flex-1" onClick={() => setShowEditModal(false)}>Cancelar</Button>
+              <Button variant="neon" className="flex-1" disabled={!editName.trim()} onClick={handleSaveEdit}>
+                Guardar Cambios
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Delete Confirm */}
+      {deletingId && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+          <Card className="w-full max-w-sm border-rose-500/30">
+            <h3 className="text-white font-bold mb-2">¿Eliminar Combo?</h3>
+            <p className="text-slate-400 text-sm mb-4">
+              Los activos serán desvinculados pero no eliminados del inventario.
+            </p>
+            <div className="flex gap-3">
+              <Button variant="secondary" className="flex-1" onClick={() => setDeletingId(null)}>Cancelar</Button>
+              <Button
+                className="flex-1 bg-rose-600 hover:bg-rose-500 text-white border-0"
+                onClick={() => {
+                  const b = bundles.find(x => x.id === deletingId);
+                  if (b) handleDelete(b.id, b.name);
+                }}
+              >
+                Eliminar
+              </Button>
+            </div>
+          </Card>
+        </div>
+      )}
+
+      {/* Main Panel */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+        <Card className="w-full max-w-2xl border-primary/30 max-h-[85vh] flex flex-col p-0 overflow-hidden">
+          <div className="flex justify-between items-center p-5 border-b border-slate-800">
+            <div>
+              <h2 className="text-white font-bold text-xl flex items-center gap-2">
+                <Package size={20} className="text-primary" /> Gestión de Combos (Kits)
+              </h2>
+              <p className="text-slate-500 text-xs mt-0.5">{bundles.length} combos registrados</p>
+            </div>
+            <button onClick={onClose}><X size={20} className="text-slate-400 hover:text-white" /></button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-3">
+            {bundles.length === 0 ? (
+              <div className="text-center py-16 border border-dashed border-slate-800 rounded-xl">
+                <Package size={40} className="mx-auto mb-3 text-slate-700" />
+                <p className="text-slate-500">No hay combos creados aún.</p>
+                <p className="text-xs text-slate-600 mt-1">
+                  Selecciona activos en el inventario y usa "Crear" para hacer un combo.
+                </p>
+              </div>
+            ) : (
+              bundles.map(bundle => (
+                <div
+                  key={bundle.id}
+                  className="bg-slate-900/50 border border-slate-800 rounded-xl p-4 hover:border-slate-700 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <h3 className="text-white font-bold">{bundle.name}</h3>
+                        <span className="text-[10px] text-primary bg-primary/10 border border-primary/20 px-2 py-0.5 rounded-full font-bold">
+                          {(bundle.assets || []).length} activos
+                        </span>
+                      </div>
+                      {bundle.description && (
+                        <p className="text-slate-500 text-xs mb-2">{bundle.description}</p>
+                      )}
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {(bundle.assets || []).slice(0, 4).map(a => (
+                          <span key={a.id} className="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded border border-slate-700">
+                            {a.name}
+                          </span>
+                        ))}
+                        {(bundle.assets || []).length > 4 && (
+                          <span className="text-[10px] text-slate-600 flex items-center">
+                            +{(bundle.assets || []).length - 4} más
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <button
+                        onClick={() => handleEditOpen(bundle)}
+                        className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-amber-400 hover:border-amber-500/40 transition-all"
+                        title="Editar combo"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(bundle.id)}
+                        className="p-2 rounded-lg border border-slate-700 text-slate-400 hover:text-rose-400 hover:border-rose-500/40 transition-all"
+                        title="Eliminar combo"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="p-4 border-t border-slate-800">
+            <Button variant="secondary" className="w-full" onClick={onClose}>Cerrar</Button>
+          </div>
+        </Card>
+      </div>
+    </>
+  );
+}
+
 // ─── INVENTORY VIEW ──────────────────────────────────────────
 function InventoryView({ onPrintSelected, onPrintSingle }: {
   onPrintSelected: (ids: Set<string>) => void;
@@ -463,6 +682,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
   const [showBundleModal, setShowBundleModal] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [bundleDesc, setBundleDesc] = useState('');
+  const [showBundleManager, setShowBundleManager] = useState(false);
 
   const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
 
@@ -499,7 +719,11 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
 
   return (
     <div className="animate-in fade-in">
+      {/* Bundle Manager Panel */}
+      {showBundleManager && <BundleManagerPanel onClose={() => setShowBundleManager(false)} />}
+
       <div className="flex flex-col gap-4 mb-6">
+        {/* Header row: título + acciones */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80 shadow-lg gap-4">
           <div>
             <h3 className="text-white font-bold text-lg">Gestión de Inventario</h3>
@@ -524,22 +748,43 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[250px]">
+        <div className="flex items-center gap-2">
+          {/* Barra de búsqueda */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
-            <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800" />
+            <Input
+              placeholder="Buscar activo por nombre o tag..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="pl-9 h-11 bg-slate-900 border-slate-800"
+            />
           </div>
-          <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
-            {categories.map(cat => (
-              <button
-                key={cat}
-                onClick={() => setCatFilter(String(cat))}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-              >
-                {cat}
-              </button>
-            ))}
-          </div>
+
+          {/* ── BOTÓN COMBOS — lado derecho de la búsqueda ── */}
+          <button
+            onClick={() => setShowBundleManager(true)}
+            className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-all border bg-slate-900 text-slate-300 border-slate-700 hover:border-primary/60 hover:text-primary hover:bg-primary/5 active:scale-95"
+          >
+            <Package size={15} />
+            <span className="hidden xs:inline">Combos</span>
+          </button>
+        </div>
+
+        {/* Filtros de categoría (fila separada) */}
+        <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCatFilter(String(cat))}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                catFilter === cat
+                  ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -717,20 +962,20 @@ export function AdminDashboard() {
   );
 
   const generatePredictiveReport = async () => {
-    if (!GEMINI_API_KEY) { toast.error('Falta API Key de Gemini en entorno'); return; }
     setIsGenerating(true);
     try {
-      const topItems = requests.slice(0, 50).map(r => r.assets?.name).filter(Boolean).join(', ');
-      const prompt = `Eres Zykla AI, experto en control patrimonial. Analiza el historial reciente de activos prestados: [${topItems}]. Genera un reporte predictivo de 1 párrafo profesional indicando la demanda y sugiriendo qué tipo de activos se deben adquirir con mayor prioridad. Hazlo ver analítico y preséntalo directo al administrador.`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
-      });
-      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-      setAiReport(data.candidates[0].content.parts[0].text);
+      const assetNames = requests
+        .filter(r => r.assets?.name)
+        .map(r => r.assets!.name as string);
+      const report = await generateReport(assetNames, 'administrador');
+      setAiReport(report);
       toast.success('Reporte generado exitosamente');
-    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error(`Error Zykla AI: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCameraScan = async (detectedCodes: { rawValue?: string }[]) => {

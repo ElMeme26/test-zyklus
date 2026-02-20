@@ -178,4 +178,12 @@
   html.light .divide-slate-800\/50 > * + * {
     border-color: rgba(0,0,0,0.08) !important;
   }
+
+   html.light .text-slate-200 {
+    color: #0f172a !important;
+  }
+
+  html.light .text-slate-500.italic {
+    color: #334155 !important;
+  }
 }
