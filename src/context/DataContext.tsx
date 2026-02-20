@@ -260,11 +260,13 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const checkOverdue = async (reqs: Request[]) => {
     const now = new Date();
     for (const req of reqs) {
-      if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
+      if (!req.expected_return_date || (req.status !== 'ACTIVE' && req.status !== 'OVERDUE')) continue;
+      
       const ret = new Date(req.expected_return_date);
       const daysLate = differenceInDays(now, ret);
       const hoursLeft = differenceInHours(ret, now);
-
+  
+      // ─── RECORDATORIOS PREVENTIVOS (48h y 24h) ───
       if (hoursLeft <= 48 && hoursLeft > 24 && req.user_id) {
         const { data: e } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '📅 Recordatorio — 48h').maybeSingle();
         if (!e) await createNotif(req.user_id, '📅 Recordatorio — 48h', 'Tu préstamo vence en 2 días.', 'WARNING', req.id);
@@ -273,25 +275,43 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const { data: e } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '⏰ Recordatorio — 24h').maybeSingle();
         if (!e) await createNotif(req.user_id, '⏰ Recordatorio — 24h', 'Tu préstamo vence mañana.', 'WARNING', req.id);
       }
+  
+      // ─── ESCALACIONES POR INCUMPLIMIENTO (Días 1, 3 y 7) ───
       if (daysLate >= 1) {
-        await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
-        if (daysLate === 1 && req.user_id) {
-          // Notif para el usuario
-          await createNotif(req.user_id, '⚠️ Préstamo Vencido', `"${req.assets?.name}" venció. Devuélvelo hoy.`, 'ALERT', req.id);
-          // Notif para el líder
-          if (req.users?.manager_id) await createNotif(req.users.manager_id, '⚠️ Equipo — Vencido', `${req.requester_name}: "${req.assets?.name}" vencido.`, 'WARNING', req.id);
-          // Notif para admins
-          await notifyByRole('ADMIN_PATRIMONIAL', '⚠️ Préstamo Vencido', `${req.requester_name}: "${req.assets?.name}".`, 'WARNING', req.id);
-          // Notif para auditores — solo vencidos, con detalle completo
-          await notifyAuditorOverdue(req);
+        // Marcar como vencido en la base de datos si aún no lo está
+        if (req.status === 'ACTIVE') {
+          await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id);
         }
+  
+        // Escalación DÍA 1
+        if (daysLate === 1 && req.user_id) {
+          const { data: e1 } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '⚠️ Préstamo Vencido').maybeSingle();
+          if (!e1) {
+            await createNotif(req.user_id, '⚠️ Préstamo Vencido', `"${req.assets?.name}" venció. Devuélvelo hoy.`, 'ALERT', req.id);
+            if (req.users?.manager_id) await createNotif(req.users.manager_id, '⚠️ Equipo — Vencido', `${req.requester_name}: "${req.assets?.name}" vencido.`, 'WARNING', req.id);
+            await notifyByRole('ADMIN_PATRIMONIAL', '⚠️ Préstamo Vencido', `${req.requester_name}: "${req.assets?.name}".`, 'WARNING', req.id);
+            await notifyAuditorOverdue(req);
+          }
+        }
+  
+        // Escalación DÍA 3
         if (daysLate >= 3 && req.user_id) {
           const { data: e3 } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '🚨 Incumplimiento — 3 días').maybeSingle();
           if (!e3) {
             await createNotif(req.user_id, '🚨 Incumplimiento — 3 días', 'Acción inmediata requerida.', 'CRITICAL', req.id);
             if (req.users?.manager_id) await createNotif(req.users.manager_id, '🚨 Incumplimiento en Equipo', `${req.requester_name}: 3 días de retraso.`, 'CRITICAL', req.id);
             await notifyByRole('ADMIN_PATRIMONIAL', '🚨 Incumplimiento 3d', `${req.requester_name}: "${req.assets?.name}".`, 'CRITICAL', req.id);
-            // Auditores también reciben escalada de 3 días
+            await notifyAuditorOverdue(req);
+          }
+        }
+  
+        if (daysLate >= 7 && req.user_id) {
+          const { data: e7 } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '🛑 Incumplimiento Crítico — 7 días').maybeSingle();
+          if (!e7) {
+            await createNotif(req.user_id, '🛑 Incumplimiento Crítico — 7 días', 'Reporte de extravío/robo iniciado.', 'CRITICAL', req.id);
+            if (req.users?.manager_id) await createNotif(req.users.manager_id, '🛑 ALERTA — 7 días de retraso', `${req.requester_name} tiene un activo retenido por una semana.`, 'CRITICAL', req.id);
+            await notifyByRole('ADMIN_PATRIMONIAL', '🛑 Reporte Crítico 7d', `${req.requester_name}: "${req.assets?.name}" sin retorno tras una semana.`, 'CRITICAL', req.id);
+            // Escalación final a Auditoría
             await notifyAuditorOverdue(req);
           }
         }
