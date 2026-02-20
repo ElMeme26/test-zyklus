@@ -112,7 +112,6 @@ const firePush = (title: string, body: string) => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.ready
         .then(reg => {
-          // Cast the options to any or specifically to NotificationOptions extended with vibrate
           const options = { 
             body, 
             icon: '/logo192.png', 
@@ -120,7 +119,6 @@ const firePush = (title: string, body: string) => {
             vibrate: [150, 100, 150], 
             tag: `zyklus-${Date.now()}` 
           } as any; 
-          
           reg.showNotification(title, options);
         })
         .catch(() => { try { new Notification(title, { body, icon: '/logo192.png' }); } catch {} });
@@ -150,6 +148,38 @@ const notifyByRole = async (role: string, title: string, message: string, type =
   if (!data) return;
   for (const u of data as { id: string }[]) {
     await createNotif(u.id, title, message, type, requestId, assetId);
+  }
+};
+
+// ─── NOTIF AUDITOR — solo préstamos vencidos con detalle completo ─────────────────────────
+const notifyAuditorOverdue = async (req: Request) => {
+  const { data: auditors } = await supabase.from('users').select('id').eq('role', 'AUDITOR');
+  if (!auditors) return;
+
+  // Buscar el líder del usuario
+  let leaderName = '—';
+  if (req.users?.manager_id) {
+    const { data: leader } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', req.users.manager_id)
+      .single();
+    if (leader) leaderName = (leader as { name: string }).name;
+  }
+
+  const assetName = req.assets?.name ?? `Activo #${req.asset_id}`;
+  const disciplina = req.requester_disciplina ?? '—';
+  const message = `${req.requester_name} (${disciplina}) — Líder: ${leaderName} — Equipo: "${assetName}"`;
+
+  for (const aud of auditors as { id: string }[]) {
+    await createNotif(
+      aud.id,
+      '🚨 Préstamo Vencido',
+      message,
+      'ALERT',
+      req.id,
+      req.asset_id
+    );
   }
 };
 
@@ -195,15 +225,36 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // ─── REAL-TIME: suscribirse a todos los cambios relevantes ───
   useEffect(() => {
     let mounted = true;
     fetchData();
+
     const ch = supabase.channel('zyklus-rt')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => { if (mounted) fetchData(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => { if (mounted) fetchData(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { if (mounted) fetchData(); })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_logs' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bundles' }, () => {
+        if (mounted) fetchData();
+      })
       .subscribe();
-    return () => { mounted = false; supabase.removeChannel(ch).catch(() => {}); };
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(ch).catch(() => {});
+    };
   }, [fetchData]);
 
   const checkOverdue = async (reqs: Request[]) => {
@@ -225,9 +276,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (daysLate >= 1) {
         await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
         if (daysLate === 1 && req.user_id) {
+          // Notif para el usuario
           await createNotif(req.user_id, '⚠️ Préstamo Vencido', `"${req.assets?.name}" venció. Devuélvelo hoy.`, 'ALERT', req.id);
+          // Notif para el líder
           if (req.users?.manager_id) await createNotif(req.users.manager_id, '⚠️ Equipo — Vencido', `${req.requester_name}: "${req.assets?.name}" vencido.`, 'WARNING', req.id);
+          // Notif para admins
           await notifyByRole('ADMIN_PATRIMONIAL', '⚠️ Préstamo Vencido', `${req.requester_name}: "${req.assets?.name}".`, 'WARNING', req.id);
+          // Notif para auditores — solo vencidos, con detalle completo
+          await notifyAuditorOverdue(req);
         }
         if (daysLate >= 3 && req.user_id) {
           const { data: e3 } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '🚨 Incumplimiento — 3 días').maybeSingle();
@@ -235,6 +291,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await createNotif(req.user_id, '🚨 Incumplimiento — 3 días', 'Acción inmediata requerida.', 'CRITICAL', req.id);
             if (req.users?.manager_id) await createNotif(req.users.manager_id, '🚨 Incumplimiento en Equipo', `${req.requester_name}: 3 días de retraso.`, 'CRITICAL', req.id);
             await notifyByRole('ADMIN_PATRIMONIAL', '🚨 Incumplimiento 3d', `${req.requester_name}: "${req.assets?.name}".`, 'CRITICAL', req.id);
+            // Auditores también reciben escalada de 3 días
+            await notifyAuditorOverdue(req);
           }
         }
       }
@@ -579,7 +637,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       } | undefined;
       if (!req) return { success: false, message: '⚠️ No hay préstamo activo para este activo.' };
 
-      // ── Si es parte de COMBO — iniciar flujo de escaneo múltiple ──
       if (req.bundle_group_id) {
         const { data: allComboReqs } = await supabase.from('requests')
           .select(`*, assets:asset_id(id, name, tag)`)
@@ -588,7 +645,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const allReqs = (allComboReqs || []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
 
-        // Si solo hay 1 activo en el combo (caso edge) — checkin directo
         if (allReqs.length === 1) {
           return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
         }
@@ -610,7 +666,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      // ── Activo individual ──
       return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
     } catch (err) {
       console.error('processGuardScan:', err);
@@ -618,7 +673,6 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Agrega más activos al combo checkin y devuelve estado actualizado (o confirma si ya están todos)
   const confirmComboCheckin = async (
     state: ComboCheckinState, isDamaged: boolean, damageNotes: string
   ): Promise<{ success: boolean; message: string }> => {

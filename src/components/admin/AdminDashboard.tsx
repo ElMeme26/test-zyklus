@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import type { Asset, AssetState } from '../../types';
@@ -8,7 +8,8 @@ import {
   LogOut, Database, Plus, Search, Edit, Trash2, X,
   Upload, CheckSquare, Square, LayoutGrid, Building2,
   ScanLine, Wrench, Shield, CheckCircle,
-  QrCode, Printer, PieChart, User, Calendar, Tag, Clock
+  QrCode, Printer, PieChart, User, Calendar, Tag, Clock, Package,
+  TrendingUp, AlertCircle, CheckCircle2, ShieldCheck, BrainCircuit, Loader2, Flame
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
@@ -17,8 +18,112 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import { AssetQRPrint } from './AssetQRPrint';
 import { DashboardCharts } from '../auditor/AuditorOverview';
 import { Scanner } from '@yudiel/react-qr-scanner';
-import { format } from 'date-fns';
+import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { toast } from 'sonner';
+
+const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+
+// ─── KPI CARD ────────────────────────────────────────────────────
+function KPICard({ label, value, color, icon, sublabel }: {
+  label: string; value: string | number; color: string; icon: React.ReactNode; sublabel?: string;
+}) {
+  return (
+    <Card className={`border-l-4 ${color}`}>
+      <div className="flex justify-between items-start">
+        <div>
+          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-2">{label}</div>
+          <div className="text-3xl font-black text-white">{value}</div>
+          {sublabel && <div className="text-xs text-slate-500 mt-1">{sublabel}</div>}
+        </div>
+        <div className="opacity-20 text-4xl">{icon}</div>
+      </div>
+    </Card>
+  );
+}
+// test
+// ─── ACTION BADGE ────────────────────────────────────────────────
+const actionBadge: Record<string, { label: string; style: string }> = {
+  CREATE:      { label: 'Alta',          style: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
+  APPROVE:     { label: 'Aprobado',      style: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
+  REJECT:      { label: 'Rechazado',     style: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
+  CHECKOUT:    { label: 'Prestado',      style: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
+  CHECKIN:     { label: 'Devuelto',      style: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
+  MAINTENANCE: { label: 'Mantenimiento', style: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
+  UPDATE:      { label: 'Actualización', style: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
+  ALERT:       { label: 'Alerta',        style: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
+};
+
+// ─── OVERDUE RANKING LIST ────────────────────────────────────────
+function OverdueList({ requests }: { requests: Request[] }) {
+  const now = new Date();
+  const overdueList = requests
+    .filter(r => r.status === 'OVERDUE' && r.expected_return_date)
+    .map(r => ({
+      ...r,
+      daysLate: differenceInDays(now, new Date(r.expected_return_date!)),
+    }))
+    .sort((a, b) => b.daysLate - a.daysLate);
+
+  if (overdueList.length === 0) {
+    return (
+      <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl text-slate-500">
+        <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500/40" />
+        <p className="text-sm">Sin préstamos vencidos 🎉</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto w-full">
+      <table className="w-full text-left text-xs text-slate-400 min-w-[580px]">
+        <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+          <tr>
+            <th className="p-3 w-10">#</th>
+            <th className="p-3">Activo</th>
+            <th className="p-3">Solicitante</th>
+            <th className="p-3">Disciplina</th>
+            <th className="p-3 text-center">Días Vencido</th>
+            <th className="p-3">Debió Retornar</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-slate-800/50">
+          {overdueList.map((r, idx) => {
+            const urgency =
+              r.daysLate >= 7 ? 'text-red-400 bg-red-500/10 border-red-500/20' :
+              r.daysLate >= 3 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
+                                'text-amber-400 bg-amber-500/10 border-amber-500/20';
+
+            return (
+              <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                <td className="p-3 font-black text-slate-600">
+                  {idx === 0 && <Flame size={14} className="text-red-400 inline" />}
+                  {idx > 0 && <span className="text-slate-600 text-[10px]">#{idx + 1}</span>}
+                </td>
+                <td className="p-3 font-medium text-white">
+                  {r.assets?.name ?? `Activo #${r.asset_id}`}
+                  <span className="text-slate-500 text-[10px] font-mono ml-2">{r.assets?.tag}</span>
+                </td>
+                <td className="p-3">{r.requester_name}</td>
+                <td className="p-3 text-slate-500">{r.requester_disciplina ?? '—'}</td>
+                <td className="p-3 text-center">
+                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${urgency}`}>
+                    {r.daysLate}d
+                  </span>
+                </td>
+                <td className="p-3 font-mono text-slate-500">
+                  {r.expected_return_date
+                    ? format(new Date(r.expected_return_date), 'dd/MM/yy', { locale: es })
+                    : '—'}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 
 // ─── ASSET INFO MODAL ────────────────────────────────────────
 function AssetInfoModal({ asset, relatedRequest, onClose }: {
@@ -304,13 +409,20 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
               <div
                 key={log.id}
                 className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl cursor-pointer hover:border-amber-500/30 hover:bg-slate-900 transition-all"
-                onClick={() => setSelectedLog(log)}
               >
                 <div>
                   <p className="text-white text-sm font-medium">{log.assets?.name || `#${log.asset_id}`}</p>
                   <p className="text-slate-500 text-xs">{log.issue_description}</p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => setSelectedLog(log)}
+                    className="text-[11px] border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+                  >
+                    Open
+                  </Button>
                   {log.status === 'OPEN' && (
                     <Button
                       size="sm"
@@ -570,7 +682,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
 // ─── MAIN ADMIN DASHBOARD ────────────────────────────────────
 export function AdminDashboard() {
   const { logout } = useAuth();
-  const { processQRScan, assets } = useData();
+  const { processQRScan, assets, requests, auditLogs } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance'>('inventory');
 
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
@@ -579,6 +691,47 @@ export function AdminDashboard() {
   const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
 
   const maintenanceCount = assets.filter(a => a.maintenance_alert || a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento').length;
+
+  // ─── Estado para Analytics (como auditor) ──────────────────────
+  const [searchLog, setSearchLog] = useState('');
+  const [filterAction, setFilterAction] = useState('ALL');
+  const [aiReport, setAiReport] = useState<string>('');
+  const [isGenerating, setIsGenerating] = useState(false);
+
+  const kpis = useMemo(() => {
+    const total = assets.length;
+    const disponible = assets.filter(a => a.status === 'Disponible').length;
+    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
+    const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
+    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
+
+    return { total, disponible, mantenimiento, disponibilidad, overdueLoans };
+  }, [assets, requests]);
+
+  const filteredLogs = useMemo(() =>
+    auditLogs.filter(l =>
+      l.action !== 'CREATE' && 
+      (filterAction === 'ALL' || l.action === filterAction) &&
+      (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
+    ), [auditLogs, filterAction, searchLog]
+  );
+
+  const generatePredictiveReport = async () => {
+    if (!GEMINI_API_KEY) { toast.error('Falta API Key de Gemini en entorno'); return; }
+    setIsGenerating(true);
+    try {
+      const topItems = requests.slice(0, 50).map(r => r.assets?.name).filter(Boolean).join(', ');
+      const prompt = `Eres Zykla AI, experto en control patrimonial. Analiza el historial reciente de activos prestados: [${topItems}]. Genera un reporte predictivo de 1 párrafo profesional indicando la demanda y sugiriendo qué tipo de activos se deben adquirir con mayor prioridad. Hazlo ver analítico y preséntalo directo al administrador.`;
+      
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
+      });
+      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
+      setAiReport(data.candidates[0].content.parts[0].text);
+      toast.success('Reporte generado exitosamente');
+    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+  };
 
   const handleCameraScan = async (detectedCodes: { rawValue?: string }[]) => {
     const code = detectedCodes?.[0]?.rawValue;
@@ -669,11 +822,150 @@ export function AdminDashboard() {
           />
         )}
         {currentView === 'analytics' && (
-          <div className="animate-in fade-in space-y-6">
-            <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <PieChart className="text-primary" size={20} /> Analíticas del Sistema
-            </h2>
+          <div className="animate-in fade-in space-y-8 max-w-7xl mx-auto">
+            {/* KPIs */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <KPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
+              <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
+              <KPICard label="Vencidos" value={kpis.overdueLoans} color="border-l-rose-500" icon={<AlertCircle />} sublabel="Requieren atención" />
+              <KPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
+            </div>
+
+            {/* 🧠 IA PREDICTIVA */}
+            <Card className="border-purple-500/30 bg-gradient-to-br from-slate-900 to-purple-900/10 shadow-[0_0_25px_rgba(147,51,234,0.1)]">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <BrainCircuit className="text-purple-400" /> Reporte de Tendencias Predictivas (Zykla AI)
+                </h3>
+                <Button onClick={generatePredictiveReport} disabled={isGenerating} className="bg-purple-600 hover:bg-purple-500 text-white border-0 shadow-lg whitespace-nowrap">
+                  {isGenerating ? <><Loader2 size={16} className="animate-spin mr-2"/> Generando Analítica...</> : 'Generar Reporte Zykla'}
+                </Button>
+              </div>
+              {aiReport ? (
+                <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/20">
+                   <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-purple-500 pl-4">{aiReport}</p>
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">Haz clic en el botón para que Zykla analice el historial de la base de datos y sugiera adquisiciones y tendencias.</p>
+              )}
+            </Card>
+
             <DashboardCharts />
+
+            {/* 🚨 PRÉSTAMOS VENCIDOS — RANKING POR TIEMPO */}
+            <div>
+              <h3 className="text-white font-bold flex items-center gap-2 mb-4">
+                <Flame className="text-rose-400" size={18} />
+                Préstamos Vencidos
+                {kpis.overdueLoans > 0 && (
+                  <span className="ml-1 text-[11px] font-black bg-rose-500 text-white px-2 py-0.5 rounded-full">
+                    {kpis.overdueLoans}
+                  </span>
+                )}
+                <span className="text-slate-500 text-xs font-normal ml-1">— Ordenados por mayor tiempo sin devolver</span>
+              </h3>
+              <OverdueList requests={requests} />
+            </div>
+
+            {/* 📦 ARTÍCULOS ACTUALMENTE PRESTADOS */}
+            <div>
+              <h3 className="text-white font-bold flex items-center gap-2 mb-4">
+                <Package className="text-emerald-400" size={18} /> Artículos Actualmente Prestados
+                <span className="text-slate-500 text-xs font-normal ml-1">— Solo activos (sin vencidos)</span>
+              </h3>
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-400 min-w-[600px]">
+                  <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+                    <tr><th className="p-3">Activo</th><th className="p-3">Usuario</th><th className="p-3">Retorno Esp.</th><th className="p-3">Estado</th></tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {requests.filter(r => r.status === 'ACTIVE').map(r => (
+                      <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
+                        <td className="p-3 font-medium text-white">{r.assets?.name ?? `Activo #${r.asset_id}`}</td>
+                        <td className="p-3">{r.requester_name}</td>
+                        <td className="p-3 font-mono">{r.expected_return_date ? format(new Date(r.expected_return_date), 'dd/MM/yy') : '—'}</td>
+                        <td className="p-3"><span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span></td>
+                      </tr>
+                    ))}
+                    {requests.filter(r => r.status === 'ACTIVE').length === 0 && (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* 🛡️ TRAZABILIDAD TOTAL */}
+            <div>
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 mt-8">
+                <h3 className="text-white font-bold flex items-center gap-2">
+                  <ShieldCheck className="text-primary" size={18} /> Trazabilidad Total (Audit Log)
+                </h3>
+                <div className="flex gap-2 w-full md:w-auto">
+                  <div className="relative flex-1 md:w-auto">
+                    <Search size={12} className="absolute left-2.5 top-2.5 text-slate-500" />
+                    <input
+                      value={searchLog}
+                      onChange={e => setSearchLog(e.target.value)}
+                      placeholder="Buscar..."
+                      className="h-9 w-full md:w-44 pl-7 pr-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white placeholder:text-slate-500 focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                  <select
+                    value={filterAction}
+                    onChange={e => setFilterAction(e.target.value)}
+                    className="h-9 px-3 text-xs bg-slate-900 border border-slate-700 rounded-lg text-white focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="ALL">Todo el Historial</option>
+                    <option value="APPROVE">Aprobados</option>
+                    <option value="REJECT">Rechazados</option>
+                    <option value="CHECKOUT">Prestados (Salidas)</option>
+                    <option value="CHECKIN">Devueltos (Entradas)</option>
+                    <option value="MAINTENANCE">Mantenimientos</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto w-full">
+                <table className="w-full text-left text-xs text-slate-400 min-w-[600px]">
+                  <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
+                    <tr>
+                      <th className="p-3 w-32">Timestamp</th>
+                      <th className="p-3 w-28">Estado / Acción</th>
+                      <th className="p-3 w-32">Usuario</th>
+                      <th className="p-3">Detalle</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/50">
+                    {filteredLogs.slice(0, 20).map(log => {
+                      const badge = actionBadge[log.action] ?? { label: log.action, style: 'text-slate-400 bg-slate-700' };
+                      return (
+                        <tr key={log.id} className="hover:bg-slate-800/30 transition-colors">
+                          <td className="p-3 font-mono text-[10px] text-slate-500 whitespace-nowrap align-top">
+                            {format(new Date(log.timestamp), 'dd/MM/yy HH:mm', { locale: es })}
+                          </td>
+                          <td className="p-3 align-top">
+                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold border whitespace-nowrap ${badge.style}`}>
+                              {badge.label}
+                            </span>
+                          </td>
+                          <td className="p-3 text-slate-300 align-top">{log.actor_name ?? log.actor_id}</td>
+                          <td className="p-3 text-slate-400 min-w-[200px] whitespace-normal leading-relaxed break-words align-top">
+                            {log.details ?? '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {filteredLogs.length === 0 && (
+                      <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay registros con ese filtro</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <p className="text-[10px] text-slate-600 mt-2 text-right">
+                Mostrando {Math.min(filteredLogs.length, 20)} de {filteredLogs.length} registros • Log inmutable
+              </p>
+            </div>
           </div>
         )}
         {currentView === 'external' && <InstitutionsManager />}

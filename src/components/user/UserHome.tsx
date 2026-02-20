@@ -633,7 +633,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         {activeTab === 'catalog' ? (
           <>
             <div className="flex flex-col gap-4 mb-6 mt-2 max-w-4xl mx-auto">
-              {/* View type toggle */}
+              {/* View type toggle: Activos / Combos */}
               <div className="flex bg-slate-900 rounded-xl p-1.5 border border-slate-800 shadow-inner w-full sm:max-w-md mx-auto">
                 <button
                   onClick={() => setView('activos')}
@@ -649,10 +649,11 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 </button>
               </div>
 
+              {/* ── Search + display toggle + category filters — all in one row ── */}
               {view === 'activos' && (
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex items-center gap-3 flex-wrap">
                   {/* Search */}
-                  <div className="relative flex-1">
+                  <div className="relative flex-1 min-w-[200px]">
                     <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
                     <Input
                       placeholder="¿Qué activo necesitas hoy?"
@@ -663,7 +664,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   </div>
 
                   {/* Display mode toggle */}
-                  <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 self-center">
+                  <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 flex-shrink-0">
                     <button
                       onClick={() => setDisplayMode('grid')}
                       className={`p-2 rounded-lg transition-all ${displayMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
@@ -679,21 +680,19 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       <List size={16} />
                     </button>
                   </div>
-                </div>
-              )}
 
-              {/* Category filters (only for assets) */}
-              {view === 'activos' && (
-                <div className="flex gap-2 flex-wrap overflow-x-auto pb-1">
-                  {categories.map(cat => (
-                    <button
-                      key={cat}
-                      onClick={() => setCatFilter(String(cat))}
-                      className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_10px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-                    >
-                      {cat}
-                    </button>
-                  ))}
+                  {/* Category filters */}
+                  <div className="flex gap-2 flex-wrap items-center">
+                    {categories.map(cat => (
+                      <button
+                        key={cat}
+                        onClick={() => setCatFilter(String(cat))}
+                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -745,7 +744,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   )}
                 </div>
               ) : (
-                /* LIST / TABLE VIEW — like admin */
+                /* LIST / TABLE VIEW */
                 <AssetCatalogTable
                   assets={filteredAssets}
                   onSelect={(a) => setPreviewAsset(a)}
