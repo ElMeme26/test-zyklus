@@ -1,7 +1,7 @@
 /* public/sw.js — Zyklus Service Worker */
 /* Maneja notificaciones push nativas en Android/iOS (PWA) */
 
-const CACHE_NAME = 'zyklus-v1';
+const CACHE_NAME = 'zyklus-v2';
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
