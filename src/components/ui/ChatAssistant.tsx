@@ -30,38 +30,61 @@ interface Message {
 // ─── COLORES ──────────────────────────────────────────────────
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6'];
 
-// ─── EXTRACTOR DE GRAPH_DATA (robusto) ────────────────────────
+// ─── EXTRACTOR DE GRAPH_DATA (robusto con conteo de llaves) ──────────────────
+// El regex {.*?} falla con JSON anidado porque para en el primer "}"
+// Esta versión busca "[GRAPH_DATA:" y extrae el JSON contando llaves
 function extractGraph(text: string): { clean: string; graph?: GraphData } {
-  // Acepta [GRAPH_DATA:{...}] con o sin espacios, con o sin bloques markdown
-  const patterns = [
-    /\[GRAPH_DATA:\s*(\{[\s\S]*?\})\s*\]/,
-    /```json\s*\[GRAPH_DATA:\s*(\{[\s\S]*?\})\s*\]\s*```/,
-    /```\s*\[GRAPH_DATA:\s*(\{[\s\S]*?\})\s*\]\s*```/,
-  ];
+  // 1. Limpiar wrappers de markdown que Gemini a veces añade
+  const cleaned = text
+    .replace(/```json\s*/g, '')
+    .replace(/```\s*/g, '');
 
-  for (const pattern of patterns) {
-    const match = text.match(pattern);
-    if (match) {
-      try {
-        const raw = JSON.parse(match[1]);
-        // Normalizar: acepta {data:[]} o {type:'bar', data:[]}
-        const graph: GraphData = {
-          type: raw.type || 'bar',
-          title: raw.title || '',
-          data: Array.isArray(raw.data) ? raw.data : [],
-        };
-        if (graph.data.length === 0) break;
-        const clean = text
-          .replace(match[0], '')
-          .replace(/```json|```/g, '')
-          .trim();
-        return { clean, graph };
-      } catch {
-        // sigue intentando otros patrones
-      }
+  const marker = '[GRAPH_DATA:';
+  const markerIdx = cleaned.indexOf(marker);
+  if (markerIdx === -1) return { clean: cleaned.trim() };
+
+  // 2. Encontrar el inicio del JSON (primer '{' después del marker)
+  const jsonStart = cleaned.indexOf('{', markerIdx + marker.length);
+  if (jsonStart === -1) return { clean: cleaned.trim() };
+
+  // 3. Contar llaves para encontrar el cierre correcto del objeto JSON
+  let depth = 0;
+  let jsonEnd = -1;
+  for (let i = jsonStart; i < cleaned.length; i++) {
+    if (cleaned[i] === '{') depth++;
+    else if (cleaned[i] === '}') {
+      depth--;
+      if (depth === 0) { jsonEnd = i; break; }
     }
   }
-  return { clean: text.replace(/```json|```/g, '').trim() };
+  if (jsonEnd === -1) return { clean: cleaned.trim() };
+
+  const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
+
+  // 4. Calcular el bloque completo "[GRAPH_DATA: {...}]" para removerlo del texto
+  const closingBracket = cleaned.indexOf(']', jsonEnd);
+  const blockEnd = closingBracket !== -1 ? closingBracket + 1 : jsonEnd + 1;
+  const fullBlock = cleaned.slice(markerIdx, blockEnd);
+  const cleanText = cleaned.replace(fullBlock, '').trim();
+
+  // 5. Parsear y validar el JSON
+  try {
+    const raw = JSON.parse(jsonStr) as {
+      type?: string;
+      title?: string;
+      data?: Array<{ name: string; value: number }>;
+    };
+    const graph: GraphData = {
+      type: (raw.type as GraphData['type']) || 'bar',
+      title: raw.title || '',
+      data: Array.isArray(raw.data) ? raw.data : [],
+    };
+    if (graph.data.length === 0) return { clean: cleanText };
+    return { clean: cleanText, graph };
+  } catch (e) {
+    console.warn('[Zykla] GRAPH_DATA parse error:', e, '\nJSON extraído:', jsonStr);
+    return { clean: cleanText };
+  }
 }
 
 // ─── COMPONENTE GRÁFICA ───────────────────────────────────────
