@@ -703,7 +703,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reqs: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string } }>,
     isDamaged: boolean, damageNotes: string
   ): Promise<{ success: boolean; message: string }> => {
-    const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
+    const newAssetStatus = isDamaged ? 'Requiere Mantenimiento' : 'Disponible';
     const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
 
     for (const r of reqs) {

@@ -16,6 +16,7 @@ import { es } from 'date-fns/locale';
 import type { Request, Asset } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { toast } from 'sonner';
+import { RefreshButton } from '../ui/RefreshButton';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -591,6 +592,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   )}
                 </button>
               )}
+              <RefreshButton />
               <NotificationCenter />
               <ThemeToggle />
               <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
@@ -625,6 +627,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 )}
               </button>
             )}
+            <RefreshButton />   
             <Button variant="outline" onClick={onBack}>Cancelar</Button>
           </div>
         </header>

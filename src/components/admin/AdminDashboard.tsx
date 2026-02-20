@@ -21,6 +21,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
+import { RefreshButton } from '../ui/RefreshButton';
 import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
 
 // ─── KPI CARD ────────────────────────────────────────────────────
@@ -1052,6 +1053,7 @@ export function AdminDashboard() {
           <Button variant="outline" size="sm" onClick={() => setUseCamera(true)} className="border-primary/30 text-primary hover:bg-primary/10 text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
+          <RefreshButton />
           <NotificationCenter />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>

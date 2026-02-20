@@ -6,7 +6,7 @@ import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
   CheckCircle2, Loader2, Scan, RefreshCcw,
-  ChevronRight, QrCode, User as UserIcon
+  ChevronRight, QrCode, User as UserIcon, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsQR from 'jsqr';
@@ -21,7 +21,7 @@ type Step =
   | 'idle'
   | 'scanning'
   | 'verifying'
-  | 'asset_verification'  // Nuevo paso para verificar activos físicos en checkout
+  | 'asset_verification'
   | 'signing'
   | 'combo_checkin'
   | 'damage_check'
@@ -33,23 +33,16 @@ function playBeep() {
     const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
     const oscillator = audioContext.createOscillator();
     const gainNode = audioContext.createGain();
-    
     oscillator.connect(gainNode);
     gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = 800; // Frecuencia del pitido (Hz)
+    oscillator.frequency.value = 800;
     oscillator.type = 'sine';
-    
     gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-    
     oscillator.start(audioContext.currentTime);
     oscillator.stop(audioContext.currentTime + 0.1);
-  } catch (error) {
-    // Fallback: usar vibración si el audio no está disponible
-    if (navigator.vibrate) {
-      navigator.vibrate(50);
-    }
+  } catch {
+    if (navigator.vibrate) navigator.vibrate(50);
   }
 }
 
@@ -65,57 +58,41 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
     let active = true;
     hasScanned.current = false;
 
-    // Definimos primero la función de escaneo para evitar errores
-    // de "Temporal Dead Zone" al usarla dentro de startCamera.
     const scan = () => {
       if (!active || hasScanned.current) return;
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas) return;
-
       if (video.readyState < video.HAVE_ENOUGH_DATA) {
         rafRef.current = requestAnimationFrame(scan);
         return;
       }
-
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, {
-        inversionAttempts: 'dontInvert'
-      });
-
+      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
       if (code && code.data) {
         hasScanned.current = true;
-        // Reproducir pitido al escanear
         playBeep();
-        // Detenemos todas las pistas de la cámara
         streamRef.current?.getTracks().forEach(t => t.stop());
         onCode(code.data);
         return;
       }
-
       rafRef.current = requestAnimationFrame(scan);
     };
 
     const startCamera = async () => {
       try {
-        const constraints = {
-          video: {
-            facingMode: { ideal: 'environment' },
-            width: { ideal: 1280 },
-            height: { ideal: 720 }
-          }
-        };
-        const stream = await navigator.mediaDevices.getUserMedia(constraints);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
+        });
         streamRef.current = stream;
         if (videoRef.current && active) {
           videoRef.current.srcObject = stream;
           await videoRef.current.play();
-          // Iniciamos el bucle de escaneo ya con "scan" definido
           rafRef.current = requestAnimationFrame(scan);
         }
       } catch (err) {
@@ -137,56 +114,26 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
     <div className="fixed inset-0 z-50 bg-black flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 bg-black/80">
         <h2 className="text-white font-bold">Escanear QR</h2>
-        <button onClick={onClose} className="text-white p-2 rounded-xl bg-white/10">
-          <X size={20} />
-        </button>
+        <button onClick={onClose} className="text-white p-2 rounded-xl bg-white/10"><X size={20} /></button>
       </div>
-
       <div className="flex-1 relative overflow-hidden">
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          playsInline
-          muted
-          autoPlay
-        />
+        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
         <canvas ref={canvasRef} className="hidden" />
-
-        {/* Viewfinder overlay */}
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          {/* Dark overlay with cutout */}
-          <div className="absolute inset-0 bg-black/50" style={{
-            clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(50% - 110px) calc(50% - 110px), calc(50% - 110px) calc(50% + 110px), calc(50% + 110px) calc(50% + 110px), calc(50% + 110px) calc(50% - 110px), calc(50% - 110px) calc(50% - 110px))'
-          }} />
+          <div className="absolute inset-0 bg-black/50" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(50% - 110px) calc(50% - 110px), calc(50% - 110px) calc(50% + 110px), calc(50% + 110px) calc(50% + 110px), calc(50% + 110px) calc(50% - 110px), calc(50% - 110px) calc(50% - 110px))' }} />
           <div className="relative w-56 h-56">
-            {/* Corner markers */}
             <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-primary rounded-tl-xl" />
             <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-primary rounded-tr-xl" />
             <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-primary rounded-bl-xl" />
             <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-primary rounded-br-xl" />
-            {/* Animated scan line */}
-            <div
-              className="absolute left-2 right-2 h-0.5 bg-primary/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]"
-              style={{
-                animation: 'scanLine 2s linear infinite',
-                top: '0%',
-              }}
-            />
+            <div className="absolute left-2 right-2 h-0.5 bg-primary/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" style={{ animation: 'scanLine 2s linear infinite', top: '0%' }} />
           </div>
         </div>
       </div>
-
       <div className="px-4 py-4 bg-black/80 text-center">
         <p className="text-slate-400 text-xs">Apunta la cámara al código QR del activo o solicitud</p>
       </div>
-
-      <style>{`
-        @keyframes scanLine {
-          0% { transform: translateY(0); }
-          50% { transform: translateY(220px); }
-          100% { transform: translateY(0); }
-        }
-      `}</style>
+      <style>{`@keyframes scanLine { 0% { transform: translateY(0); } 50% { transform: translateY(220px); } 100% { transform: translateY(0); } }`}</style>
     </div>
   );
 }
@@ -194,23 +141,20 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
 function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     APPROVED: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    ACTIVE:   'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-    OVERDUE:  'text-rose-400 bg-rose-500/10 border-rose-500/20',
+    ACTIVE: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
+    OVERDUE: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
   };
-  return (
-    <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${map[status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>
-      {status}
-    </span>
-  );
+  return <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${map[status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>{status}</span>;
 }
 
 export function GuardScanner() {
-  const { processGuardScan, confirmComboCheckin } = useData();
+  const { processGuardScan, confirmComboCheckin, fetchData } = useData();
   const { user, logout } = useAuth();
 
   const [mode, setMode] = useState<ScanMode>('CHECKOUT');
   const [step, setStep] = useState<Step>('idle');
   const [scanning, setScanning] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown>[] | null>(null);
   const [rawQR, setRawQR] = useState('');
@@ -219,10 +163,18 @@ export function GuardScanner() {
   const [comboState, setComboState] = useState<ComboCheckinState | null>(null);
   const [isDamaged, setIsDamaged] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
-  
-  // Estado para verificación de activos en checkout
   const [scannedAssets, setScannedAssets] = useState<Set<string>>(new Set());
   const [expectedAssetIds, setExpectedAssetIds] = useState<string[]>([]);
+
+  // Track last checkin result message for done screen
+  const [doneMessage, setDoneMessage] = useState('');
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await fetchData();
+    setIsRefreshing(false);
+    toast.success('Datos actualizados');
+  };
 
   const reset = useCallback(() => {
     setStep('idle');
@@ -234,6 +186,7 @@ export function GuardScanner() {
     setDamageNotes('');
     setScannedAssets(new Set());
     setExpectedAssetIds([]);
+    setDoneMessage('');
     sigRef.current?.clear();
   }, []);
 
@@ -253,16 +206,14 @@ export function GuardScanner() {
       }
 
       if (mode === 'CHECKOUT') {
-        // Verificar que hay datos antes de continuar
         if (result.data && Array.isArray(result.data) && result.data.length > 0) {
           setVerifiedData(result.data as Record<string, unknown>[]);
-          // Extraer los IDs de activos esperados de la solicitud
           const assetIds = (result.data as Array<{ asset_id?: string }>)
             .map(req => req.asset_id)
             .filter((id): id is string => Boolean(id));
           setExpectedAssetIds(assetIds);
           setScannedAssets(new Set());
-          setStep('asset_verification'); // Ir a verificación de activos físicos
+          setStep('asset_verification');
         } else {
           toast.error('No se encontraron solicitudes aprobadas para este QR');
           setStep('idle');
@@ -274,6 +225,7 @@ export function GuardScanner() {
           setStep('combo_checkin');
           toast.success('Primer activo del combo escaneado ✓');
         } else {
+          // Single asset checkin — go to damage check
           setStep('damage_check');
         }
       }
@@ -287,46 +239,23 @@ export function GuardScanner() {
   // ─── VERIFICAR ACTIVO FÍSICO EN CHECKOUT ────────────────────────
   const handleAssetVerification = useCallback(async (code: string) => {
     setScanning(false);
-    playBeep(); // Pitido al escanear
-    
+    playBeep();
     let parsed: Record<string, unknown>;
-    try { 
-      parsed = JSON.parse(code); 
-    } catch { 
-      toast.error('QR inválido'); 
-      return; 
-    }
+    try { parsed = JSON.parse(code); } catch { toast.error('QR inválido'); return; }
 
     const scannedId = (parsed.id || parsed.asset_id) as string;
-    if (!scannedId) { 
-      toast.error('QR sin ID de activo'); 
-      return; 
-    }
+    if (!scannedId) { toast.error('QR sin ID de activo'); return; }
+    if (!expectedAssetIds.includes(scannedId)) { toast.error('⚠️ Este activo no corresponde a la solicitud'); return; }
+    if (scannedAssets.has(scannedId)) { toast.warning('Este activo ya fue escaneado'); return; }
 
-    // Verificar que el activo escaneado esté en la lista esperada
-    if (!expectedAssetIds.includes(scannedId)) {
-      toast.error('⚠️ Este activo no corresponde a la solicitud');
-      return;
-    }
-
-    // Verificar que no se haya escaneado ya
-    if (scannedAssets.has(scannedId)) {
-      toast.warning('Este activo ya fue escaneado');
-      return;
-    }
-
-    // Agregar a la lista de escaneados
     const newScanned = new Set(scannedAssets);
     newScanned.add(scannedId);
     setScannedAssets(newScanned);
 
-    // Encontrar el nombre del activo para mostrar feedback
     const assetInfo = verifiedData?.find(req => (req as { asset_id?: string }).asset_id === scannedId);
     const assetName = (assetInfo as { assets?: { name?: string } })?.assets?.name || scannedId;
-    
     toast.success(`✓ ${assetName} verificado`);
 
-    // Si todos los activos están escaneados, continuar a firma
     if (newScanned.size === expectedAssetIds.length) {
       toast.success('Todos los activos verificados ✓');
       setStep('signing');
@@ -337,7 +266,7 @@ export function GuardScanner() {
   const handleNextComboScan = useCallback(async (code: string) => {
     if (!comboState) return;
     setScanning(false);
-    playBeep(); // Pitido al escanear
+    playBeep();
 
     let parsed: Record<string, unknown>;
     try { parsed = JSON.parse(code); } catch { toast.error('QR inválido'); return; }
@@ -353,14 +282,11 @@ export function GuardScanner() {
 
     const newScanned = [...comboState.scannedAssetIds, scannedId];
     const newPending = comboState.pendingAssets.filter(a => a.id !== scannedId);
-
     const updatedState: ComboCheckinState = { ...comboState, scannedAssetIds: newScanned, pendingAssets: newPending };
     setComboState(updatedState);
     toast.success(`✓ ${isPending.name} escaneado`);
 
-    if (newPending.length === 0) {
-      setStep('damage_check');
-    }
+    if (newPending.length === 0) setStep('damage_check');
   }, [comboState]);
 
   // ─── CHECKOUT CONFIRM ────────────────────────────────────────
@@ -368,21 +294,32 @@ export function GuardScanner() {
     if (!sigRef.current || sigRef.current.isEmpty()) { toast.error('Firma digital requerida'); return; }
     const sig = sigRef.current.toDataURL();
     const result = await processGuardScan(rawQR, 'CHECKOUT', sig);
-    if (result.success) { toast.success(result.message); setStep('done'); }
-    else toast.error(result.message);
+    if (result.success) {
+      setDoneMessage('Salida confirmada correctamente');
+      toast.success(result.message);
+      setStep('done');
+    } else {
+      toast.error(result.message);
+    }
   };
 
   // ─── CHECKIN CONFIRM ─────────────────────────────────────────
   const handleCheckinConfirm = async () => {
     if (isDamaged && !damageNotes.trim()) { toast.error('Describe el daño'); return; }
+
     let result;
     if (comboState) {
       result = await confirmComboCheckin(comboState, isDamaged, damageNotes);
     } else {
       result = await processGuardScan(rawQR, 'CHECKIN', '', isDamaged, damageNotes);
     }
-    if (result.success) { setStep('done'); }
-    else toast.error(result.message);
+
+    if (result.success) {
+      setDoneMessage(isDamaged ? 'Equipo recibido — enviado a revisión de mantenimiento' : 'Devolución registrada correctamente');
+      setStep('done');
+    } else {
+      toast.error(result.message);
+    }
   };
 
   return (
@@ -411,6 +348,15 @@ export function GuardScanner() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* ── BOTÓN REFRESH ── */}
+            <button
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="p-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all active:scale-90"
+              title="Actualizar datos"
+            >
+              <RefreshCw size={18} className={isRefreshing ? 'animate-spin text-primary' : ''} />
+            </button>
             <NotificationCenter />
             <ThemeToggle />
             <button onClick={logout} className="p-2 text-slate-400 hover:text-rose-400 transition-colors rounded-xl hover:bg-slate-800">
@@ -495,33 +441,20 @@ export function GuardScanner() {
                 Escanea el QR físico de cada activo que se va a retirar para verificar que coincida con la solicitud.
               </p>
 
-              {/* Lista de activos esperados */}
               <div className="space-y-2 max-h-48 overflow-y-auto">
                 {verifiedData.map((req, i) => {
                   const r = req as { asset_id?: string; assets?: { name?: string; tag?: string } };
                   const assetId = r.asset_id || '';
                   const isScanned = scannedAssets.has(assetId);
-                  
                   return (
-                    <div 
-                      key={i} 
-                      className={`flex items-center justify-between py-2 px-3 rounded-lg border ${
-                        isScanned 
-                          ? 'bg-emerald-500/10 border-emerald-500/30' 
-                          : 'bg-slate-900/50 border-slate-800'
-                      }`}
-                    >
+                    <div key={i} className={`flex items-center justify-between py-2 px-3 rounded-lg border ${isScanned ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-slate-900/50 border-slate-800'}`}>
                       <div className="flex-1">
-                        <p className={`text-sm font-bold ${isScanned ? 'text-emerald-300' : 'text-white'}`}>
-                          {r.assets?.name || `Activo #${assetId}`}
-                        </p>
+                        <p className={`text-sm font-bold ${isScanned ? 'text-emerald-300' : 'text-white'}`}>{r.assets?.name || `Activo #${assetId}`}</p>
                         <p className="text-slate-500 text-xs font-mono">{r.assets?.tag}</p>
                       </div>
-                      {isScanned ? (
-                        <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0" />
-                      ) : (
-                        <div className="w-5 h-5 rounded-full border-2 border-dashed border-slate-600 flex-shrink-0" />
-                      )}
+                      {isScanned
+                        ? <CheckCircle2 size={20} className="text-emerald-400 flex-shrink-0" />
+                        : <div className="w-5 h-5 rounded-full border-2 border-dashed border-slate-600 flex-shrink-0" />}
                     </div>
                   );
                 })}
@@ -544,56 +477,6 @@ export function GuardScanner() {
               </button>
             )}
             <button onClick={reset} className="w-full text-xs text-slate-600 py-1">Cancelar</button>
-          </div>
-        )}
-
-        {/* ── CHECKOUT: show info before signing (ya no se usa, pero lo dejo por compatibilidad) */}
-        {step === 'verifying' && verifiedData && mode === 'CHECKOUT' && (
-          <div className="space-y-4">
-            <Card className="border-emerald-500/30">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                  <CheckCircle2 size={20} className="text-emerald-400" />
-                </div>
-                <div>
-                  <h2 className="text-white font-bold">{verifiedData.length > 1 ? `Combo (${verifiedData.length} activos)` : 'Solicitud Verificada'}</h2>
-                  <p className="text-emerald-400 text-xs font-bold">Listo para salida</p>
-                </div>
-              </div>
-
-              <div className="space-y-2 max-h-48 overflow-y-auto">
-                {verifiedData.map((req, i) => {
-                  const r = req as { id: number; requester_name?: string; assets?: { name?: string; tag?: string }; expected_return_date?: string; status?: string };
-                  return (
-                    <div key={i} className="flex items-center justify-between py-2 border-b border-slate-800 last:border-0">
-                      <div>
-                        <p className="text-white text-sm font-bold">{r.assets?.name || `Activo #${r.id}`}</p>
-                        <p className="text-slate-500 text-xs font-mono">{r.assets?.tag}</p>
-                      </div>
-                      <StatusPill status={r.status || 'APPROVED'} />
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-3 pt-3 border-t border-slate-800 flex items-center gap-2 text-slate-400 text-xs">
-                <UserIcon size={12} />
-                <span>{(verifiedData[0] as { requester_name?: string })?.requester_name || 'Solicitante'}</span>
-              </div>
-
-              {verifiedData[0] && (verifiedData[0] as { expected_return_date?: string }).expected_return_date && (
-                <div className="mt-2 text-xs text-slate-500">
-                  Retorno: {format(new Date((verifiedData[0] as { expected_return_date: string }).expected_return_date), "d MMM yyyy", { locale: es })}
-                </div>
-              )}
-            </Card>
-
-            <div className="flex gap-3">
-              <button onClick={reset} className="flex-1 py-3 rounded-xl border border-slate-700 text-slate-400 text-sm font-bold">Cancelar</button>
-              <button onClick={() => setStep('signing')} className="flex-1 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold flex items-center justify-center gap-2">
-                Firmar <ChevronRight size={16} />
-              </button>
-            </div>
           </div>
         )}
 
@@ -688,7 +571,7 @@ export function GuardScanner() {
 
               <div className="grid grid-cols-2 gap-3">
                 <button
-                  onClick={() => setIsDamaged(false)}
+                  onClick={() => { setIsDamaged(false); setDamageNotes(''); }}
                   className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${!isDamaged ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 bg-slate-900/50'}`}
                 >
                   <Check size={28} className={!isDamaged ? 'text-emerald-400' : 'text-slate-600'} />
@@ -728,17 +611,23 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── DONE */}
+        {/* ── DONE ── */}
         {step === 'done' && (
           <div className="text-center py-10 space-y-4">
-            <div className="w-24 h-24 rounded-3xl mx-auto flex items-center justify-center bg-emerald-500/10 border border-emerald-500/20 shadow-[0_0_50px_rgba(16,185,129,0.2)]">
-              <CheckCircle2 size={48} className="text-emerald-400" />
+            <div className={`w-24 h-24 rounded-3xl mx-auto flex items-center justify-center border shadow-lg ${isDamaged ? 'bg-amber-500/10 border-amber-500/20 shadow-amber-500/20' : 'bg-emerald-500/10 border-emerald-500/20 shadow-emerald-500/20'}`}>
+              {isDamaged
+                ? <AlertTriangle size={48} className="text-amber-400" />
+                : <CheckCircle2 size={48} className="text-emerald-400" />}
             </div>
             <div>
               <h2 className="text-white font-black text-2xl">¡Listo!</h2>
-              <p className="text-slate-400 text-sm mt-1">
-                {mode === 'CHECKOUT' ? 'Salida registrada correctamente' : 'Devolución registrada correctamente'}
-              </p>
+              <p className="text-slate-400 text-sm mt-1">{doneMessage || (mode === 'CHECKOUT' ? 'Salida registrada correctamente' : 'Devolución registrada correctamente')}</p>
+              {isDamaged && mode === 'CHECKIN' && (
+                <div className="mt-3 inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2">
+                  <AlertTriangle size={14} className="text-amber-400" />
+                  <span className="text-amber-300 text-xs font-bold">Activo enviado a Requiere Mantenimiento</span>
+                </div>
+              )}
             </div>
             <button
               onClick={reset}

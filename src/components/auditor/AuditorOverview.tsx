@@ -19,6 +19,7 @@ import { es } from 'date-fns/locale';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
 import { toast } from 'sonner';
+import { RefreshButton } from '../ui/RefreshButton';
 import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
 
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
@@ -310,6 +311,7 @@ export function AuditorOverview() {
             auditLogs={auditLogs}
             maintenanceLogs={maintenanceLogs}
           />
+          <RefreshButton />
           <NotificationCenter />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
