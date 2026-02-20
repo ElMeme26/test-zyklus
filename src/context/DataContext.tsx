@@ -4,7 +4,16 @@ import type { Asset, Request, User, Institution, Notification, AuditLog, Mainten
 import { toast } from 'sonner';
 import { differenceInDays, differenceInHours, addDays, format } from 'date-fns';
 
-// ─── CONTEXT INTERFACE ───────────────────────────────────────
+// ─── COMBO CHECKIN STATE ─────────────────────────────────────
+export interface ComboCheckinState {
+  bundleGroupId: string;
+  totalAssets: number;
+  scannedAssetIds: string[];
+  pendingAssets: Array<{ id: string; name: string; tag: string }>;
+  allRequests: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
+}
+
+// ─── CONTEXT INTERFACE ────────────────────────────────────────
 interface DataContextType {
   assets: Asset[];
   requests: Request[];
@@ -12,6 +21,7 @@ interface DataContextType {
   notifications: Notification[];
   maintenanceLogs: MaintenanceLog[];
   bundles: Bundle[];
+  auditLogs: AuditLog[];
   isLoading: boolean;
   unreadCount: number;
 
@@ -28,7 +38,6 @@ interface DataContextType {
   addInstitution: (inst: Partial<Institution>) => Promise<void>;
   deleteInstitution: (id: number) => Promise<void>;
 
-  // FIX: return type ahora es correcto — puede retornar null
   processQRScan: (qrData: string) => Promise<{ asset?: Asset; request?: Request } | null>;
 
   approveRequest: (reqId: number, approverId: string, approverName: string) => Promise<void>;
@@ -50,7 +59,13 @@ interface DataContextType {
     signature?: string,
     isDamaged?: boolean,
     damageNotes?: string
-  ) => Promise<{ success: boolean; message: string; data?: unknown }>;
+  ) => Promise<{ success: boolean; message: string; data?: unknown; comboState?: ComboCheckinState }>;
+
+  confirmComboCheckin: (
+    state: ComboCheckinState,
+    isDamaged: boolean,
+    damageNotes: string
+  ) => Promise<{ success: boolean; message: string }>;
 
   markNotificationRead: (notifId: string) => Promise<void>;
   markAllRead: (userId: string) => Promise<void>;
@@ -58,82 +73,116 @@ interface DataContextType {
   reportMaintenance: (assetId: string, userId: string, description: string) => Promise<void>;
   resolveMaintenance: (logId: number, cost?: number) => Promise<void>;
 
-  auditLogs: AuditLog[];
   getAssetHistory: (assetId: string) => AuditLog[];
-
   fetchData: () => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
 
 // ─── HELPERS ─────────────────────────────────────────────────
+const isValidUUID = (s: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s || '');
 
-// Valida que el string sea un UUID v4 válido para evitar crash en Postgres
-const isValidUUID = (uuid: string) => {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(uuid);
-};
-
-// FIX: next_maintenance_date es tipo DATE en BD, necesita formato 'yyyy-MM-dd'
-const toDateString = (date: Date): string => format(date, 'yyyy-MM-dd');
+const toDateString = (d: Date) => format(d, 'yyyy-MM-dd');
 
 const logAudit = async (
-  action: AuditLog['action'],
-  actorId: string,
-  actorName: string,
-  targetId: string,
-  targetType: string,
-  details?: string,
-  metadata?: Record<string, unknown>
+  action: AuditLog['action'], actorId: string, actorName: string,
+  targetId: string, targetType: string, details?: string
 ) => {
-  const finalActorId = isValidUUID(actorId) ? actorId : null;
-
   const { error } = await supabase.from('audit_logs').insert({
-    action,
-    actor_id: finalActorId,
-    actor_name: actorName,
-    target_id: targetId,
-    target_type: targetType,
-    details,
-    metadata,
+    action, actor_id: isValidUUID(actorId) ? actorId : null,
+    actor_name: actorName, target_id: targetId, target_type: targetType, details,
   });
-  if (error) console.error('logAudit error:', error.message);
+  if (error) console.error('logAudit:', error.message);
 };
 
-const requestNativeNotificationPermission = async () => {
-  if ('Notification' in window && navigator.serviceWorker) {
-    if (Notification.permission !== 'granted' && Notification.permission !== 'denied') {
-      await Notification.requestPermission();
+// ─── PUSH NATIVE ─────────────────────────────────────────────
+export const requestPushPermission = async () => {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+};
+
+const firePush = (title: string, body: string) => {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready
+        .then(reg => {
+          const options = { 
+            body, 
+            icon: '/logo192.png', 
+            badge: '/badge72.png', 
+            vibrate: [150, 100, 150], 
+            tag: `zyklus-${Date.now()}` 
+          } as any; 
+          reg.showNotification(title, options);
+        })
+        .catch(() => { try { new Notification(title, { body, icon: '/logo192.png' }); } catch {} });
+    } else {
+      new Notification(title, { body, icon: '/logo192.png' });
     }
-  }
+  } catch (e) { console.warn('firePush:', e); }
 };
 
-const createNotification = async (
-  userId: string,
-  title: string,
-  message: string,
-  type: string = 'INFO',
-  requestId?: number,
-  assetId?: string
+// ─── CREAR NOTIFICACIÓN EN BD ─────────────────────────────────
+const createNotif = async (
+  userId: string, title: string, message: string,
+  type = 'INFO', requestId?: number, assetId?: string
 ) => {
   if (!userId || !isValidUUID(userId)) return;
-
   const { error } = await supabase.from('notifications').insert({
-    user_id: userId,
-    request_id: requestId ?? null,
-    asset_id: assetId ?? null,
-    title,
-    message,
-    type,
-    is_read: false,
+    user_id: userId, request_id: requestId ?? null, asset_id: assetId ?? null,
+    title, message, type, is_read: false,
   });
-  if (error) console.error('createNotification error:', error.message);
+  if (error) console.error('createNotif:', error.message);
+  firePush(title, message);
+};
 
-  if ('Notification' in window && Notification.permission === 'granted') {
-    new Notification(title, { body: message, icon: '/logo.png' });
+// Notificar a TODOS los usuarios de un rol
+const notifyByRole = async (role: string, title: string, message: string, type = 'INFO', requestId?: number, assetId?: string) => {
+  const { data } = await supabase.from('users').select('id').eq('role', role);
+  if (!data) return;
+  for (const u of data as { id: string }[]) {
+    await createNotif(u.id, title, message, type, requestId, assetId);
   }
 };
 
-// ─── PROVIDER ────────────────────────────────────────────────
+// ─── NOTIF AUDITOR — solo préstamos vencidos con detalle completo ─────────────────────────
+const notifyAuditorOverdue = async (req: Request) => {
+  const { data: auditors } = await supabase.from('users').select('id').eq('role', 'AUDITOR');
+  if (!auditors) return;
+
+  // Buscar el líder del usuario
+  let leaderName = '—';
+  if (req.users?.manager_id) {
+    const { data: leader } = await supabase
+      .from('users')
+      .select('name')
+      .eq('id', req.users.manager_id)
+      .single();
+    if (leader) leaderName = (leader as { name: string }).name;
+  }
+
+  const assetName = req.assets?.name ?? `Activo #${req.asset_id}`;
+  const disciplina = req.requester_disciplina ?? '—';
+  const message = `${req.requester_name} (${disciplina}) — Líder: ${leaderName} — Equipo: "${assetName}"`;
+
+  for (const aud of auditors as { id: string }[]) {
+    await createNotif(
+      aud.id,
+      '🚨 Préstamo Vencido',
+      message,
+      'ALERT',
+      req.id,
+      req.asset_id
+    );
+  }
+};
+
+// ─── PROVIDER ─────────────────────────────────────────────────
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
@@ -146,140 +195,130 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
-  useEffect(() => { requestNativeNotificationPermission(); }, []);
+  useEffect(() => { requestPushPermission(); }, []);
 
-  // ─── FETCH ─────────────────────────────────────────────────
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [assetsRes, reqRes, instRes, notifRes, maintRes, auditRes, bundlesRes] = await Promise.all([
+      const [aR, rR, iR, nR, mR, auR, bR] = await Promise.all([
         supabase.from('assets').select('*').order('created_at', { ascending: false }),
-        supabase.from('requests').select(`
-          *,
-          assets:asset_id (*),
-          users:user_id (*),
-          institutions:institution_id (*)
-        `).order('created_at', { ascending: false }),
+        supabase.from('requests').select(`*, assets:asset_id(*), users:user_id(*), institutions:institution_id(*)`).order('created_at', { ascending: false }),
         supabase.from('institutions').select('*').order('id', { ascending: false }),
-        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(50),
-        supabase.from('maintenance_logs').select(`
-          *,
-          assets:asset_id(*),
-          users:reported_by_user_id(*)
-        `).order('created_at', { ascending: false }),
-        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(100),
-        // FIX: bundles.select('*, assets(*)') — Supabase infiere relación inversa (assets.bundle_id → bundles.id)
+        supabase.from('notifications').select('*').order('created_at', { ascending: false }).limit(100),
+        supabase.from('maintenance_logs').select(`*, assets:asset_id(*), users:reported_by_user_id(*)`).order('created_at', { ascending: false }),
+        supabase.from('audit_logs').select('*').order('timestamp', { ascending: false }).limit(200),
         supabase.from('bundles').select('*, assets(*)').order('created_at', { ascending: false }),
       ]);
-
-      if (assetsRes.error) console.error('assets error:', assetsRes.error.message);
-      if (reqRes.error) console.error('requests error:', reqRes.error.message);
-
-      setAssets((assetsRes.data || []) as Asset[]);
-      setRequests((reqRes.data || []) as Request[]);
-      setInstitutions((instRes.data || []) as Institution[]);
-      setNotifications((notifRes.data || []) as Notification[]);
-      setMaintenanceLogs((maintRes.data || []) as MaintenanceLog[]);
-      setAuditLogs((auditRes.data || []) as AuditLog[]);
-      setBundles((bundlesRes.data || []) as Bundle[]);
-
-      await checkOverdueRequests((reqRes.data || []) as Request[]);
-    } catch (error) {
-      console.error('fetchData error:', error);
+      if (aR.error) console.error('assets:', aR.error.message);
+      if (rR.error) console.error('requests:', rR.error.message);
+      setAssets((aR.data || []) as Asset[]);
+      setRequests((rR.data || []) as Request[]);
+      setInstitutions((iR.data || []) as Institution[]);
+      setNotifications((nR.data || []) as Notification[]);
+      setMaintenanceLogs((mR.data || []) as MaintenanceLog[]);
+      setAuditLogs((auR.data || []) as AuditLog[]);
+      setBundles((bR.data || []) as Bundle[]);
+      await checkOverdue((rR.data || []) as Request[]);
     } finally {
       setIsLoading(false);
     }
   }, []);
 
+  // ─── REAL-TIME: suscribirse a todos los cambios relevantes ───
   useEffect(() => {
-    let isMounted = true;
-    if (isMounted) fetchData();
+    let mounted = true;
+    fetchData();
 
-    const channel = supabase.channel('realtime-db')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => { if (isMounted) fetchData(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => { if (isMounted) fetchData(); })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => { if (isMounted) fetchData(); })
+    const ch = supabase.channel('zyklus-rt')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'requests' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'assets' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_logs' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'audit_logs' }, () => {
+        if (mounted) fetchData();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'bundles' }, () => {
+        if (mounted) fetchData();
+      })
       .subscribe();
 
     return () => {
-      isMounted = false;
-      supabase.removeChannel(channel).catch(() => {});
+      mounted = false;
+      supabase.removeChannel(ch).catch(() => {});
     };
   }, [fetchData]);
 
-  // ─── MOTOR DE NOTIFICACIONES ───────────────────────────────
-  const checkOverdueRequests = async (reqs: Request[]) => {
+  const checkOverdue = async (reqs: Request[]) => {
     const now = new Date();
     for (const req of reqs) {
       if (!req.expected_return_date || req.status !== 'ACTIVE') continue;
-      const returnDate = new Date(req.expected_return_date);
-      const daysLate = differenceInDays(now, returnDate);
-      const hoursUntilReturn = differenceInHours(returnDate, now);
+      const ret = new Date(req.expected_return_date);
+      const daysLate = differenceInDays(now, ret);
+      const hoursLeft = differenceInHours(ret, now);
 
-      if (hoursUntilReturn <= 48 && hoursUntilReturn > 24 && req.user_id) {
-        const { data: notifExists } = await supabase
-          .from('notifications').select('id')
-          .eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '📅 Recordatorio — 48h')
-          .maybeSingle();
-        if (!notifExists) await createNotification(req.user_id, '📅 Recordatorio — 48h', 'Tu préstamo vence en 2 días. Prepara la devolución.', 'WARNING', req.id);
+      if (hoursLeft <= 48 && hoursLeft > 24 && req.user_id) {
+        const { data: e } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '📅 Recordatorio — 48h').maybeSingle();
+        if (!e) await createNotif(req.user_id, '📅 Recordatorio — 48h', 'Tu préstamo vence en 2 días.', 'WARNING', req.id);
       }
-
-      if (hoursUntilReturn <= 24 && hoursUntilReturn > 0 && req.user_id) {
-        const { data: notifExists } = await supabase
-          .from('notifications').select('id')
-          .eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '⏰ Recordatorio — 24h')
-          .maybeSingle();
-        if (!notifExists) await createNotification(req.user_id, '⏰ Recordatorio — 24h', 'Tu préstamo vence mañana. Prepara la devolución.', 'WARNING', req.id);
+      if (hoursLeft <= 24 && hoursLeft > 0 && req.user_id) {
+        const { data: e } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '⏰ Recordatorio — 24h').maybeSingle();
+        if (!e) await createNotif(req.user_id, '⏰ Recordatorio — 24h', 'Tu préstamo vence mañana.', 'WARNING', req.id);
       }
-
       if (daysLate >= 1) {
         await supabase.from('requests').update({ status: 'OVERDUE' }).eq('id', req.id).eq('status', 'ACTIVE');
-        if (daysLate === 1 && req.user_id) await createNotification(req.user_id, '⚠️ Préstamo Vencido', 'Tu préstamo ha vencido. Por favor devuelve el activo hoy.', 'ALERT', req.id);
-        if (daysLate >= 3 && req.user_id) {
-          await createNotification(req.user_id, '🚨 Incumplimiento (3 días)', 'Incumplimiento de devolución detectado. Se requiere acción inmediata.', 'CRITICAL', req.id);
-          if (req.users?.manager_id) await createNotification(req.users.manager_id, '🚨 Alerta de Equipo', `${req.requester_name} lleva 3 días de retraso.`, 'CRITICAL', req.id);
+        if (daysLate === 1 && req.user_id) {
+          // Notif para el usuario
+          await createNotif(req.user_id, '⚠️ Préstamo Vencido', `"${req.assets?.name}" venció. Devuélvelo hoy.`, 'ALERT', req.id);
+          // Notif para el líder
+          if (req.users?.manager_id) await createNotif(req.users.manager_id, '⚠️ Equipo — Vencido', `${req.requester_name}: "${req.assets?.name}" vencido.`, 'WARNING', req.id);
+          // Notif para admins
+          await notifyByRole('ADMIN_PATRIMONIAL', '⚠️ Préstamo Vencido', `${req.requester_name}: "${req.assets?.name}".`, 'WARNING', req.id);
+          // Notif para auditores — solo vencidos, con detalle completo
+          await notifyAuditorOverdue(req);
         }
-        if (daysLate >= 7 && req.user_id) await createNotification(req.user_id, '🔴 ALERTA CRÍTICA — 1 Semana', 'Activo con 1 semana de retraso. Marcado como incidencia grave.', 'CRITICAL', req.id);
+        if (daysLate >= 3 && req.user_id) {
+          const { data: e3 } = await supabase.from('notifications').select('id').eq('user_id', req.user_id).eq('request_id', req.id).eq('title', '🚨 Incumplimiento — 3 días').maybeSingle();
+          if (!e3) {
+            await createNotif(req.user_id, '🚨 Incumplimiento — 3 días', 'Acción inmediata requerida.', 'CRITICAL', req.id);
+            if (req.users?.manager_id) await createNotif(req.users.manager_id, '🚨 Incumplimiento en Equipo', `${req.requester_name}: 3 días de retraso.`, 'CRITICAL', req.id);
+            await notifyByRole('ADMIN_PATRIMONIAL', '🚨 Incumplimiento 3d', `${req.requester_name}: "${req.assets?.name}".`, 'CRITICAL', req.id);
+            // Auditores también reciben escalada de 3 días
+            await notifyAuditorOverdue(req);
+          }
+        }
       }
     }
   };
 
-  // ─── ASSETS ────────────────────────────────────────────────
+  // ─── ASSETS ──────────────────────────────────────────────────
   const getNextTag = () => {
-    if (assets.length === 0) return 'ZF-001';
-    const nums = assets
-      .map(a => a.tag)
-      .filter(t => t?.startsWith('ZF-'))
-      .map(t => parseInt(t.split('-')[1]))
-      .filter(n => !isNaN(n))
-      .sort((a, b) => b - a);
+    if (!assets.length) return 'ZF-001';
+    const nums = assets.map(a => a.tag).filter(t => t?.startsWith('ZF-')).map(t => parseInt(t.split('-')[1])).filter(n => !isNaN(n)).sort((a, b) => b - a);
     return `ZF-${((nums[0] || 0) + 1).toString().padStart(3, '0')}`;
   };
 
   const addAsset = async (asset: Partial<Asset>) => {
-    // FIX: next_maintenance_date es tipo DATE en BD → usar 'yyyy-MM-dd'
-    const payload = {
-      ...asset,
-      tag: asset.tag || getNextTag(),
-      status: asset.status || 'Disponible',
-      usage_count: 0,
-      maintenance_period_days: asset.maintenance_period_days || 180,
-      next_maintenance_date: toDateString(addDays(new Date(), asset.maintenance_period_days || 180)),
-    };
+    const payload = { ...asset, tag: asset.tag || getNextTag(), status: asset.status || 'Disponible', usage_count: 0, maintenance_period_days: asset.maintenance_period_days || 180, next_maintenance_date: toDateString(addDays(new Date(), asset.maintenance_period_days || 180)) };
     const { data, error } = await supabase.from('assets').insert([payload]).select().single();
     if (error) { toast.error(error.message); return; }
-    toast.success(`✅ Activo ${payload.tag} creado`);
-    await logAudit('CREATE', 'system', 'Admin', data.id, 'ASSET', `Nuevo activo: ${payload.name}`);
+    await logAudit('CREATE', 'system', 'Admin', data.id, 'ASSET', `Nuevo: ${payload.name}`);
+    await notifyByRole('ADMIN_PATRIMONIAL', '📦 Nuevo Activo Registrado', `${payload.name} (${payload.tag}).`, 'INFO');
+    toast.success(`✅ ${payload.tag} creado`);
     fetchData();
   };
 
   const updateAsset = async (id: string, updates: Partial<Asset>) => {
-    // FIX: si se actualiza next_maintenance_date aseguramos formato DATE
-    const sanitized = { ...updates };
-    if (sanitized.next_maintenance_date && sanitized.next_maintenance_date.includes('T')) {
-      sanitized.next_maintenance_date = sanitized.next_maintenance_date.split('T')[0];
-    }
-    const { error } = await supabase.from('assets').update(sanitized).eq('id', id);
+    const s = { ...updates };
+    if (s.next_maintenance_date?.includes('T')) s.next_maintenance_date = s.next_maintenance_date.split('T')[0];
+    const { error } = await supabase.from('assets').update(s).eq('id', id);
     if (error) { toast.error(error.message); return; }
     toast.success('Activo actualizado');
     fetchData();
@@ -297,14 +336,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const vals = line.split(',');
       const obj: Record<string, string> = {};
       headers.forEach((h, i) => { obj[h] = (vals[i] || '').trim(); });
-      return {
-        name: obj.name || obj.nombre || 'Sin nombre',
-        tag: obj.tag || getNextTag(),
-        category: obj.category || obj.categoria || 'General',
-        serial: obj.serial || obj.serie,
-        status: 'Disponible' as const,
-        next_maintenance_date: toDateString(addDays(new Date(), 180)),
-      };
+      return { name: obj.name || obj.nombre || 'Sin nombre', tag: obj.tag || getNextTag(), category: obj.category || obj.categoria || 'General', serial: obj.serial || obj.serie, status: 'Disponible' as const, next_maintenance_date: toDateString(addDays(new Date(), 180)) };
     });
     const { error } = await supabase.from('assets').insert(rows);
     if (error) { toast.error(error.message); return; }
@@ -315,517 +347,378 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const validateMaintenanceAsset = async (assetId: string) => {
     const asset = assets.find(a => a.id === assetId);
     if (!asset) return;
-    // FIX: next_maintenance_date es tipo DATE en BD
-    const newMaintenanceDate = toDateString(addDays(new Date(), asset.maintenance_period_days || 180));
-    const { error } = await supabase.from('assets').update({
-      status: 'Disponible',
-      maintenance_alert: false,
-      usage_count: 0,
-      next_maintenance_date: newMaintenanceDate,
-    }).eq('id', assetId);
+    const { error } = await supabase.from('assets').update({ status: 'Disponible', maintenance_alert: false, usage_count: 0, next_maintenance_date: toDateString(addDays(new Date(), asset.maintenance_period_days || 180)) }).eq('id', assetId);
     if (error) { toast.error(error.message); return; }
-    toast.success('✅ Mantenimiento validado. Activo liberado.');
+    toast.success('✅ Mantenimiento validado.');
     fetchData();
   };
 
-  // ─── BUNDLES ───────────────────────────────────────────────
+  // ─── BUNDLES ─────────────────────────────────────────────────
   const createBundle = async (name: string, description: string, assetIds: string[]) => {
     const { data: bundle, error } = await supabase.from('bundles').insert([{ name, description }]).select().single();
-    if (error || !bundle) { toast.error('Error creando bundle: ' + (error?.message || '')); return; }
-    const { error: updateError } = await supabase.from('assets').update({ bundle_id: bundle.id }).in('id', assetIds);
-    if (updateError) { toast.error('Error asignando activos al kit: ' + updateError.message); return; }
-    toast.success(`Kit "${name}" creado con ${assetIds.length} activos`);
+    if (error || !bundle) { toast.error('Error: ' + error?.message); return; }
+    await supabase.from('assets').update({ bundle_id: bundle.id }).in('id', assetIds);
+    toast.success(`Kit "${name}" creado`);
     fetchData();
   };
 
   const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
-    if (!bundle.assets || bundle.assets.length === 0) { toast.error('El kit no tiene activos'); return; }
-    const returnDate = days === 0
-      ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString()
-      : addDays(new Date(), days).toISOString();
-    const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
-    const finalApproveDate = autoApprove ? new Date().toISOString() : null;
+    if (!bundle.assets?.length) { toast.error('Kit sin activos'); return; }
+    const unavail = bundle.assets.filter(a => a.status !== 'Disponible');
+    if (unavail.length) { toast.error(`No disponibles: ${unavail.map(a => `${a.name}(${a.status})`).join(', ')}`); return; }
+    const returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
     const bundleGroupId = `BNDL-${Date.now()}`;
-
-    // Verificar que todos los activos del bundle estén disponibles
-    const unavailable = bundle.assets.filter(a => a.status !== 'Disponible');
-    if (unavailable.length > 0) {
-      toast.error(`${unavailable.length} activo(s) del kit no están disponibles`);
-      return;
-    }
-
-    const rows = bundle.assets.map(a => ({
-      asset_id: a.id,
-      user_id: user.id,
-      requester_name: user.name,
-      requester_disciplina: user.disciplina,
-      days_requested: days,
-      motive: `[COMBO: ${bundle.name}] ${motive}`,
-      status: finalStatus,
-      approved_at: finalApproveDate,
-      expected_return_date: returnDate,
-      bundle_group_id: bundleGroupId,
-    }));
-
+    const rows = bundle.assets.map(a => ({ asset_id: a.id, user_id: user.id, requester_name: user.name, requester_disciplina: user.disciplina, days_requested: days, motive: `[COMBO: ${bundle.name}] ${motive}`, status: autoApprove ? 'APPROVED' : 'PENDING', approved_at: autoApprove ? new Date().toISOString() : null, expected_return_date: returnDate, bundle_group_id: bundleGroupId }));
     const { error } = await supabase.from('requests').insert(rows);
-    if (error) { toast.error('Error al crear solicitud: ' + error.message); return; }
-
-    // FIX: si autoApprove, marcar los assets como 'Prestada'
+    if (error) { toast.error(error.message); return; }
     if (autoApprove) {
-      await supabase.from('assets')
-        .update({ status: 'Prestada' })
-        .in('id', bundle.assets.map(a => a.id));
-      await logAudit('APPROVE', user.id, user.name, bundleGroupId, 'REQUEST', `Auto-Aprobación Combo: ${bundle.name}`);
+      await supabase.from('assets').update({ status: 'Prestada' }).in('id', bundle.assets.map(a => a.id));
+      await logAudit('APPROVE', user.id, user.name, bundleGroupId, 'REQUEST', `Auto-combo: ${bundle.name}`);
+    } else {
+      await supabase.from('assets').update({ status: 'En trámite' }).in('id', bundle.assets.map(a => a.id));
+      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud — Kit', `${user.name} solicita kit "${bundle.name}".`, 'INFO');
+      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Kit', `${user.name} solicita kit "${bundle.name}".`, 'INFO');
     }
-
     toast.success(`Combo "${bundle.name}" solicitado`);
     fetchData();
   };
 
-  // ─── INSTITUCIONES ─────────────────────────────────────────
+  // ─── INSTITUCIONES ────────────────────────────────────────────
   const addInstitution = async (inst: Partial<Institution>) => {
     const { error } = await supabase.from('institutions').insert([inst]);
-    if (!error) { toast.success('Institución registrada'); fetchData(); }
-    else toast.error(error.message);
+    if (!error) { toast.success('Institución registrada'); fetchData(); } else toast.error(error.message);
   };
-
   const deleteInstitution = async (id: number) => {
     const { error } = await supabase.from('institutions').delete().eq('id', id);
-    if (!error) { toast.success('Institución eliminada'); fetchData(); }
-    else toast.error(error.message);
+    if (!error) { toast.success('Institución eliminada'); fetchData(); } else toast.error(error.message);
   };
 
-  // ─── QR LOGIC ──────────────────────────────────────────────
+  // ─── QR ──────────────────────────────────────────────────────
   const generateQRCode = (requestId: number): string => {
     const req = requests.find(r => r.id === requestId);
     if (!req) return '';
-    const payload = {
-      type: 'REQUEST',
-      request_id: requestId,
-      bundle_group_id: req.bundle_group_id,
-      asset_id: req.asset_id,
-      asset_name: req.assets?.name || '',
-      requester_name: req.requester_name,
-      checkout_date: new Date().toISOString(),
-    };
-    return JSON.stringify(payload);
+    return JSON.stringify({ type: 'REQUEST', request_id: requestId, bundle_group_id: req.bundle_group_id, asset_id: req.asset_id, requester_name: req.requester_name });
   };
-
-  const getQRPayload = (_requestId: number): object | null => null;
-
-  const processQRScan = async (qrData: string): Promise<{ asset?: Asset; request?: Request } | null> => {
+  const getQRPayload = (_: number) => null;
+  const processQRScan = async (qrData: string) => {
     try {
       const json = JSON.parse(qrData);
       const assetId = json.asset_id || json.id;
-      const asset = assets.find(a => a.id === assetId || a.tag === assetId);
-      const relatedRequest = requests.find(r => r.id === json.request_id || r.asset_id === assetId);
-      return { asset: asset || undefined, request: relatedRequest };
-    } catch {
-      toast.error('Formato QR inválido');
-      return null;
-    }
+      return { asset: assets.find(a => a.id === assetId || a.tag === assetId), request: requests.find(r => r.id === json.request_id || r.asset_id === assetId) };
+    } catch { toast.error('QR inválido'); return null; }
   };
 
-  // ─── APROBACIONES Y RECHAZOS ───────────────────────────────
+  // ─── APROBACIONES ─────────────────────────────────────────────
   const approveRequest = async (reqId: number, approverId: string, approverName: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
-
-    const approvedAt = new Date().toISOString();
-
+    const now = new Date().toISOString();
     if (req.bundle_group_id) {
-      // Obtener todos los request_ids del bundle para luego actualizar sus assets
-      const bundleReqs = requests.filter(r => r.bundle_group_id === req.bundle_group_id);
-      const assetIds = bundleReqs.map(r => r.asset_id).filter(Boolean);
-
-      await supabase.from('requests')
-        .update({ status: 'APPROVED', approved_at: approvedAt })
-        .eq('bundle_group_id', req.bundle_group_id);
-
-      // FIX: NO marcamos como 'Prestada' aún — el asset se presta en CHECKOUT por el guardia
-      // Pero sí validamos que no estén ya prestados (protección)
-      await logAudit('APPROVE', approverId, approverName, req.bundle_group_id, 'REQUEST', `Combo completo aprobado (${assetIds.length} activos)`);
-      toast.success('✅ Combo completo aprobado');
+      await supabase.from('requests').update({ status: 'APPROVED', approved_at: now }).eq('bundle_group_id', req.bundle_group_id);
+      await logAudit('APPROVE', approverId, approverName, req.bundle_group_id, 'REQUEST', 'Combo aprobado');
+      toast.success('✅ Combo aprobado');
     } else {
-      await supabase.from('requests')
-        .update({ status: 'APPROVED', approved_at: approvedAt })
-        .eq('id', reqId);
-
-      await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Solicitud aprobada: ${req.assets?.name}`);
-      toast.success('✅ Solicitud aprobada');
+      await supabase.from('requests').update({ status: 'APPROVED', approved_at: now }).eq('id', reqId);
+      await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado: ${req.assets?.name}`);
+      toast.success('✅ Aprobado');
     }
-
-    if (req.user_id) {
-      await createNotification(req.user_id, '✅ Solicitud Aprobada', `Tu solicitud fue aprobada. Preséntate con el guardia para retirar el equipo.`, 'INFO', reqId);
-    }
+    if (req.user_id) await createNotif(req.user_id, '✅ Solicitud Aprobada', `"${req.assets?.name || 'equipo'}" aprobado por ${approverName}. Preséntate al guardia.`, 'INFO', reqId);
     fetchData();
   };
 
   const rejectRequest = async (reqId: number, reason: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
-
     if (req.bundle_group_id) {
-      const { error } = await supabase.from('requests')
-        .update({ status: 'REJECTED', rejection_feedback: reason })
-        .eq('bundle_group_id', req.bundle_group_id);
-      if (error) { toast.error(`Error BD: ${error.message}`); return; }
-      await logAudit('REJECT', 'system', 'Líder/Admin', req.bundle_group_id, 'REQUEST', `Combo rechazado. Motivo: ${reason}`);
+      const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('bundle_group_id', req.bundle_group_id);
+      if (error) { toast.error(error.message); return; }
+      const bundleReqs = requests.filter(r => r.bundle_group_id === req.bundle_group_id);
+      for (const br of bundleReqs) {
+        const a = assets.find(x => x.id === br.asset_id);
+        if (a?.status === 'En trámite') await supabase.from('assets').update({ status: 'Disponible' }).eq('id', br.asset_id);
+      }
+      await logAudit('REJECT', 'system', 'Líder/Admin', req.bundle_group_id, 'REQUEST', reason);
     } else {
-      const { error } = await supabase.from('requests')
-        .update({ status: 'REJECTED', rejection_feedback: reason })
-        .eq('id', reqId);
-      if (error) { toast.error(`Error BD: ${error.message}`); return; }
-      await logAudit('REJECT', 'system', 'Líder/Admin', String(reqId), 'REQUEST', `Solicitud rechazada. Motivo: ${reason}`);
+      const { error } = await supabase.from('requests').update({ status: 'REJECTED', rejection_feedback: reason }).eq('id', reqId);
+      if (error) { toast.error(error.message); return; }
+      const a = assets.find(x => x.id === req.asset_id);
+      if (a?.status === 'En trámite') await supabase.from('assets').update({ status: 'Disponible' }).eq('id', req.asset_id);
+      await logAudit('REJECT', 'system', 'Líder/Admin', String(reqId), 'REQUEST', reason);
     }
-
     toast.error('Solicitud rechazada');
-    if (req.user_id) await createNotification(req.user_id, '❌ Solicitud Rechazada', `Motivo: ${reason}`, 'ALERT', reqId);
+    if (req.user_id) await createNotif(req.user_id, '❌ Solicitud Rechazada', `Motivo: ${reason}`, 'ALERT', reqId);
     fetchData();
   };
 
   const returnRequestWithFeedback = async (reqId: number, feedback: string) => {
     const req = requests.find(r => r.id === reqId);
     if (!req) return;
-
-    if (req.bundle_group_id) {
-      const { error } = await supabase.from('requests')
-        .update({ status: 'ACTION_REQUIRED', feedback_log: feedback })
-        .eq('bundle_group_id', req.bundle_group_id);
-      if (error) { toast.error(`Error BD: ${error.message}`); return; }
-    } else {
-      const { error } = await supabase.from('requests')
-        .update({ status: 'ACTION_REQUIRED', feedback_log: feedback })
-        .eq('id', reqId);
-      if (error) { toast.error(`Error BD: ${error.message}`); return; }
-    }
-
-    toast.warning('📋 Devuelta al usuario para corrección');
-    if (req.user_id) await createNotification(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más información: ${feedback}`, 'WARNING', reqId);
+    const q = req.bundle_group_id
+      ? supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('bundle_group_id', req.bundle_group_id)
+      : supabase.from('requests').update({ status: 'ACTION_REQUIRED', feedback_log: feedback }).eq('id', reqId);
+    const { error } = await q;
+    if (error) { toast.error(error.message); return; }
+    toast.warning('📋 Devuelta para corrección');
+    if (req.user_id) await createNotif(req.user_id, '📋 Acción Requerida', `Tu solicitud necesita más info: ${feedback}`, 'WARNING', reqId);
     fetchData();
   };
 
   const getTeamRequests = (managerId: string): Request[] => {
-    const teamReqs = requests.filter(r => r.users?.manager_id === managerId);
     const grouped = new Map<string | number, Request>();
-    teamReqs.forEach(r => {
+    requests.filter(r => r.users?.manager_id === managerId).forEach(r => {
       if (r.bundle_group_id) {
-        if (!grouped.has(r.bundle_group_id)) {
-          grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
-        } else {
-          const existing = grouped.get(r.bundle_group_id)!;
-          existing.bundle_items = (existing.bundle_items || 1) + 1;
-        }
-      } else {
-        grouped.set(r.id, r);
-      }
+        if (!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
+        else grouped.get(r.bundle_group_id)!.bundle_items = (grouped.get(r.bundle_group_id)!.bundle_items || 1) + 1;
+      } else grouped.set(r.id, r);
     });
     return Array.from(grouped.values());
   };
 
   const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
-    if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) {
-      toast.error('🔧 Este activo requiere mantenimiento.');
-      return;
-    }
+    if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) { toast.error('🔧 Requiere mantenimiento.'); return; }
     if (asset.status !== 'Disponible') {
-      toast.error(`El activo no está disponible (estado: ${asset.status})`);
+      const msgs: Record<string, string> = { 'Prestada': '⚠️ Ya prestado.', 'En trámite': '⚠️ Ya tiene solicitud en trámite.', 'En mantenimiento': '🔧 En mantenimiento.', 'Dada de baja': '🚫 Dado de baja.' };
+      toast.error(msgs[asset.status] || `No disponible (${asset.status})`);
       return;
     }
-
-    const returnDate = days === 0
-      ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString()
-      : addDays(new Date(), days).toISOString();
-    const finalStatus = autoApprove ? 'APPROVED' : 'PENDING';
-
-    const { data, error } = await supabase.from('requests').insert({
-      asset_id: asset.id,
-      user_id: user.id,
-      institution_id: institutionId || null,
-      requester_name: user.name,
-      requester_disciplina: user.disciplina,
-      days_requested: days,
-      motive,
-      status: finalStatus,
-      approved_at: autoApprove ? new Date().toISOString() : null,
-      expected_return_date: returnDate,
-    }).select().single();
-
-    if (error) { toast.error('Error al crear solicitud: ' + error.message); return; }
-
-    // FIX: si autoApprove (líder auto-solicita), NO marcamos como prestada todavía.
-    // El asset se marca 'Prestada' solo en el CHECKOUT del guardia.
-    if (autoApprove && data) {
-      await logAudit('APPROVE', user.id, user.name, String(data.id), 'REQUEST', `Auto-Aprobación Directa: ${asset.name}`);
+    const returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
+    const { data, error } = await supabase.from('requests').insert({ asset_id: asset.id, user_id: user.id, institution_id: institutionId || null, requester_name: user.name, requester_disciplina: user.disciplina, days_requested: days, motive, status: autoApprove ? 'APPROVED' : 'PENDING', approved_at: autoApprove ? new Date().toISOString() : null, expected_return_date: returnDate }).select().single();
+    if (error) { toast.error(error.message); return; }
+    if (!autoApprove) {
+      await supabase.from('assets').update({ status: 'En trámite' }).eq('id', asset.id);
+      if (user.manager_id) {
+        await createNotif(user.manager_id, '📋 Nueva Solicitud',
+          `${user.name} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}. ${motive || ''}`, 'INFO', data?.id);
+      }
+      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud',
+        `${user.name} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}.`, 'INFO', data?.id, asset.id);
+    } else if (data) {
+      await logAudit('APPROVE', user.id, user.name, String(data.id), 'REQUEST', `Auto-aprobado: ${asset.name}`);
     }
-
     toast.success(autoApprove ? '✅ Auto-Aprobado — Preséntate al guardia' : '📤 Solicitud enviada');
     fetchData();
   };
 
   const cancelRequest = async (reqId: number) => {
+    const req = requests.find(r => r.id === reqId);
     const { error } = await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId);
-    if (error) toast.error(error.message);
-    else fetchData();
+    if (error) { toast.error(error.message); return; }
+    if (req && ['PENDING', 'ACTION_REQUIRED'].includes(req.status) && req.asset_id) {
+      const a = assets.find(x => x.id === req.asset_id);
+      if (a?.status === 'En trámite') await supabase.from('assets').update({ status: 'Disponible' }).eq('id', req.asset_id);
+    }
+    toast.success('Solicitud cancelada');
+    fetchData();
   };
 
-  const renewRequest = async (reqId: number, additionalDays: number) => {
+  const renewRequest = async (reqId: number, days: number) => {
     const req = requests.find(r => r.id === reqId);
     if (!req?.expected_return_date) return;
-    const newDate = addDays(new Date(req.expected_return_date), additionalDays).toISOString();
-    const { error } = await supabase.from('requests').update({
-      expected_return_date: newDate,
-      days_requested: req.days_requested + additionalDays,
-      status: 'ACTIVE',
-    }).eq('id', reqId);
+    const { error } = await supabase.from('requests').update({ expected_return_date: addDays(new Date(req.expected_return_date), days).toISOString(), days_requested: req.days_requested + days, status: 'ACTIVE' }).eq('id', reqId);
     if (error) { toast.error(error.message); return; }
-    toast.success(`Renovado por ${additionalDays} días`);
+    toast.success(`Renovado ${days} días`);
     fetchData();
   };
 
   const getUserRequests = (userId: string): Request[] => {
-    const userReqs = requests.filter(r => r.user_id === userId);
     const grouped = new Map<string | number, Request>();
-    userReqs.forEach(r => {
+    requests.filter(r => r.user_id === userId).forEach(r => {
       if (r.bundle_group_id) {
-        if (!grouped.has(r.bundle_group_id)) {
-          grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
-        } else {
-          const existing = grouped.get(r.bundle_group_id)!;
-          existing.bundle_items = (existing.bundle_items || 1) + 1;
-        }
-      } else {
-        grouped.set(r.id, r);
-      }
+        if (!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
+        else grouped.get(r.bundle_group_id)!.bundle_items = (grouped.get(r.bundle_group_id)!.bundle_items || 1) + 1;
+      } else grouped.set(r.id, r);
     });
     return Array.from(grouped.values());
   };
 
-  // ─── GUARD SCAN ────────────────────────────────────────────
+  // ─── GUARD SCAN ───────────────────────────────────────────────
   const processGuardScan = async (
-    qrData: string,
-    type: 'CHECKOUT' | 'CHECKIN',
-    signature = '',
-    isDamaged = false,
-    damageNotes = ''
-  ): Promise<{ success: boolean; message: string; data?: unknown }> => {
+    qrData: string, type: 'CHECKOUT' | 'CHECKIN',
+    signature = '', isDamaged = false, damageNotes = ''
+  ): Promise<{ success: boolean; message: string; data?: unknown; comboState?: ComboCheckinState }> => {
     try {
-      let parsedData: Record<string, unknown>;
-      try {
-        parsedData = JSON.parse(qrData);
-      } catch {
-        return { success: false, message: '⚠️ QR inválido o malformado.' };
-      }
+      let parsed: Record<string, unknown>;
+      try { parsed = JSON.parse(qrData); }
+      catch { return { success: false, message: '⚠️ QR inválido.' }; }
 
-      const reqId = parsedData.request_id || parsedData.id;
-      const bundleId = parsedData.bundle_group_id as string | undefined;
+      const reqId = parsed.request_id || parsed.id;
+      const bundleId = parsed.bundle_group_id as string | undefined;
 
       if (type === 'CHECKOUT') {
         let reqsToProcess: Record<string, unknown>[] = [];
-
         if (bundleId) {
-          const { data, error } = await supabase
-            .from('requests')
-            .select(`*, assets:asset_id(*)`)
-            .eq('bundle_group_id', bundleId)
-            .eq('status', 'APPROVED');
-          if (error) return { success: false, message: `Error BD: ${error.message}` };
+          const { data, error } = await supabase.from('requests').select(`*, assets:asset_id(*)`).eq('bundle_group_id', bundleId).eq('status', 'APPROVED');
+          if (error) return { success: false, message: error.message };
           reqsToProcess = data || [];
-          if (reqsToProcess.length === 0) return { success: false, message: '⚠️ Combo no tiene solicitudes aprobadas.' };
+          if (!reqsToProcess.length) return { success: false, message: '⚠️ Combo sin solicitudes aprobadas.' };
         } else {
-          const { data, error } = await supabase
-            .from('requests')
-            .select(`*, assets:asset_id(*)`)
-            .eq('id', reqId)
-            .eq('status', 'APPROVED')
-            .maybeSingle();
-          if (error) return { success: false, message: `Error BD: ${error.message}` };
-          if (data) reqsToProcess = [data];
-          else return { success: false, message: '⚠️ Solicitud no encontrada o no aprobada.' };
+          const { data, error } = await supabase.from('requests').select(`*, assets:asset_id(*)`).eq('id', reqId).eq('status', 'APPROVED').maybeSingle();
+          if (error) return { success: false, message: error.message };
+          if (data) reqsToProcess = [data]; else return { success: false, message: '⚠️ Solicitud no aprobada.' };
         }
-
-        // Si hay firma: confirmar checkout
         if (signature) {
-          for (const req of reqsToProcess) {
-            const r = req as { id: number; asset_id: string; assets?: { usage_count?: number; name?: string } };
-            await supabase.from('requests').update({
-              status: 'ACTIVE',
-              checkout_at: new Date().toISOString(),
-              digital_signature: signature,
-            }).eq('id', r.id);
-
-            // FIX: Marcar asset como 'Prestada' y sumar usage_count
-            await supabase.from('assets').update({
-              status: 'Prestada',
-              usage_count: (r.assets?.usage_count || 0) + 1,
-            }).eq('id', r.asset_id);
-
-            await logAudit('CHECKOUT', 'guard', 'Guardia', String(r.id), 'REQUEST', `Salida confirmada: ${r.assets?.name || 'Activo'}`);
-          }
-
-          // FIX: Verificar si algún asset supera el umbral de mantenimiento
-          for (const req of reqsToProcess) {
-            const r = req as { asset_id: string; assets?: { usage_count?: number; maintenance_usage_threshold?: number; name?: string } };
+          for (const raw of reqsToProcess) {
+            const r = raw as { id: number; asset_id: string; assets?: { usage_count?: number; maintenance_usage_threshold?: number; name?: string } };
             const newUsage = (r.assets?.usage_count || 0) + 1;
             const threshold = r.assets?.maintenance_usage_threshold || 10;
-            if (newUsage >= threshold) {
-              await supabase.from('assets').update({ maintenance_alert: true }).eq('id', r.asset_id);
-            }
+            await supabase.from('requests').update({ status: 'ACTIVE', checkout_at: new Date().toISOString(), digital_signature: signature }).eq('id', r.id);
+            await supabase.from('assets').update({ status: 'Prestada', usage_count: newUsage, ...(newUsage >= threshold ? { maintenance_alert: true } : {}) }).eq('id', r.asset_id);
+            await logAudit('CHECKOUT', 'guard', 'Guardia', String(r.id), 'REQUEST', `Salida: ${r.assets?.name}`);
           }
-
+          const first = reqsToProcess[0] as { requester_name?: string; user_id?: string; assets?: { name?: string } };
+          await notifyByRole('ADMIN_PATRIMONIAL', '📤 Activo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name || 'equipo')}".`, 'INFO');
+          if (first.user_id) {
+            const userReq = requests.find(r => r.user_id === first.user_id);
+            if (userReq?.users?.manager_id) await createNotif(userReq.users.manager_id, '📤 Equipo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name || 'equipo')}".`, 'INFO');
+          }
           fetchData();
-          return { success: true, message: 'Salida registrada exitosamente.' };
+          return { success: true, message: '✅ Salida confirmada.' };
         }
-
-        // Sin firma: retornar lista para verificación física
         return { success: true, message: 'Verificado', data: reqsToProcess };
+      }
 
-      } else {
-        // CHECKIN
-        const assetId = (parsedData.id || parsedData.asset_id) as string;
-        if (!assetId) return { success: false, message: '⚠️ QR no contiene ID de activo.' };
+      // ─── CHECKIN ──────────────────────────────────────────────
+      const assetId = (parsed.id || parsed.asset_id) as string;
+      if (!assetId) return { success: false, message: '⚠️ QR sin ID de activo.' };
 
-        const { data: reqs, error } = await supabase
-          .from('requests')
-          .select(`*, assets:asset_id(*)`)
-          .eq('asset_id', assetId)
-          .in('status', ['ACTIVE', 'OVERDUE'])
-          .order('checkout_at', { ascending: false })
-          .limit(1);
+      const { data: reqs, error } = await supabase.from('requests')
+        .select(`*, assets:asset_id(id, name, tag)`)
+        .eq('asset_id', assetId)
+        .in('status', ['ACTIVE', 'OVERDUE'])
+        .order('checkout_at', { ascending: false })
+        .limit(1);
+      if (error) return { success: false, message: error.message };
 
-        if (error) return { success: false, message: `Error BD: ${error.message}` };
-        const req = reqs?.[0] as { id: number; asset_id: string; user_id: string; assets?: { name?: string } } | undefined;
+      const req = reqs?.[0] as {
+        id: number; asset_id: string; user_id: string;
+        bundle_group_id?: string;
+        assets?: { name?: string; tag?: string };
+      } | undefined;
+      if (!req) return { success: false, message: '⚠️ No hay préstamo activo para este activo.' };
 
-        if (!req) return { success: false, message: `⚠️ No se encontró préstamo activo para este activo.` };
+      if (req.bundle_group_id) {
+        const { data: allComboReqs } = await supabase.from('requests')
+          .select(`*, assets:asset_id(id, name, tag)`)
+          .eq('bundle_group_id', req.bundle_group_id)
+          .in('status', ['ACTIVE', 'OVERDUE']);
 
-        const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
-        const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
+        const allReqs = (allComboReqs || []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
 
-        await supabase.from('requests').update({
-          status: newReqStatus,
-          checkin_at: new Date().toISOString(),
-          is_damaged: isDamaged,
-          damage_notes: damageNotes || null,
-          return_condition: isDamaged ? 'DAÑADO' : 'BUENO',
-        }).eq('id', req.id);
-
-        await supabase.from('assets').update({ status: newAssetStatus }).eq('id', req.asset_id);
-        await logAudit('CHECKIN', 'guard', 'Guardia', String(req.id), 'REQUEST', `Devolución: ${req.assets?.name || 'Activo'}. Estado: ${newAssetStatus}`);
-
-        if (isDamaged) {
-          await supabase.from('maintenance_logs').insert({
-            asset_id: req.asset_id,
-            reported_by_user_id: req.user_id || null,
-            issue_description: damageNotes || 'Daños reportados en devolución',
-            status: 'OPEN',
-          });
-          await supabase.from('assets').update({ maintenance_alert: true }).eq('id', req.asset_id);
-
-          // Notificar al admin
-          const { data: admins } = await supabase.from('users').select('id').eq('role', 'ADMIN_PATRIMONIAL').limit(1);
-          if (admins && admins[0]) {
-            await createNotification(
-              (admins[0] as { id: string }).id,
-              '🔧 Daño Reportado en Retorno',
-              `Equipo "${req.assets?.name || 'desconocido'}" fue devuelto con daños. ${damageNotes}`,
-              'ALERT'
-            );
-          }
-          await logAudit('MAINTENANCE', 'guard', 'Guardia', req.asset_id, 'ASSET', `Enviado a mantenimiento: ${damageNotes}`);
-          toast.warning('⚠️ Daño registrado. Activo enviado a mantenimiento.');
-        } else {
-          toast.success('✅ Devolución registrada correctamente.');
+        if (allReqs.length === 1) {
+          return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
         }
 
-        fetchData();
-        return { success: true, message: isDamaged ? 'Devolución con daño registrada' : 'Devolución limpia registrada' };
+        const comboState: ComboCheckinState = {
+          bundleGroupId: req.bundle_group_id,
+          totalAssets: allReqs.length,
+          scannedAssetIds: [assetId],
+          pendingAssets: allReqs.filter(r => r.asset_id !== assetId).map(r => ({
+            id: r.asset_id, name: r.assets?.name || 'Activo', tag: r.assets?.tag || '—',
+          })),
+          allRequests: allReqs,
+        };
+
+        return {
+          success: true,
+          message: `📦 Combo detectado (${allReqs.length} activos). Escanea los ${allReqs.length - 1} restantes.`,
+          comboState,
+        };
       }
+
+      return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
     } catch (err) {
-      console.error('processGuardScan error:', err);
-      return { success: false, message: 'Error interno procesando QR' };
+      console.error('processGuardScan:', err);
+      return { success: false, message: 'Error interno.' };
     }
   };
 
-  // ─── NOTIFICACIONES ────────────────────────────────────────
+  const confirmComboCheckin = async (
+    state: ComboCheckinState, isDamaged: boolean, damageNotes: string
+  ): Promise<{ success: boolean; message: string }> => {
+    return await _doCheckin(state.allRequests, isDamaged, damageNotes);
+  };
+
+  const _doCheckin = async (
+    reqs: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string } }>,
+    isDamaged: boolean, damageNotes: string
+  ): Promise<{ success: boolean; message: string }> => {
+    const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
+    const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
+
+    for (const r of reqs) {
+      await supabase.from('requests').update({ status: newReqStatus, checkin_at: new Date().toISOString(), is_damaged: isDamaged, damage_notes: damageNotes || null, return_condition: isDamaged ? 'DAÑADO' : 'BUENO' }).eq('id', r.id);
+      await supabase.from('assets').update({ status: newAssetStatus }).eq('id', r.asset_id);
+      await logAudit('CHECKIN', 'guard', 'Guardia', String(r.id), 'REQUEST', `Devolución: ${r.assets?.name}`);
+    }
+
+    if (isDamaged) {
+      for (const r of reqs) {
+        await supabase.from('maintenance_logs').insert({ asset_id: r.asset_id, reported_by_user_id: isValidUUID(r.user_id) ? r.user_id : null, issue_description: damageNotes || 'Daños en devolución', status: 'OPEN' });
+        await supabase.from('assets').update({ maintenance_alert: true }).eq('id', r.asset_id);
+      }
+      await notifyByRole('ADMIN_PATRIMONIAL', '🔧 Daños en Devolución', `${reqs.length} equipo(s) devueltos con daños. ${damageNotes}`, 'ALERT');
+      if (reqs[0]?.user_id && isValidUUID(reqs[0].user_id)) {
+        const userReq = requests.find(r => r.user_id === reqs[0].user_id);
+        if (userReq?.users?.manager_id) await createNotif(userReq.users.manager_id, '🔧 Equipo Devuelto con Daños', `Daños en ${reqs.length} equipo(s). ${damageNotes}`, 'ALERT');
+      }
+      toast.warning('⚠️ Daño registrado. Activos a mantenimiento.');
+    } else {
+      const names = reqs.map(r => r.assets?.name).filter(Boolean).join(', ');
+      await notifyByRole('ADMIN_PATRIMONIAL', '📥 Devolución Registrada', `Devueltos: ${names}.`, 'INFO');
+      toast.success('✅ Devolución registrada.');
+    }
+
+    fetchData();
+    return { success: true, message: isDamaged ? 'Devuelto con daño' : 'Devuelto correctamente' };
+  };
+
+  // ─── NOTIFICACIONES ───────────────────────────────────────────
   const markNotificationRead = async (notifId: string) => {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
-    if (!error) setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
+    await supabase.from('notifications').update({ is_read: true }).eq('id', notifId);
+    setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n));
   };
 
   const markAllRead = async (userId: string) => {
-    const { error } = await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
-    if (!error) {
-      setNotifications(prev => prev.map(n => n.user_id === userId ? { ...n, is_read: true } : n));
-      toast.success('Todas las notificaciones marcadas como leídas');
-    }
+    await supabase.from('notifications').update({ is_read: true }).eq('user_id', userId).eq('is_read', false);
+    setNotifications(prev => prev.map(n => n.user_id === userId ? { ...n, is_read: true } : n));
+    toast.success('Todas leídas');
   };
 
-  // ─── MANTENIMIENTO ─────────────────────────────────────────
+  // ─── MANTENIMIENTO ────────────────────────────────────────────
   const reportMaintenance = async (assetId: string, userId: string, description: string) => {
-    const [maintError] = await Promise.all([
-      supabase.from('maintenance_logs').insert({
-        asset_id: assetId,
-        reported_by_user_id: isValidUUID(userId) ? userId : null,
-        issue_description: description,
-        status: 'OPEN',
-      }),
-    ]);
-
+    await supabase.from('maintenance_logs').insert({ asset_id: assetId, reported_by_user_id: isValidUUID(userId) ? userId : null, issue_description: description, status: 'OPEN' });
     await supabase.from('assets').update({ status: 'En mantenimiento', maintenance_alert: true }).eq('id', assetId);
-    await logAudit('MAINTENANCE', userId, 'Sistema', assetId, 'ASSET', `Marcado para mantenimiento: ${description}`);
-
-    toast.warning('🔧 Activo marcado para mantenimiento');
+    await logAudit('MAINTENANCE', userId, 'Sistema', assetId, 'ASSET', description);
+    await notifyByRole('ADMIN_PATRIMONIAL', '🔧 Mantenimiento', description, 'WARNING', undefined, assetId);
+    toast.warning('🔧 En mantenimiento');
     fetchData();
   };
 
   const resolveMaintenance = async (logId: number, cost?: number) => {
     const log = maintenanceLogs.find(l => l.id === logId);
-
-    const { error } = await supabase.from('maintenance_logs').update({
-      status: 'RESOLVED',
-      resolved_at: new Date().toISOString(),
-      cost: cost ?? null,
-    }).eq('id', logId);
-
+    const { error } = await supabase.from('maintenance_logs').update({ status: 'RESOLVED', resolved_at: new Date().toISOString(), cost: cost ?? null }).eq('id', logId);
     if (error) { toast.error(error.message); return; }
-
     if (log?.asset_id) {
-      await supabase.from('assets').update({
-        status: 'Disponible',
-        maintenance_alert: false,
-        usage_count: 0,
-        next_maintenance_date: toDateString(addDays(new Date(), 180)),
-      }).eq('id', log.asset_id);
-
-      await logAudit('UPDATE', 'admin', 'Admin', log.asset_id, 'ASSET', `Mantenimiento resuelto (Log #${logId})`);
+      await supabase.from('assets').update({ status: 'Disponible', maintenance_alert: false, usage_count: 0, next_maintenance_date: toDateString(addDays(new Date(), 180)) }).eq('id', log.asset_id);
+      await logAudit('UPDATE', 'admin', 'Admin', log.asset_id, 'ASSET', 'Mantenimiento resuelto');
     }
-
-    toast.success('✅ Mantenimiento resuelto');
+    toast.success('✅ Resuelto');
     fetchData();
   };
 
-  const getAssetHistory = (assetId: string): AuditLog[] =>
-    auditLogs.filter(l =>
-      l.target_id === assetId ||
-      (l.metadata && (l.metadata as Record<string, unknown>)?.asset_id === assetId)
-    );
+  const getAssetHistory = (assetId: string) =>
+    auditLogs.filter(l => l.target_id === assetId || (l.metadata as Record<string, unknown>)?.asset_id === assetId);
 
   return (
     <DataContext.Provider value={{
-      assets, requests, institutions, notifications, maintenanceLogs, bundles, auditLogs,
-      isLoading, unreadCount,
+      assets, requests, institutions, notifications, maintenanceLogs, bundles, auditLogs, isLoading, unreadCount,
       addAsset, updateAsset, deleteAsset, importAssets, getNextTag, validateMaintenanceAsset,
-      createBundle, createBatchRequest,
-      addInstitution, deleteInstitution,
-      processQRScan,
-      approveRequest, rejectRequest, returnRequestWithFeedback, getTeamRequests,
+      createBundle, createBatchRequest, addInstitution, deleteInstitution,
+      processQRScan, approveRequest, rejectRequest, returnRequestWithFeedback, getTeamRequests,
       createRequest, cancelRequest, renewRequest, getUserRequests,
-      generateQRCode, getQRPayload,
-      processGuardScan,
-      markNotificationRead, markAllRead,
-      reportMaintenance, resolveMaintenance,
-      getAssetHistory,
-      fetchData,
+      generateQRCode, getQRPayload, processGuardScan, confirmComboCheckin,
+      markNotificationRead, markAllRead, reportMaintenance, resolveMaintenance,
+      getAssetHistory, fetchData,
     }}>
       {children}
     </DataContext.Provider>
@@ -833,7 +726,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 };
 
 export const useData = () => {
-  const context = useContext(DataContext);
-  if (!context) throw new Error('useData must be used within DataProvider');
-  return context;
+  const ctx = useContext(DataContext);
+  if (!ctx) throw new Error('useData must be used within DataProvider');
+  return ctx;
 };
