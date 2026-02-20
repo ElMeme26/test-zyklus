@@ -334,17 +334,15 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
 function FeedbackModal({ request, onClose, onRefresh }: { request: Request; onClose: () => void; onRefresh: () => void }) {
   const [text, setText] = useState('');
   const handleSubmit = async () => {
-    const { supabase } = await import('../../supabaseClient');
-    let res;
-    if (request.bundle_group_id) {
-      res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('bundle_group_id', request.bundle_group_id);
-    } else {
-      res = await supabase.from('requests').update({ status: 'PENDING', feedback_log: `Usuario respondió: ${text}` }).eq('id', request.id);
+    try {
+      const { respondToFeedback } = await import('../../api/requests');
+      await respondToFeedback(request.id, text, request.bundle_group_id ?? undefined);
+      toast.success('Respuesta enviada al líder');
+      onRefresh();
+      onClose();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error');
     }
-    if (res.error) { toast.error(`Error: ${res.error.message}`); return; }
-    toast.success('Respuesta enviada al líder');
-    onRefresh();
-    onClose();
   };
   const reasonText = request.rejection_feedback || request.feedback_log;
   return (

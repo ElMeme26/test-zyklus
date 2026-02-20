@@ -1,50 +1,31 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
-import type { Asset } from '../../types';
+import React, { useState } from 'react';
+import { useData } from '../../context/DataContext';
 import { Package, Check, Save } from 'lucide-react';
+import { toast } from 'sonner';
 
 export const BundleManager = () => {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const { assets: allAssets, createBundle } = useData();
+  const assets = allAssets.filter((a) => !a.bundle_id).slice(0, 50);
   const [bundleName, setBundleName] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    // Cargar activos sin bundle asignado
-    const load = async () => {
-      const { data } = await supabase.from('assets').select('*').is('bundle_id', null).limit(50);
-      if (data) setAssets(data as Asset[]);
-    };
-    load();
-  }, [loading]);
-
   const handleSave = async () => {
-    if (!bundleName || selectedIds.length === 0) return alert("Faltan datos");
-    setLoading(true);
-    
-    // 1. Crear Bundle
-    const { data: bundle, error } = await supabase
-      .from('bundles')
-      .insert([{ name: bundleName }])
-      .select()
-      .single();
-
-    if (error) {
-        alert("Error creando bundle");
-        setLoading(false);
-        return;
+    if (!bundleName || selectedIds.length === 0) {
+      toast.error('Faltan datos');
+      return;
     }
-
-    // 2. Actualizar Activos
-    await supabase
-      .from('assets')
-      .update({ bundle_id: bundle.id })
-      .in('id', selectedIds);
-
-    alert("Bundle creado!");
-    setBundleName('');
-    setSelectedIds([]);
-    setLoading(false);
+    setLoading(true);
+    try {
+      await createBundle(bundleName, '', selectedIds);
+      toast.success('Kit creado');
+      setBundleName('');
+      setSelectedIds([]);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error creando kit');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

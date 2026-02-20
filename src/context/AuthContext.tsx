@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import type { User } from '../types'; 
+import * as api from '../api/auth';
+import type { User } from '../types';
 import { toast } from 'sonner';
 
 interface AuthContextType {
   user: User | null;
-  
+
   // Nombres estándar
   login: (email: string) => Promise<void>;
   logout: () => void;
@@ -33,24 +33,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const login = async (email: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
-
-      if (error || !data) {
-        toast.error("Usuario no encontrado.");
-        return;
-      }
-
-      const userData = data as User;
+      const { user: userData, token } = await api.login(email);
       setUser(userData);
       localStorage.setItem('zf_user', JSON.stringify(userData));
+      localStorage.setItem('zf_token', token);
       toast.success(`Bienvenido, ${userData.name}`);
-      
     } catch (err) {
-      toast.error("Error de conexión.");
+      const message = err instanceof Error ? err.message : 'Error de conexión.';
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -59,6 +49,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('zf_user');
+    localStorage.removeItem('zf_token');
     window.location.href = '/';
   };
 
