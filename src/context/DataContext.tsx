@@ -444,7 +444,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const createMultipleRequests = async (assetList: Asset[], user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
     if (!assetList.length) { toast.error('No hay activos en el carrito'); return; }
-    const unavail = assetList.filter(a => a.status !== 'Disponible' || a.maintenance_alert || a.status === 'Requiere Mantenimiento');
+    const unavail = assetList.filter(a => a.status !== 'Disponible' || a.maintenance_alert);
     if (unavail.length) {
       const msgs: Record<string, string> = { 'Prestada': 'Ya prestado', 'En trámite': 'Ya tiene solicitud', 'En mantenimiento': 'En mantenimiento', 'Dada de baja': 'Dado de baja' };
       toast.error(`No disponibles: ${unavail.map(a => `${a.name} (${msgs[a.status] || a.status})`).join(', ')}`);
