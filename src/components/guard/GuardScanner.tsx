@@ -5,8 +5,8 @@ import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
-  CheckCircle2, Loader2, Scan, RefreshCcw,
-  ChevronRight, QrCode, User as UserIcon, RefreshCw
+  CheckCircle2, Loader2, Scan, RefreshCw, RefreshCcw,
+  ChevronRight, QrCode, User as UserIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsQR from 'jsqr';
