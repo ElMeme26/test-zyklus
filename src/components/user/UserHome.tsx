@@ -568,7 +568,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         />
       )}
 
-      {/* Header */}
+      {/* Header — Normal User */}
       {!isManagerView && (
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between px-4 py-3">
@@ -603,11 +603,12 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         </header>
       )}
 
+      {/* ── HEADER — Manager View (Auto-Solicitud) ── */}
       {isManagerView && (
-        <header className="flex justify-between items-center mb-6">
+        <header className="flex justify-between items-center mb-6 px-4 pt-5 pb-2">
           <div>
             <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
-            <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
+            <p className="text-emerald-400 text-xs font-bold mt-0.5">⚡ Aprobación Directa</p>
           </div>
           <div className="flex items-center gap-2">
             {((activeTab === 'catalog' && view === 'activos') || cart.length > 0) && (
@@ -649,7 +650,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 </button>
               </div>
 
-              {/* ── Search + display toggle + category filters — all in one row ── */}
+              {/* ── Search + display toggle + category filters ── */}
               {view === 'activos' && (
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* Search */}
