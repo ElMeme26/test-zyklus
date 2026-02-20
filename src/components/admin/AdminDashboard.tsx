@@ -589,7 +589,7 @@ function BundleManagerPanel({ onClose }: { onClose: () => void }) {
           <div className="flex justify-between items-center p-5 border-b border-slate-800">
             <div>
               <h2 className="text-white font-bold text-xl flex items-center gap-2">
-                <Package size={20} className="text-primary" /> Gestión de Combos (Kits)
+                <Package size={20} className="text-primary" /> Gestión de Combos
               </h2>
               <p className="text-slate-500 text-xs mt-0.5">{bundles.length} combos registrados</p>
             </div>
@@ -802,7 +802,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
       {showBundleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-sm space-y-4 border-primary/30">
-            <h3 className="text-white font-bold text-lg">Nuevo Combo (Kit)</h3>
+            <h3 className="text-white font-bold text-lg">Nuevo Combo</h3>
             <p className="text-xs text-slate-400">Agrupará los {selectedIds.size} activos seleccionados.</p>
             <Input placeholder="Nombre del Combo" value={bundleName} onChange={e => setBundleName(e.target.value)} />
             <Input placeholder="Descripción breve" value={bundleDesc} onChange={e => setBundleDesc(e.target.value)} />
