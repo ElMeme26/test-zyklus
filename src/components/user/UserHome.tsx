@@ -507,7 +507,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         {activeTab === 'catalog' ? (
           <>
             <div className="flex flex-col gap-4 mb-6 mt-2 max-w-4xl mx-auto">
-              {/* View type toggle */}
+              {/* View type toggle: Activos / Combos */}
               <div className="flex bg-slate-900 rounded-xl p-1.5 border border-slate-800 shadow-inner w-full sm:max-w-md mx-auto">
                 <button
                   onClick={() => setView('activos')}
@@ -523,41 +523,40 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 </button>
               </div>
 
+              {/* ── Search + display toggle + category filters — all in one row ── */}
               {view === 'activos' && (
-                <>
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    {/* Search */}
-                    <div className="relative flex-1">
-                      <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
-                      <Input
-                        placeholder="¿Qué activo necesitas hoy?"
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
-                      />
-                    </div>
-
-                    {/* Display mode toggle */}
-                    <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 self-center">
-                      <button
-                        onClick={() => setDisplayMode('grid')}
-                        className={`p-2 rounded-lg transition-all ${displayMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
-                        title="Vista en cuadrícula"
-                      >
-                        <LayoutGrid size={16} />
-                      </button>
-                      <button
-                        onClick={() => setDisplayMode('list')}
-                        className={`p-2 rounded-lg transition-all ${displayMode === 'list' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
-                        title="Vista en lista"
-                      >
-                        <List size={16} />
-                      </button>
-                    </div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  {/* Search */}
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-4 top-3.5 text-slate-500 w-5 h-5" />
+                    <Input
+                      placeholder="¿Qué activo necesitas hoy?"
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      className="pl-12 h-12 rounded-2xl shadow-[0_0_20px_rgba(6,182,212,0.1)] focus:shadow-[0_0_30px_rgba(6,182,212,0.25)] text-base"
+                    />
                   </div>
 
-                  {/* Category filters - junto al buscador como administrador */}
-                  <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
+                  {/* Display mode toggle */}
+                  <div className="flex bg-slate-900 border border-slate-800 rounded-xl p-1 gap-1 flex-shrink-0">
+                    <button
+                      onClick={() => setDisplayMode('grid')}
+                      className={`p-2 rounded-lg transition-all ${displayMode === 'grid' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
+                      title="Vista en cuadrícula"
+                    >
+                      <LayoutGrid size={16} />
+                    </button>
+                    <button
+                      onClick={() => setDisplayMode('list')}
+                      className={`p-2 rounded-lg transition-all ${displayMode === 'list' ? 'bg-primary/20 text-primary' : 'text-slate-500 hover:text-white'}`}
+                      title="Vista en lista"
+                    >
+                      <List size={16} />
+                    </button>
+                  </div>
+
+                  {/* Category filters */}
+                  <div className="flex gap-2 flex-wrap items-center">
                     {categories.map(cat => (
                       <button
                         key={cat}
@@ -568,7 +567,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       </button>
                     ))}
                   </div>
-                </>
+                </div>
               )}
             </div>
 
@@ -605,7 +604,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   )}
                 </div>
               ) : (
-                /* LIST / TABLE VIEW — like admin */
+                /* LIST / TABLE VIEW */
                 <AssetCatalogTable
                   assets={filteredAssets}
                   onSelect={(a) => setPreviewAsset(a)}
