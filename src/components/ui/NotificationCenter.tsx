@@ -1,6 +1,6 @@
 // src/components/ui/NotificationCenter.tsx
 import React, { useState, useRef, useEffect } from 'react';
-import { Bell, BellOff, X, CheckCheck, Info, AlertTriangle, AlertCircle, Zap, RefreshCw } from 'lucide-react';
+import { Bell, BellOff, X, CheckCheck, Info, AlertTriangle, AlertCircle, Zap } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { requestPushPermission } from '../../context/DataContext';
@@ -55,6 +55,7 @@ export function NotificationCenter() {
   const [open, setOpen] = useState(false);
   const [pushEnabled, setPushEnabled] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
+  const portalRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if ('Notification' in window) setPushEnabled(Notification.permission === 'granted');
@@ -62,7 +63,10 @@ export function NotificationCenter() {
 
   useEffect(() => {
     const handler = (e: MouseEvent | TouchEvent) => {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      const isInsideButton = panelRef.current?.contains(target);
+      const isInsidePortal = portalRef.current?.contains(target);
+      if (!isInsideButton && !isInsidePortal) setOpen(false);
     };
     if (open) {
       document.addEventListener('mousedown', handler);
@@ -72,6 +76,19 @@ export function NotificationCenter() {
       document.removeEventListener('mousedown', handler);
       document.removeEventListener('touchstart', handler);
     };
+  }, [open]);
+
+  // Bloquear scroll del body cuando el panel está abierto en móvil
+  useEffect(() => {
+    if (open && typeof window !== 'undefined') {
+      const isMobile = window.matchMedia('(max-width: 639px)').matches;
+      if (isMobile) {
+        document.body.style.overflow = 'hidden';
+      }
+      return () => {
+        document.body.style.overflow = '';
+      };
+    }
   }, [open]);
 
   if (!user) return null;

@@ -7,7 +7,7 @@ import { RequestDetailModal } from '../ui/RequestDetailModal';
 import {
   Search, LogOut, Clock, Package, ChevronRight, QrCode, X,
   CheckCircle, MessageSquare, Building2, Info, Trash2, AlertTriangle,
-  LayoutGrid, List, Tag, MapPin, Wrench
+  LayoutGrid, List, Tag, MapPin, Wrench, ShoppingCart, Minus
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import QRCode from 'react-qr-code';
@@ -40,10 +40,11 @@ function StatusBadge({ status }: { status: string }) {
 }
 
 // ─── ASSET DETAIL MODAL (for catalog) ────────────────────────
-function AssetDetailModal({ asset, onClose, onRequest }: {
+function AssetDetailModal({ asset, onClose, onRequest, onAddToCart }: {
   asset: Asset;
   onClose: () => void;
   onRequest: (asset: Asset) => void;
+  onAddToCart?: (asset: Asset) => boolean;
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
@@ -97,11 +98,27 @@ function AssetDetailModal({ asset, onClose, onRequest }: {
           </div>
         </div>
 
-        <div className="flex gap-2">
-          <Button variant="secondary" className="flex-1" onClick={onClose}>Cancelar</Button>
-          <Button variant="neon" className="flex-1" onClick={() => { onClose(); onRequest(asset); }}>
-            Solicitar Ahora
-          </Button>
+        <div className="flex flex-col gap-2">
+          <div className="flex gap-2">
+            <Button variant="secondary" className="flex-1" onClick={onClose}>Cancelar</Button>
+            <Button variant="neon" className="flex-1" onClick={() => { onClose(); onRequest(asset); }}>
+              Solicitar Ahora
+            </Button>
+          </div>
+          {onAddToCart && (
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => {
+                const added = onAddToCart(asset);
+                onClose();
+                if (added) toast.success(`${asset.name} añadido al carrito`);
+                else toast.warning('Este activo ya está en el carrito');
+              }}
+            >
+              <ShoppingCart size={14} className="mr-2" /> Añadir al carrito
+            </Button>
+          )}
         </div>
       </Card>
     </div>
@@ -352,7 +369,7 @@ function FeedbackModal({ request, onClose, onRefresh }: { request: Request; onCl
 }
 
 // ─── ASSET CATALOG TABLE VIEW ─────────────────────────────────
-function AssetCatalogTable({ assets, onSelect }: { assets: Asset[]; onSelect: (a: Asset) => void }) {
+function AssetCatalogTable({ assets, onSelect, onAddToCart }: { assets: Asset[]; onSelect: (a: Asset) => void; onAddToCart?: (a: Asset) => void }) {
   const statusColors: Record<string, string> = {
     'Disponible': 'text-emerald-400 bg-emerald-500/10',
     'Prestada': 'text-cyan-400 bg-cyan-500/10',
@@ -388,9 +405,20 @@ function AssetCatalogTable({ assets, onSelect }: { assets: Asset[]; onSelect: (a
                 </span>
               </td>
               <td className="p-3 text-right">
-                <Button size="sm" variant="neon" className="text-[11px] h-7" onClick={e => { e.stopPropagation(); onSelect(a); }}>
-                  Solicitar <ChevronRight size={12} />
-                </Button>
+                <div className="flex items-center justify-end gap-1">
+                  {onAddToCart && (
+                    <button
+                      onClick={e => { e.stopPropagation(); onAddToCart(a); }}
+                      className="p-2 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50 transition-all"
+                      title="Añadir al carrito"
+                    >
+                      <ShoppingCart size={14} />
+                    </button>
+                  )}
+                  <Button size="sm" variant="neon" className="text-[11px] h-7" onClick={e => { e.stopPropagation(); onSelect(a); }}>
+                    Solicitar <ChevronRight size={12} />
+                  </Button>
+                </div>
               </td>
             </tr>
           ))}
@@ -408,7 +436,7 @@ function AssetCatalogTable({ assets, onSelect }: { assets: Asset[]; onSelect: (a
 
 // ─── MAIN USER HOME ──────────────────────────────────────────
 export function UserHome({ isManagerView = false, onBack }: { isManagerView?: boolean; onBack?: () => void }) {
-  const { assets, bundles, createRequest, createBatchRequest, institutions, fetchData } = useData();
+  const { assets, bundles, createRequest, createBatchRequest, createMultipleRequests, institutions, fetchData } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'activos' | 'combos'>('activos');
@@ -418,6 +446,9 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
 
   const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
+  const [cart, setCart] = useState<Asset[]>([]);
+  const [cartOpen, setCartOpen] = useState(false);
+  const [checkoutFromCart, setCheckoutFromCart] = useState(false);
   const [previewAsset, setPreviewAsset] = useState<Asset | null>(null);
   const [days, setDays] = useState(0);
   const [motive, setMotive] = useState('');
@@ -426,6 +457,17 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
 
   const [qrRequest, setQRRequest] = useState<Request | null>(null);
   const [feedbackRequest, setFeedbackRequest] = useState<Request | null>(null);
+
+  const addToCart = (asset: Asset) => {
+    let added = false;
+    setCart(prev => {
+      if (prev.some(a => a.id === asset.id)) return prev;
+      added = true;
+      return [...prev, asset];
+    });
+    return added;
+  };
+  const removeFromCart = (assetId: string) => setCart(prev => prev.filter(a => a.id !== assetId));
 
   const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
 
@@ -442,7 +484,12 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
 
   const handleSubmit = async () => {
     if (!user) return;
-    if (selectedAsset) {
+    if (checkoutFromCart && cart.length > 0) {
+      await createMultipleRequests(cart, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
+      setCart([]);
+      setCheckoutFromCart(false);
+      setCartOpen(false);
+    } else if (selectedAsset) {
       await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
     } else if (selectedBundle) {
       await createBatchRequest(selectedBundle, user, days, motive, isManagerView);
@@ -463,12 +510,61 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       {qrRequest && <QRModal request={qrRequest} onClose={() => setQRRequest(null)} />}
       {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} onRefresh={fetchData} />}
 
+      {/* Cart Drawer */}
+      {cartOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in">
+          <div className="absolute inset-0 bg-black/60" onClick={() => setCartOpen(false)} />
+          <div className="relative w-full max-w-sm bg-background border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800">
+              <h3 className="text-white font-bold flex items-center gap-2">
+                <ShoppingCart size={20} className="text-primary" />
+                Carrito ({cart.length})
+              </h3>
+              <button onClick={() => setCartOpen(false)} className="p-2 text-slate-400 hover:text-white"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {cart.length === 0 ? (
+                <div className="text-center py-12 text-slate-500">
+                  <Package size={40} className="mx-auto mb-3 opacity-30" />
+                  <p className="text-sm">Tu carrito está vacío.</p>
+                  <p className="text-xs mt-1">Añade activos desde el catálogo.</p>
+                </div>
+              ) : (
+                cart.map(a => (
+                  <div key={a.id} className="flex items-center gap-3 p-3 bg-slate-900/50 rounded-xl border border-slate-800">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-white font-medium text-sm truncate">{a.name}</p>
+                      <p className="text-slate-500 text-xs font-mono">{a.tag}</p>
+                    </div>
+                    <button
+                      onClick={() => removeFromCart(a.id)}
+                      className="p-1.5 rounded-lg text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-all"
+                      title="Quitar"
+                    >
+                      <Minus size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            {cart.length > 0 && (
+              <div className="p-4 border-t border-slate-800">
+                <Button variant="neon" className="w-full" onClick={() => { setCartOpen(false); setCheckoutFromCart(true); }}>
+                  Completar solicitud ({cart.length} {cart.length === 1 ? 'activo' : 'activos'})
+                </Button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Asset Preview Modal */}
       {previewAsset && (
         <AssetDetailModal
           asset={previewAsset}
           onClose={() => setPreviewAsset(null)}
           onRequest={(a) => setSelectedAsset(a)}
+          onAddToCart={addToCart}
         />
       )}
 
@@ -481,6 +577,20 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
               <p className="text-[11px] text-slate-500">{user?.disciplina}</p>
             </div>
             <div className="flex items-center gap-2">
+              {((activeTab === 'catalog' && view === 'activos') || cart.length > 0) && (
+                <button
+                  onClick={() => setCartOpen(true)}
+                  className="relative p-2 rounded-lg hover:bg-slate-800/80 text-slate-400 hover:text-primary transition-all"
+                  title="Ver carrito"
+                >
+                  <ShoppingCart size={20} />
+                  {cart.length > 0 && (
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-primary text-black text-[10px] font-bold rounded-full">
+                      {cart.length}
+                    </span>
+                  )}
+                </button>
+              )}
               <NotificationCenter />
               <ThemeToggle />
               <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
@@ -499,7 +609,23 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
             <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
           </div>
-          <Button variant="outline" onClick={onBack}>Cancelar</Button>
+          <div className="flex items-center gap-2">
+            {((activeTab === 'catalog' && view === 'activos') || cart.length > 0) && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative p-2 rounded-lg hover:bg-slate-800/80 text-slate-400 hover:text-primary transition-all border border-slate-700"
+                title="Ver carrito"
+              >
+                <ShoppingCart size={20} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-primary text-black text-[10px] font-bold rounded-full">
+                    {cart.length}
+                  </span>
+                )}
+              </button>
+            )}
+            <Button variant="outline" onClick={onBack}>Cancelar</Button>
+          </div>
         </header>
       )}
 
@@ -588,11 +714,25 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       </div>
                       <h3 className="text-white font-bold text-sm mb-1 truncate">{asset.name}</h3>
                       <p className="text-secondary text-xs mb-3 truncate">{asset.description || asset.location || 'Sin descripción'}</p>
-                      <div className="flex justify-between items-center pt-2 border-t border-slate-800">
+                      <div className="flex justify-between items-center pt-2 border-t border-slate-800 gap-2">
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><CheckCircle size={10} /> Disponible</span>
-                        <Button size="sm" variant="neon" className="text-[11px] h-7" onClick={e => { e.stopPropagation(); setSelectedAsset(asset); }}>
-                          Solicitar <ChevronRight size={12} />
-                        </Button>
+                        <div className="flex gap-1">
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              const added = addToCart(asset);
+                              if (added) toast.success(`${asset.name} añadido al carrito`);
+                              else toast.warning('Este activo ya está en el carrito');
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50 transition-all"
+                            title="Añadir al carrito"
+                          >
+                            <ShoppingCart size={14} />
+                          </button>
+                          <Button size="sm" variant="neon" className="text-[11px] h-7" onClick={e => { e.stopPropagation(); setSelectedAsset(asset); }}>
+                            Solicitar <ChevronRight size={12} />
+                          </Button>
+                        </div>
                       </div>
                     </Card>
                   ))}
@@ -608,6 +748,11 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 <AssetCatalogTable
                   assets={filteredAssets}
                   onSelect={(a) => setPreviewAsset(a)}
+                  onAddToCart={(a) => {
+                    const added = addToCart(a);
+                    if (added) toast.success(`${a.name} añadido al carrito`);
+                    else toast.warning('Este activo ya está en el carrito');
+                  }}
                 />
               )
             ) : (
@@ -652,17 +797,26 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       </main>
 
       {/* Request Modal */}
-      {(selectedAsset || selectedBundle) && (
+      {(selectedAsset || selectedBundle || (checkoutFromCart && cart.length > 0)) && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-md space-y-6 border-primary/30 shadow-[0_0_50px_rgba(6,182,212,0.15)]">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-xl font-bold text-white">Configura tu solicitud</h2>
                 <p className="text-primary text-sm mt-0.5">
-                  {selectedAsset ? selectedAsset.name : `Combo: ${selectedBundle?.name}`}
+                  {checkoutFromCart && cart.length > 0
+                    ? `${cart.length} activos en el carrito`
+                    : selectedAsset ? selectedAsset.name : `Combo: ${selectedBundle?.name}`}
                 </p>
+                {checkoutFromCart && cart.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {cart.map(a => (
+                      <span key={a.id} className="text-[10px] px-2 py-0.5 bg-slate-800 rounded text-slate-400">{a.name}</span>
+                    ))}
+                  </div>
+                )}
               </div>
-              <button onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }} className="text-slate-400 hover:text-white">
+              <button onClick={() => { setSelectedAsset(null); setSelectedBundle(null); setCheckoutFromCart(false); }} className="text-slate-400 hover:text-white">
                 <X size={18} />
               </button>
             </div>
@@ -720,8 +874,10 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">
-              <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); }}>Cancelar</Button>
-              <Button variant="neon" onClick={handleSubmit}>{isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud'}</Button>
+              <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); setCheckoutFromCart(false); }}>Cancelar</Button>
+              <Button variant="neon" onClick={handleSubmit}>
+                {(checkoutFromCart && cart.length > 0) ? (isManagerView ? `Auto-Aprobar ${cart.length} activos` : 'Enviar 1 solicitud') : (isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud')}
+              </Button>
             </div>
           </Card>
         </div>
