@@ -511,7 +511,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       {feedbackRequest && <FeedbackModal request={feedbackRequest} onClose={() => setFeedbackRequest(null)} onRefresh={fetchData} />}
 
       {/* Cart Drawer */}
-      {cartOpen && !isManagerView && (
+      {cartOpen && (
         <div className="fixed inset-0 z-50 flex justify-end animate-in fade-in">
           <div className="absolute inset-0 bg-black/60" onClick={() => setCartOpen(false)} />
           <div className="relative w-full max-w-sm bg-background border-l border-slate-800 shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
@@ -564,7 +564,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
           asset={previewAsset}
           onClose={() => setPreviewAsset(null)}
           onRequest={(a) => setSelectedAsset(a)}
-          onAddToCart={!isManagerView ? addToCart : undefined}
+          onAddToCart={addToCart}
         />
       )}
 
@@ -609,7 +609,23 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
             <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
           </div>
-          <Button variant="outline" onClick={onBack}>Cancelar</Button>
+          <div className="flex items-center gap-2">
+            {((activeTab === 'catalog' && view === 'activos') || cart.length > 0) && (
+              <button
+                onClick={() => setCartOpen(true)}
+                className="relative p-2 rounded-lg hover:bg-slate-800/80 text-slate-400 hover:text-primary transition-all border border-slate-700"
+                title="Ver carrito"
+              >
+                <ShoppingCart size={20} />
+                {cart.length > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 flex items-center justify-center bg-primary text-black text-[10px] font-bold rounded-full">
+                    {cart.length}
+                  </span>
+                )}
+              </button>
+            )}
+            <Button variant="outline" onClick={onBack}>Cancelar</Button>
+          </div>
         </header>
       )}
 
@@ -702,20 +718,18 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       <div className="flex justify-between items-center pt-2 border-t border-slate-800 gap-2">
                         <span className="text-xs text-emerald-400 font-bold flex items-center gap-1"><CheckCircle size={10} /> Disponible</span>
                         <div className="flex gap-1">
-                          {!isManagerView && (
-                            <button
-                              onClick={e => {
-                                e.stopPropagation();
-                                const added = addToCart(asset);
-                                if (added) toast.success(`${asset.name} añadido al carrito`);
-                                else toast.warning('Este activo ya está en el carrito');
-                              }}
-                              className="p-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50 transition-all"
-                              title="Añadir al carrito"
-                            >
-                              <ShoppingCart size={14} />
-                            </button>
-                          )}
+                          <button
+                            onClick={e => {
+                              e.stopPropagation();
+                              const added = addToCart(asset);
+                              if (added) toast.success(`${asset.name} añadido al carrito`);
+                              else toast.warning('Este activo ya está en el carrito');
+                            }}
+                            className="p-1.5 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50 transition-all"
+                            title="Añadir al carrito"
+                          >
+                            <ShoppingCart size={14} />
+                          </button>
                           <Button size="sm" variant="neon" className="text-[11px] h-7" onClick={e => { e.stopPropagation(); setSelectedAsset(asset); }}>
                             Solicitar <ChevronRight size={12} />
                           </Button>
@@ -735,11 +749,11 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 <AssetCatalogTable
                   assets={filteredAssets}
                   onSelect={(a) => setPreviewAsset(a)}
-                  onAddToCart={!isManagerView ? (a) => {
+                  onAddToCart={(a) => {
                     const added = addToCart(a);
                     if (added) toast.success(`${a.name} añadido al carrito`);
                     else toast.warning('Este activo ya está en el carrito');
-                  } : undefined}
+                  }}
                 />
               )
             ) : (
@@ -863,7 +877,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             <div className="grid grid-cols-2 gap-3 pt-1">
               <Button variant="ghost" onClick={() => { setSelectedAsset(null); setSelectedBundle(null); setCheckoutFromCart(false); }}>Cancelar</Button>
               <Button variant="neon" onClick={handleSubmit}>
-                {(checkoutFromCart && cart.length > 0) ? (isManagerView ? `Auto-Aprobar ${cart.length} activos` : `Enviar ${cart.length} solicitudes`) : (isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud')}
+                {(checkoutFromCart && cart.length > 0) ? (isManagerView ? `Auto-Aprobar ${cart.length} activos` : 'Enviar 1 solicitud') : (isManagerView ? 'Auto-Aprobar' : 'Enviar Solicitud')}
               </Button>
             </div>
           </Card>

@@ -451,11 +451,14 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return;
     }
     const returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
+    const cartGroupId = `CART-${Date.now()}`;
+    const groupedMotive = motive.trim() ? `[CARRITO] ${motive}` : '[CARRITO] Solicitud desde carrito';
     const rows = assetList.map(a => ({
       asset_id: a.id, user_id: user.id, institution_id: institutionId || null,
       requester_name: user.name, requester_disciplina: user.disciplina,
-      days_requested: days, motive, status: autoApprove ? 'APPROVED' : 'PENDING',
+      days_requested: days, motive: groupedMotive, status: autoApprove ? 'APPROVED' : 'PENDING',
       approved_at: autoApprove ? new Date().toISOString() : null, expected_return_date: returnDate,
+      bundle_group_id: cartGroupId,
     }));
     const { data: createdRequests, error } = await supabase
       .from('requests')
@@ -465,27 +468,29 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await supabase.from('assets').update({ status: autoApprove ? 'Prestada' : 'En trámite' }).in('id', assetList.map(a => a.id));
     if (!autoApprove) {
       const names = assetList.map(a => a.name).join(', ');
-      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud (múltiple)', `${user.name} solicita ${assetList.length} activos: ${names}${institutionId ? ' — institución externa' : ''}.`, 'INFO');
-      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud (múltiple)', `${user.name} solicita ${assetList.length} activos: ${names}.`, 'INFO', undefined, undefined);
+      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud — Carrito', `${user.name} solicita ${assetList.length} activo(s) en una solicitud: ${names}${institutionId ? ' — institución externa' : ''}.`, 'INFO');
+      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Carrito', `${user.name} solicita ${assetList.length} activo(s) en una solicitud: ${names}.`, 'INFO', undefined, undefined);
     } else {
-      const nameByAssetId = new Map(assetList.map(a => [a.id, a.name] as const));
-      for (const r of (createdRequests || [])) {
-        await logAudit('APPROVE', user.id, user.name, String(r.id), 'REQUEST', `Auto-aprobado: ${nameByAssetId.get(r.asset_id) || r.asset_id}`);
-      }
+      await logAudit('APPROVE', user.id, user.name, cartGroupId, 'REQUEST', `Auto-aprobado carrito: ${assetList.length} activos`);
     }
-    toast.success(autoApprove ? `✅ ${assetList.length} activos auto-aprobados` : `📤 ${assetList.length} solicitudes enviadas`);
+    toast.success(autoApprove ? `✅ ${assetList.length} activos auto-aprobados` : '📤 Solicitud enviada');
     fetchData();
   };
 
   const cancelRequest = async (reqId: number) => {
     const req = requests.find(r => r.id === reqId);
-    const { error } = await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId);
+    if (!req) return;
+    const isGroup = !!req.bundle_group_id;
+    const { error } = isGroup
+      ? await supabase.from('requests').update({ status: 'CANCELLED' }).eq('bundle_group_id', req.bundle_group_id)
+      : await supabase.from('requests').update({ status: 'CANCELLED' }).eq('id', reqId);
     if (error) { toast.error(error.message); return; }
-    if (req && ['PENDING', 'ACTION_REQUIRED'].includes(req.status) && req.asset_id) {
-      const a = assets.find(x => x.id === req.asset_id);
-      if (a?.status === 'En trámite') await supabase.from('assets').update({ status: 'Disponible' }).eq('id', req.asset_id);
+    if (['PENDING', 'ACTION_REQUIRED'].includes(req.status)) {
+      const idsToFree = isGroup ? requests.filter(r => r.bundle_group_id === req.bundle_group_id).map(r => r.asset_id) : (req.asset_id ? [req.asset_id] : []);
+      const inTramite = idsToFree.filter(id => assets.find(x => x.id === id)?.status === 'En trámite');
+      if (inTramite.length) await supabase.from('assets').update({ status: 'Disponible' }).in('id', inTramite);
     }
-    toast.success('Solicitud cancelada');
+    toast.success(isGroup ? 'Solicitud (carrito/combo) cancelada' : 'Solicitud cancelada');
     fetchData();
   };
 
