@@ -21,8 +21,7 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
 
 // ─── KPI CARD ────────────────────────────────────────────────────
 function KPICard({ label, value, color, icon, sublabel }: {
@@ -963,20 +962,20 @@ export function AdminDashboard() {
   );
 
   const generatePredictiveReport = async () => {
-    if (!GEMINI_API_KEY) { toast.error('Falta API Key de Gemini en entorno'); return; }
     setIsGenerating(true);
     try {
-      const topItems = requests.slice(0, 50).map(r => r.assets?.name).filter(Boolean).join(', ');
-      const prompt = `Eres Zykla AI, experto en control patrimonial. Analiza el historial reciente de activos prestados: [${topItems}]. Genera un reporte predictivo de 1 párrafo profesional indicando la demanda y sugiriendo qué tipo de activos se deben adquirir con mayor prioridad. Hazlo ver analítico y preséntalo directo al administrador.`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
-      });
-      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-      setAiReport(data.candidates[0].content.parts[0].text);
+      const assetNames = requests
+        .filter(r => r.assets?.name)
+        .map(r => r.assets!.name as string);
+      const report = await generateReport(assetNames, 'administrador');
+      setAiReport(report);
       toast.success('Reporte generado exitosamente');
-    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error(`Error Zykla AI: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCameraScan = async (detectedCodes: { rawValue?: string }[]) => {
