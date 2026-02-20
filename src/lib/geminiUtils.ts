@@ -1,3 +1,6 @@
+// src/lib/geminiUtils.ts
+// Utilidades compartidas para llamadas a Gemini AI en Zyklus Halo
+
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
@@ -28,7 +31,7 @@ export async function callGemini(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxOutputTokens ?? 512,
+        maxOutputTokens: options.maxOutputTokens ?? 1500,
       },
     }),
   });
@@ -85,5 +88,5 @@ Genera un reporte predictivo profesional de máximo 3 párrafos cortos dirigido 
 
 Usa un tono analítico y ejecutivo. Responde solo en español.`;
 
-  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 400 });
+  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 1500 });
 }
