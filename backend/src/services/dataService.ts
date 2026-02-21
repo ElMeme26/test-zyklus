@@ -98,7 +98,7 @@ export async function getStats(): Promise<DataStats> {
     query<{ category: string; count: string }>(`SELECT category, COUNT(*)::int AS count FROM assets WHERE category IS NOT NULL AND category != '' GROUP BY category`),
   ]);
 
-  const assetCounts: Record<string, number> = { total: 0, disponible: 0, prestada: 0, mantenimiento: 0 };
+  const assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number } = { total: 0, disponible: 0, prestada: 0, mantenimiento: 0 };
   for (const row of assetCountsRes.rows ?? []) {
     const status = row.status ?? '';
     const count = Number(row.count ?? 0);
