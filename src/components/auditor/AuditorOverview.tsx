@@ -20,8 +20,9 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
 import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
+import { RefreshButton } from '../ui/RefreshButton';
+import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
 
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
 
 function KPICard({ label, value, color, icon, sublabel }: {
@@ -275,20 +276,20 @@ export function AuditorOverview() {
   );
 
   const generatePredictiveReport = async () => {
-    if (!GEMINI_API_KEY) { toast.error('Falta API Key de Gemini en entorno'); return; }
     setIsGenerating(true);
     try {
-      const topItems = requests.slice(0, 50).map(r => r.assets?.name).filter(Boolean).join(', ');
-      const prompt = `Eres Zykla AI, experto en control patrimonial. Analiza el historial reciente de activos prestados: [${topItems}]. Genera un reporte predictivo de 1 párrafo profesional indicando la demanda y sugiriendo qué tipo de activos se deben adquirir con mayor prioridad. Hazlo ver analítico y preséntalo directo al auditor.`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
-      });
-      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-      setAiReport(data.candidates[0].content.parts[0].text);
+      const assetNames = requests
+        .filter(r => r.assets?.name)
+        .map(r => r.assets!.name as string);
+      const report = await generateReport(assetNames, 'auditor');
+      setAiReport(report);
       toast.success('Reporte generado exitosamente');
-    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error(`Error Zykla AI: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   if (isLoading) {
@@ -317,6 +318,7 @@ export function AuditorOverview() {
             auditLogs={auditLogs}
             maintenanceLogs={maintenanceLogs}
           />
+          <RefreshButton />
           <NotificationCenter />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>

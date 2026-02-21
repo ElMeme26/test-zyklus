@@ -18,6 +18,7 @@ import type { Request, Asset } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
+import { RefreshButton } from '../ui/RefreshButton';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -207,7 +208,7 @@ function MyLoansView({ onShowQR, onFeedback }: {
                   <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setDetailReq(req)}>
                     <div className="flex items-center gap-2 mb-1">
                       <h3 className="text-white font-bold truncate hover:text-primary transition-colors">
-                        {req.is_bundle ? `📦 ${req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Kit de equipos'}` : req.assets?.name || `Activo #${req.asset_id}`}
+                        {req.is_bundle ? `📦 ${req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Combo de equipos'}` : req.assets?.name || `Activo #${req.asset_id}`}
                       </h3>
                       {!req.is_bundle && <span className="text-xs text-slate-500 font-mono flex-shrink-0">{req.assets?.tag}</span>}
                     </div>
@@ -316,7 +317,7 @@ function QRModal({ request, onClose }: { request: Request; onClose: () => void }
             <span className="text-white font-medium">{request.requester_name}</span>
           </div>
           <div className="flex justify-between text-xs text-primary font-bold">
-            <span>{request.is_bundle ? 'Combo (Kit)' : 'Activo'}</span>
+            <span>{request.is_bundle ? 'Combo' : 'Activo'}</span>
             <span className="text-right">{request.is_bundle ? `${request.bundle_items} equipos` : request.assets?.name}</span>
           </div>
           <div className="flex justify-between text-xs">
@@ -603,7 +604,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         />
       )}
 
-      {/* Header */}
+      {/* Header — Normal User */}
       {!isManagerView && (
         <header className="sticky top-0 z-30 bg-background/80 backdrop-blur border-b border-slate-800">
           <div className="flex items-center justify-between px-4 py-3">
@@ -626,6 +627,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   )}
                 </button>
               )}
+              <RefreshButton />
               <NotificationCenter />
               <ThemeToggle />
               <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
@@ -638,11 +640,12 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
         </header>
       )}
 
+      {/* ── HEADER — Manager View (Auto-Solicitud) ── */}
       {isManagerView && (
-        <header className="flex justify-between items-center mb-6">
+        <header className="flex justify-between items-center mb-6 px-4 pt-5 pb-2">
           <div>
             <h1 className="text-xl font-bold text-white">Auto-Solicitud Líder</h1>
-            <p className="text-emerald-400 text-xs font-bold">⚡ Aprobación Directa</p>
+            <p className="text-emerald-400 text-xs font-bold mt-0.5">⚡ Aprobación Directa</p>
           </div>
           <div className="flex items-center gap-2">
             {((activeTab === 'catalog' && view === 'activos') || cart.length > 0) && (
@@ -659,6 +662,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 )}
               </button>
             )}
+            <RefreshButton />   
             <Button variant="outline" onClick={onBack}>Cancelar</Button>
           </div>
         </header>
@@ -680,11 +684,11 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   onClick={() => setView('combos')}
                   className={`flex-1 py-2 text-sm font-bold rounded-lg transition-all duration-300 ${view === 'combos' ? 'bg-primary text-black shadow-md scale-105' : 'text-slate-400 hover:text-white'}`}
                 >
-                  Combos (Kits)
+                  Combos
                 </button>
               </div>
 
-              {/* ── Search + display toggle + category filters — all in one row ── */}
+              {/* ── Search + display toggle + category filters ── */}
               {view === 'activos' && (
                 <div className="flex items-center gap-3 flex-wrap">
                   {/* Search */}
