@@ -16,7 +16,17 @@ const app = express();
 const PORT = process.env.PORT ?? 3000;
 const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
 
-app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || origin.endsWith('.netlify.app') || origin === FRONTEND_ORIGIN) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 app.get('/health', async (_req, res) => {
