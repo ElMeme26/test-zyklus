@@ -6,7 +6,7 @@ import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
   CheckCircle2, Loader2, Scan, RefreshCw, RefreshCcw,
-  ChevronRight, QrCode, User as UserIcon
+  QrCode, User as UserIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
 import jsQR from 'jsqr';
@@ -138,15 +138,6 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
   );
 }
 
-function StatusPill({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    APPROVED: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20',
-    ACTIVE: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20',
-    OVERDUE: 'text-rose-400 bg-rose-500/10 border-rose-500/20',
-  };
-  return <span className={`text-[10px] font-black px-2 py-1 rounded-full border ${map[status] || 'text-slate-400 bg-slate-800 border-slate-700'}`}>{status}</span>;
-}
-
 export function GuardScanner() {
   const { processGuardScan, confirmComboCheckin, fetchData } = useData();
   const { user, logout } = useAuth();
@@ -161,13 +152,20 @@ export function GuardScanner() {
   const sigRef = useRef<SignatureCanvas>(null);
 
   const [comboState, setComboState] = useState<ComboCheckinState | null>(null);
+
+  // ── Estado del daño (se resetea en cada ciclo)
   const [isDamaged, setIsDamaged] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
+
   const [scannedAssets, setScannedAssets] = useState<Set<string>>(new Set());
   const [expectedAssetIds, setExpectedAssetIds] = useState<string[]>([]);
 
-  // Track last checkin result message for done screen
+  // ── Estado "snapshot" para la pantalla done
+  // Se captura justo antes de setStep('done') para evitar que el reset
+  // borre los valores antes de que la pantalla los lea.
   const [doneMessage, setDoneMessage] = useState('');
+  const [doneMode, setDoneMode] = useState<ScanMode>('CHECKOUT');
+  const [doneDamaged, setDoneDamaged] = useState(false);
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
@@ -187,6 +185,8 @@ export function GuardScanner() {
     setScannedAssets(new Set());
     setExpectedAssetIds([]);
     setDoneMessage('');
+    setDoneMode('CHECKOUT');
+    setDoneDamaged(false);
     sigRef.current?.clear();
   }, []);
 
@@ -219,13 +219,13 @@ export function GuardScanner() {
           setStep('idle');
         }
       } else {
-        // CHECKIN mode
+        // CHECKIN
         if (result.comboState) {
           setComboState(result.comboState);
           setStep('combo_checkin');
           toast.success('Primer activo del combo escaneado ✓');
         } else {
-          // Single asset checkin — go to damage check
+          // Activo individual — ir a inspección de daños
           setStep('damage_check');
         }
       }
@@ -295,6 +295,9 @@ export function GuardScanner() {
     const sig = sigRef.current.toDataURL();
     const result = await processGuardScan(rawQR, 'CHECKOUT', sig);
     if (result.success) {
+      // Capturar snapshot antes de transicionar
+      setDoneMode('CHECKOUT');
+      setDoneDamaged(false);
       setDoneMessage('Salida confirmada correctamente');
       toast.success(result.message);
       setStep('done');
@@ -305,7 +308,10 @@ export function GuardScanner() {
 
   // ─── CHECKIN CONFIRM ─────────────────────────────────────────
   const handleCheckinConfirm = async () => {
-    if (isDamaged && !damageNotes.trim()) { toast.error('Describe el daño'); return; }
+    if (isDamaged && !damageNotes.trim()) {
+      toast.error('Por favor describe el daño antes de continuar');
+      return;
+    }
 
     let result;
     if (comboState) {
@@ -315,7 +321,16 @@ export function GuardScanner() {
     }
 
     if (result.success) {
-      setDoneMessage(isDamaged ? 'Equipo recibido — enviado a revisión de mantenimiento' : 'Devolución registrada correctamente');
+      // IMPORTANTE: capturar snapshot del estado actual ANTES de que
+      // cualquier re-render pueda cambiar isDamaged
+      const wasDamaged = isDamaged;
+      const msg = wasDamaged
+        ? 'Equipo recibido — enviado a revisión de mantenimiento'
+        : 'Devolución registrada correctamente';
+
+      setDoneMode('CHECKIN');
+      setDoneDamaged(wasDamaged);
+      setDoneMessage(msg);
       setStep('done');
     } else {
       toast.error(result.message);
@@ -348,7 +363,6 @@ export function GuardScanner() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* ── BOTÓN REFRESH ── */}
             <button
               onClick={handleRefresh}
               disabled={isRefreshing}
@@ -570,70 +584,129 @@ export function GuardScanner() {
               <p className="text-slate-400 text-sm mb-5">Inspecciona el equipo físicamente antes de confirmar.</p>
 
               <div className="grid grid-cols-2 gap-3">
+                {/* Sin daños */}
                 <button
                   onClick={() => { setIsDamaged(false); setDamageNotes(''); }}
-                  className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${!isDamaged ? 'border-emerald-500 bg-emerald-500/10' : 'border-slate-700 bg-slate-900/50'}`}
+                  className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                    !isDamaged
+                      ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_20px_rgba(16,185,129,0.2)]'
+                      : 'border-slate-700 bg-slate-900/50 hover:border-slate-600'
+                  }`}
                 >
-                  <Check size={28} className={!isDamaged ? 'text-emerald-400' : 'text-slate-600'} />
-                  <span className={`text-sm font-black ${!isDamaged ? 'text-emerald-400' : 'text-slate-500'}`}>Sin Daños</span>
+                  <Check size={32} className={!isDamaged ? 'text-emerald-400' : 'text-slate-600'} />
+                  <span className={`text-sm font-black ${!isDamaged ? 'text-emerald-400' : 'text-slate-500'}`}>
+                    Sin Daños
+                  </span>
+                  {!isDamaged && (
+                    <span className="text-[10px] text-emerald-500 font-bold">✓ Seleccionado</span>
+                  )}
                 </button>
+
+                {/* Con daños */}
                 <button
                   onClick={() => setIsDamaged(true)}
-                  className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all ${isDamaged ? 'border-rose-500 bg-rose-500/10' : 'border-slate-700 bg-slate-900/50'}`}
+                  className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
+                    isDamaged
+                      ? 'border-rose-500 bg-rose-500/10 shadow-[0_0_20px_rgba(244,63,94,0.2)]'
+                      : 'border-slate-700 bg-slate-900/50 hover:border-slate-600'
+                  }`}
                 >
-                  <AlertTriangle size={28} className={isDamaged ? 'text-rose-400' : 'text-slate-600'} />
-                  <span className={`text-sm font-black ${isDamaged ? 'text-rose-400' : 'text-slate-500'}`}>Con Daños</span>
+                  <AlertTriangle size={32} className={isDamaged ? 'text-rose-400' : 'text-slate-600'} />
+                  <span className={`text-sm font-black ${isDamaged ? 'text-rose-400' : 'text-slate-500'}`}>
+                    Con Daños
+                  </span>
+                  {isDamaged && (
+                    <span className="text-[10px] text-rose-500 font-bold">✓ Seleccionado</span>
+                  )}
                 </button>
               </div>
 
+              {/* Descripción del daño — solo si isDamaged */}
               {isDamaged && (
-                <div className="mt-4 animate-in slide-in-from-top-2">
-                  <label className="text-xs font-bold text-rose-400 uppercase tracking-wider block mb-2">Describe el daño</label>
+                <div className="mt-5 space-y-2 animate-in slide-in-from-top-2 duration-200">
+                  <label className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
+                    <AlertTriangle size={11} /> Describe el daño <span className="text-rose-500 ml-0.5">*</span>
+                  </label>
                   <textarea
                     value={damageNotes}
                     onChange={e => setDamageNotes(e.target.value)}
-                    placeholder="Ej: Pantalla rayada, faltó cable de alimentación..."
-                    className="w-full h-24 bg-slate-950 border border-rose-500/30 rounded-xl px-3 py-2 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-1 focus:ring-rose-500 resize-none"
+                    placeholder="Ej: Pantalla rayada, faltó cable de alimentación, golpe en la esquina..."
+                    className="w-full h-28 bg-slate-950 border border-rose-500/40 focus:border-rose-500 rounded-xl px-3 py-2.5 text-sm text-white placeholder:text-slate-600 focus:outline-none focus:ring-2 focus:ring-rose-500/30 resize-none transition-all"
+                    autoFocus
                   />
+                  {!damageNotes.trim() && (
+                    <p className="text-rose-400/70 text-xs flex items-center gap-1">
+                      <AlertTriangle size={10} /> Campo requerido para continuar
+                    </p>
+                  )}
                 </div>
               )}
             </Card>
 
+            {/* Botón confirmar */}
             <button
               onClick={handleCheckinConfirm}
               disabled={isDamaged && !damageNotes.trim()}
-              className="w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed bg-primary text-black shadow-lg shadow-primary/30"
+              className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-center gap-3 transition-all active:scale-[0.97] disabled:opacity-40 disabled:cursor-not-allowed ${
+                isDamaged
+                  ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-500/20'
+                  : 'bg-primary text-black shadow-lg shadow-primary/30'
+              }`}
             >
               <CheckCircle2 size={20} />
-              {isDamaged ? 'Confirmar Entrada con Daño' : 'Confirmar Entrada'}
+              {isDamaged ? 'Confirmar Entrada con Daño Reportado' : 'Confirmar Entrada — Sin Daños'}
             </button>
+
             <button onClick={reset} className="w-full text-xs text-slate-600 py-1">Cancelar</button>
           </div>
         )}
 
         {/* ── DONE ── */}
         {step === 'done' && (
-          <div className="text-center py-10 space-y-4">
-            <div className={`w-24 h-24 rounded-3xl mx-auto flex items-center justify-center border shadow-lg ${isDamaged ? 'bg-amber-500/10 border-amber-500/20 shadow-amber-500/20' : 'bg-emerald-500/10 border-emerald-500/20 shadow-emerald-500/20'}`}>
-              {isDamaged
-                ? <AlertTriangle size={48} className="text-amber-400" />
-                : <CheckCircle2 size={48} className="text-emerald-400" />}
+          <div className="flex flex-col items-center text-center py-10 space-y-6 animate-in fade-in duration-300">
+
+            {/* Ícono */}
+            <div className={`w-28 h-28 rounded-3xl flex items-center justify-center border-2 shadow-2xl ${
+              doneDamaged
+                ? 'bg-amber-500/10 border-amber-500/40 shadow-amber-500/20'
+                : 'bg-emerald-500/10 border-emerald-500/40 shadow-emerald-500/20'
+            }`}>
+              {doneDamaged
+                ? <AlertTriangle size={56} className="text-amber-400" />
+                : <CheckCircle2 size={56} className="text-emerald-400" />}
             </div>
-            <div>
-              <h2 className="text-white font-black text-2xl">¡Listo!</h2>
-              <p className="text-slate-400 text-sm mt-1">{doneMessage || (mode === 'CHECKOUT' ? 'Salida registrada correctamente' : 'Devolución registrada correctamente')}</p>
-              {isDamaged && mode === 'CHECKIN' && (
-                <div className="mt-3 inline-flex items-center gap-2 bg-amber-500/10 border border-amber-500/20 rounded-xl px-4 py-2">
-                  <AlertTriangle size={14} className="text-amber-400" />
-                  <span className="text-amber-300 text-xs font-bold">Activo enviado a Requiere Mantenimiento</span>
-                </div>
-              )}
+
+            {/* Texto */}
+            <div className="space-y-2">
+              <h2 className="text-white font-black text-3xl">¡Listo!</h2>
+              <p className="text-slate-400 text-base max-w-xs mx-auto leading-relaxed">{doneMessage}</p>
             </div>
+
+            {/* Badge de daño */}
+            {doneDamaged && doneMode === 'CHECKIN' && (
+              <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-3">
+                <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
+                <span className="text-amber-300 text-sm font-bold">Activo enviado a Requiere Mantenimiento</span>
+              </div>
+            )}
+
+            {/* Badge de tipo de operación */}
+            <div className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black uppercase tracking-widest border ${
+              doneMode === 'CHECKOUT'
+                ? 'bg-primary/10 border-primary/30 text-primary'
+                : doneDamaged
+                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+            }`}>
+              {doneMode === 'CHECKOUT' ? '📤 Salida registrada' : doneDamaged ? '⚠️ Entrada con daño' : '📥 Entrada registrada'}
+            </div>
+
+            {/* Botón siguiente */}
             <button
               onClick={reset}
-              className="mx-auto flex items-center gap-2 px-6 py-3 rounded-xl bg-primary/10 border border-primary/30 text-primary font-bold text-sm hover:bg-primary/20 transition-colors"
+              className="flex items-center gap-3 px-10 py-4 rounded-2xl bg-primary text-black font-black text-lg shadow-lg shadow-primary/40 hover:bg-cyan-400 active:scale-[0.97] transition-all"
             >
-              <Scan size={16} /> Escanear otro
+              <Scan size={22} /> Escanear otro
             </button>
           </div>
         )}
