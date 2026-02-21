@@ -11,7 +11,7 @@ export function RefreshButton() {
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await fetchData();
+      await fetchData({ silent: true });
       toast.success('✅ Datos actualizados');
     } catch {
       toast.error('Error al actualizar');
