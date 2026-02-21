@@ -84,7 +84,7 @@ interface DataContextType {
   resolveMaintenance: (logId: number, cost?: number) => Promise<void>;
 
   getAssetHistory: (assetId: string) => AuditLog[];
-  fetchData: () => Promise<void>;
+  fetchData: (opts?: { silent?: boolean }) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | null>(null);
@@ -114,9 +114,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => { requestPushPermission(); }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = opts?.silent === true;
     try {
-      setIsLoading(true);
+      if (!silent) setIsLoading(true);
       const [data, statsData] = await Promise.all([api.getData(), api.getStats()]);
       setAssets(data.assets);
       setRequests(data.requests);
@@ -130,7 +131,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     } catch (err) {
       console.error('fetchData:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 

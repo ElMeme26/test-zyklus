@@ -5,7 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
-  CheckCircle2, Loader2, Scan, RefreshCw, RefreshCcw,
+  CheckCircle2, Loader2, Scan, RefreshCcw,
   QrCode, User as UserIcon
 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { RefreshButton } from '../ui/RefreshButton';
 
 type ScanMode = 'CHECKOUT' | 'CHECKIN';
 type Step =
@@ -139,13 +140,12 @@ function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; on
 }
 
 export function GuardScanner() {
-  const { processGuardScan, confirmComboCheckin, fetchData } = useData();
+  const { processGuardScan, confirmComboCheckin } = useData();
   const { user, logout } = useAuth();
 
   const [mode, setMode] = useState<ScanMode>('CHECKOUT');
   const [step, setStep] = useState<Step>('idle');
   const [scanning, setScanning] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const [verifiedData, setVerifiedData] = useState<Record<string, unknown>[] | null>(null);
   const [rawQR, setRawQR] = useState('');
@@ -166,13 +166,6 @@ export function GuardScanner() {
   const [doneMessage, setDoneMessage] = useState('');
   const [doneMode, setDoneMode] = useState<ScanMode>('CHECKOUT');
   const [doneDamaged, setDoneDamaged] = useState(false);
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    await fetchData();
-    setIsRefreshing(false);
-    toast.success('Datos actualizados');
-  };
 
   const reset = useCallback(() => {
     setStep('idle');
@@ -352,14 +345,7 @@ export function GuardScanner() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="p-2 rounded-xl text-slate-400 hover:text-primary hover:bg-primary/10 border border-slate-800 hover:border-primary/30 transition-all active:scale-90"
-              title="Actualizar datos"
-            >
-              <RefreshCw size={18} className={isRefreshing ? 'animate-spin text-primary' : ''} />
-            </button>
+            <RefreshButton />
             <NotificationCenter />
             <ThemeToggle />
             <button onClick={logout} className="p-2 text-slate-400 hover:text-rose-400 transition-colors rounded-xl hover:bg-slate-800">

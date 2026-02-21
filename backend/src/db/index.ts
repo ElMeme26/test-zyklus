@@ -7,6 +7,8 @@ const pool = new Pool({
   idleTimeoutMillis: 30000,
 });
 
+export { pool };
+
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params?: unknown[]
