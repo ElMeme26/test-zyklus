@@ -66,7 +66,7 @@ export function RequestDetailModal({ request: req, onClose }: RequestDetailModal
               </div>
               <h2 className="text-white font-bold text-lg leading-tight">
                 {isBundle
-                  ? req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Kit de equipos'
+                  ? req.motive?.split(']')[0].replace('[COMBO: ', '') || 'Combo de equipos'
                   : req.assets?.name || `Activo #${req.asset_id}`
                 }
               </h2>

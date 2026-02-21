@@ -107,7 +107,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bundles, setBundles] = useState<Bundle[]>([]);
-  const [stats, setStats] = useState<{ assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number } } | null>(null);
+  const [stats, setStats] = useState<{ assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number }; categoryCounts?: Record<string, number> } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -200,8 +200,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const validateMaintenanceAsset = async (assetId: string) => {
-    let asset = assets.find(a => a.id === assetId);
-    if (!asset) asset = await apiAssets.getAssetById(assetId);
+    let asset: Asset | null | undefined = assets.find(a => a.id === assetId);
+    if (!asset) asset = await apiAssets.getAssetById(assetId) ?? undefined;
     if (!asset) return;
     try {
       await apiAssets.validateMaintenance(assetId, asset.maintenance_period_days ?? 180);
@@ -224,7 +224,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
-    if (!bundle.assets?.length) { toast.error('Kit sin activos'); return; }
+    if (!bundle.assets?.length) { toast.error('Combo sin activos'); return; }
     const unavail = bundle.assets.filter(a => a.status !== 'Disponible');
     if (unavail.length) { toast.error(`No disponibles: ${unavail.map(a => `${a.name}(${a.status})`).join(', ')}`); return; }
     try {

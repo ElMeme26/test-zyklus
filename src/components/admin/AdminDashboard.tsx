@@ -23,8 +23,9 @@ import { Scanner } from '@yudiel/react-qr-scanner';
 import { format, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
+import { RefreshButton } from '../ui/RefreshButton';
+import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
+import { BundleManager } from './BundleManager';
 
 // ─── KPI CARD ────────────────────────────────────────────────────
 function KPICard({ label, value, color, icon, sublabel }: {
@@ -463,6 +464,25 @@ function MaintenancePanel({ onPrintAll }: { onPrintAll: (assets: Asset[]) => voi
 
 const INVENTORY_PAGE_SIZE = 50;
 
+// ─── BUNDLE MANAGER PANEL (modal) ─────────────────────────────
+function BundleManagerPanel({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
+      <Card className="w-full max-w-2xl border-primary/30 max-h-[85vh] flex flex-col p-0 overflow-hidden">
+        <div className="flex justify-between items-center p-5 border-b border-slate-800">
+          <h2 className="text-white font-bold text-xl flex items-center gap-2">
+            <Package size={20} className="text-primary" /> Gestión de Kits
+          </h2>
+          <button onClick={onClose} className="p-2 rounded-lg text-slate-400 hover:text-white"><X size={20} /></button>
+        </div>
+        <div className="flex-1 overflow-y-auto p-5">
+          <BundleManager />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 // ─── INVENTORY VIEW ──────────────────────────────────────────
 function InventoryView({ onPrintSelected, onPrintSingle }: {
   onPrintSelected: (ids: Set<string>, assets: Asset[]) => void;
@@ -485,6 +505,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
   const [showBundleModal, setShowBundleModal] = useState(false);
   const [bundleName, setBundleName] = useState('');
   const [bundleDesc, setBundleDesc] = useState('');
+  const [showBundleManager, setShowBundleManager] = useState(false);
 
   const categoryOptions = ['Todas', ...categories];
 
@@ -547,7 +568,11 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
 
   return (
     <div className="animate-in fade-in">
+      {/* Bundle Manager Panel */}
+      {showBundleManager && <BundleManagerPanel onClose={() => setShowBundleManager(false)} />}
+
       <div className="flex flex-col gap-4 mb-6">
+        {/* Header row: título + acciones */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center bg-slate-900/40 p-4 rounded-2xl border border-slate-800/80 shadow-lg gap-4">
           <div>
             <h3 className="text-white font-bold text-lg">Gestión de Inventario</h3>
@@ -573,8 +598,9 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <div className="relative flex-1 min-w-[250px]">
+        <div className="flex items-center gap-2">
+          {/* Barra de búsqueda */}
+          <div className="relative flex-1">
             <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
             <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800" />
           </div>
@@ -589,6 +615,32 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
               </button>
             ))}
           </div>
+
+          {/* ── BOTÓN COMBOS — lado derecho de la búsqueda ── */}
+          <button
+            onClick={() => setShowBundleManager(true)}
+            className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-all border bg-slate-900 text-slate-300 border-slate-700 hover:border-primary/60 hover:text-primary hover:bg-primary/5 active:scale-95"
+          >
+            <Package size={15} />
+            <span className="hidden xs:inline">Combos</span>
+          </button>
+        </div>
+
+        {/* Filtros de categoría (fila separada) */}
+        <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
+          {categories.map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCatFilter(String(cat))}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border ${
+                catFilter === cat
+                  ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]'
+                  : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -606,7 +658,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
       {showBundleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
           <Card className="w-full max-w-sm space-y-4 border-primary/30">
-            <h3 className="text-white font-bold text-lg">Nuevo Combo (Kit)</h3>
+            <h3 className="text-white font-bold text-lg">Nuevo Combo</h3>
             <p className="text-xs text-slate-400">Agrupará los {selectedIds.size} activos seleccionados.</p>
             <Input placeholder="Nombre del Combo" value={bundleName} onChange={e => setBundleName(e.target.value)} />
             <Input placeholder="Descripción breve" value={bundleDesc} onChange={e => setBundleDesc(e.target.value)} />
@@ -794,20 +846,20 @@ export function AdminDashboard() {
   );
 
   const generatePredictiveReport = async () => {
-    if (!GEMINI_API_KEY) { toast.error('Falta API Key de Gemini en entorno'); return; }
     setIsGenerating(true);
     try {
-      const topItems = requests.slice(0, 50).map(r => r.assets?.name).filter(Boolean).join(', ');
-      const prompt = `Eres Zykla AI, experto en control patrimonial. Analiza el historial reciente de activos prestados: [${topItems}]. Genera un reporte predictivo de 1 párrafo profesional indicando la demanda y sugiriendo qué tipo de activos se deben adquirir con mayor prioridad. Hazlo ver analítico y preséntalo directo al administrador.`;
-      
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.4, maxOutputTokens: 200 } })
-      });
-      const data = await response.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
-      setAiReport(data.candidates[0].content.parts[0].text);
+      const assetNames = requests
+        .filter(r => r.assets?.name)
+        .map(r => r.assets!.name as string);
+      const report = await generateReport(assetNames, 'administrador');
+      setAiReport(report);
       toast.success('Reporte generado exitosamente');
-    } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Error desconocido';
+      toast.error(`Error Zykla AI: ${msg}`);
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleCameraScan = async (detectedCodes: { rawValue?: string }[]) => {
@@ -892,6 +944,7 @@ export function AdminDashboard() {
           <Button variant="outline" size="sm" onClick={() => setUseCamera(true)} className="border-primary/30 text-primary hover:bg-primary/10 text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
+          <RefreshButton />
           <NotificationCenter />
           <ThemeToggle />
           <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>
