@@ -379,12 +379,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const { data: bundle, error } = await supabase.from('bundles').insert([{ name, description }]).select().single();
     if (error || !bundle) { toast.error('Error: ' + error?.message); return; }
     await supabase.from('assets').update({ bundle_id: bundle.id }).in('id', assetIds);
-    toast.success(`Kit "${name}" creado`);
+    toast.success(`Combo "${name}" creado`);
     fetchData();
   };
 
   const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
-    if (!bundle.assets?.length) { toast.error('Kit sin activos'); return; }
+    if (!bundle.assets?.length) { toast.error('Combo sin activos'); return; }
     const unavail = bundle.assets.filter(a => a.status !== 'Disponible');
     if (unavail.length) { toast.error(`No disponibles: ${unavail.map(a => `${a.name}(${a.status})`).join(', ')}`); return; }
     const returnDate = days === 0 ? new Date(new Date().setHours(21, 0, 0, 0)).toISOString() : addDays(new Date(), days).toISOString();
@@ -397,8 +397,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       await logAudit('APPROVE', user.id, user.name, bundleGroupId, 'REQUEST', `Auto-combo: ${bundle.name}`);
     } else {
       await supabase.from('assets').update({ status: 'En trámite' }).in('id', bundle.assets.map(a => a.id));
-      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud — Kit', `${user.name} solicita kit "${bundle.name}".`, 'INFO');
-      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Kit', `${user.name} solicita kit "${bundle.name}".`, 'INFO');
+      if (user.manager_id) await createNotif(user.manager_id, '📋 Nueva Solicitud — Combo', `${user.name} solicita Combo "${bundle.name}".`, 'INFO');
+      await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Combo', `${user.name} solicita Combo "${bundle.name}".`, 'INFO');
     }
     toast.success(`Combo "${bundle.name}" solicitado`);
     fetchData();
@@ -666,7 +666,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const allReqs = (allComboReqs || []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
 
         if (allReqs.length === 1) {
-          return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
+          if (signature === 'CONFIRM') {
+            return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
+          } else {
+            return { success: true, message: 'Verificado', data: allReqs };
+          }
         }
 
         const comboState: ComboCheckinState = {
@@ -686,7 +690,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
+      // LA CORRECCIÓN SE APLICA AQUÍ
+      if (signature === 'CONFIRM') {
+        return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
+      } else {
+        return { success: true, message: 'Activo verificado. Continúa a revisión de daños.', data: [req] };
+      }
     } catch (err) {
       console.error('processGuardScan:', err);
       return { success: false, message: 'Error interno.' };
@@ -703,7 +712,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     reqs: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string } }>,
     isDamaged: boolean, damageNotes: string
   ): Promise<{ success: boolean; message: string }> => {
-    const newAssetStatus = isDamaged ? 'En mantenimiento' : 'Disponible';
+    const newAssetStatus = isDamaged ? 'Requiere Mantenimiento' : 'Disponible';
     const newReqStatus = isDamaged ? 'MAINTENANCE' : 'RETURNED';
 
     for (const r of reqs) {

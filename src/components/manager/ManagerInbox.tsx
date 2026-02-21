@@ -14,6 +14,7 @@ import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { UserHome } from '../user/UserHome';
+import { RefreshButton } from '../ui/RefreshButton';
 
 // ─── QR Modal para el Líder ───────────────────────────────────
 function LeaderQRModal({ request, onClose }: { request: Request; onClose: () => void }) {
@@ -242,6 +243,7 @@ export function ManagerInbox() {
             <p className="text-[11px] text-slate-500">{pendingRequests.length} solicitudes pendientes</p>
           </div>
           <div className="flex items-center gap-2">
+            <RefreshButton />
             <NotificationCenter />
             <ThemeToggle />
             <Button variant="ghost" size="icon" onClick={logout}><LogOut size={18} /></Button>

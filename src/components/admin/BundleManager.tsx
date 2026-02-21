@@ -53,12 +53,12 @@ export const BundleManager = () => {
       
       <div className="grid md:grid-cols-2 gap-6">
         <div>
-          <label className="block text-sm font-medium mb-1">Nombre del Kit</label>
+          <label className="block text-sm font-medium mb-1">Nombre del Combo</label>
           <input 
             className="w-full border p-2 rounded" 
             value={bundleName} 
             onChange={e => setBundleName(e.target.value)} 
-            placeholder="Ej: Kit de Grabación"
+            placeholder="Ej: Combo de Grabación"
           />
           <button 
             onClick={handleSave} 
