@@ -18,6 +18,7 @@ import { format, subDays, isAfter, differenceInDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
+import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
@@ -41,7 +42,7 @@ function KPICard({ label, value, color, icon, sublabel }: {
 }
 
 export function DashboardCharts() {
-  const { assets, requests } = useData();
+  const { assets, requests, stats } = useData();
 
   const top8Assets = useMemo(() => {
     return Object.entries(
@@ -79,16 +80,15 @@ export function DashboardCharts() {
     .slice(0, 5); 
   }, [requests, selectedDisciplina]);
 
-  const categoryData = useMemo(() =>
-    Object.entries(
-      assets.reduce((acc: Record<string, number>, a) => {
+  const categoryData = useMemo(() => {
+    return Object.entries(
+      stats?.categoryCounts ?? assets.reduce((acc: Record<string, number>, a) => {
         const cat = a.category ?? 'Sin Categoría';
         acc[cat] = (acc[cat] ?? 0) + 1;
         return acc;
       }, {})
-    ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6),
-    [assets]
-  );
+    ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
+  }, [stats?.categoryCounts, assets]);
 
   return (
     <div className="space-y-6">
@@ -248,7 +248,7 @@ function OverdueList({ requests }: { requests: import('../../types').Request[] }
 }
 
 export function AuditorOverview() {
-  const { assets, requests, auditLogs, maintenanceLogs } = useData();
+  const { assets, requests, auditLogs, maintenanceLogs, stats, isLoading } = useData();
   const { logout } = useAuth();
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
@@ -257,14 +257,14 @@ export function AuditorOverview() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const kpis = useMemo(() => {
-    const total = assets.length;
-    const disponible = assets.filter(a => a.status === 'Disponible').length;
-    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
+    const total = stats?.assetCounts?.total ?? assets.length;
+    const disponible = stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length;
+    const mantenimiento = stats?.assetCounts?.mantenimiento ?? assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
     const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
-    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
+    const overdueLoans = stats?.requestCounts?.overdue ?? requests.filter(r => r.status === 'OVERDUE').length;
 
     return { total, disponible, mantenimiento, disponibilidad, overdueLoans };
-  }, [assets, requests]);
+  }, [stats, assets, requests]);
 
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
@@ -290,6 +290,14 @@ export function AuditorOverview() {
       toast.success('Reporte generado exitosamente');
     } catch (_e) { toast.error('Error al generar reporte de IA'); } finally { setIsGenerating(false); }
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background font-sans">
+        <DataLoadingScreen message="Cargando panel de auditoría..." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background font-sans pb-20">

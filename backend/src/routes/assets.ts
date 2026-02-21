@@ -4,6 +4,27 @@ import * as assetService from '../services/assetService.js';
 
 const router = Router();
 
+router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
+    const limit = Math.min(req.query.export === 'true' ? 10000 : 100, Math.max(1, parseInt(String(req.query.limit), 10) || 24));
+    const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
+    const category = typeof req.query.category === 'string' ? req.query.category : undefined;
+    const status = typeof req.query.status === 'string' ? req.query.status : undefined;
+    const availableOnly = req.query.availableOnly === 'true' || req.query.availableOnly === '1';
+    const maintenanceOnly = req.query.maintenanceOnly === 'true' || req.query.maintenanceOnly === '1';
+    const unbundledOnly = req.query.unbundledOnly === 'true' || req.query.unbundledOnly === '1';
+
+    const filters = (search || category || status || availableOnly || maintenanceOnly || unbundledOnly)
+      ? { search, category, status, availableOnly, maintenanceOnly, unbundledOnly } : undefined;
+    const result = await assetService.getAssetsPaginated(page, limit, filters);
+    res.json(result);
+  } catch (err) {
+    console.error('GET /api/assets:', err);
+    res.status(500).json({ error: 'Failed to load assets' });
+  }
+});
+
 router.get('/next-tag', authMiddleware, async (_req: AuthRequest, res: Response) => {
   try {
     const tag = await assetService.getNextTag();
@@ -11,6 +32,18 @@ router.get('/next-tag', authMiddleware, async (_req: AuthRequest, res: Response)
   } catch (err) {
     console.error('GET /api/assets/next-tag:', err);
     res.status(500).json({ error: 'Failed to get next tag' });
+  }
+});
+
+router.get('/:id', authMiddleware, async (req: AuthRequest, res: Response) => {
+  try {
+    const id = req.params.id;
+    const asset = await assetService.getAssetById(id);
+    if (!asset) return res.status(404).json({ error: 'Asset not found' });
+    res.json(asset);
+  } catch (err) {
+    console.error('GET /api/assets/:id:', err);
+    res.status(500).json({ error: 'Failed to load asset' });
   }
 });
 

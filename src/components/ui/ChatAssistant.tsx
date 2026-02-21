@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, YAxis } from 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 
 export function ChatAssistant() {
-  const { assets, requests } = useData();
+  const { assets, requests, stats } = useData();
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   
@@ -85,20 +85,20 @@ export function ChatAssistant() {
       let contextData: any = {};
       
       if (user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR') {
-         const cats = assets.reduce((acc:any, a) => {
+         const cats = stats?.categoryCounts ?? assets.reduce((acc: Record<string, number>, a) => {
             const c = a.category || 'Otros';
             acc[c] = (acc[c] || 0) + 1; return acc;
          }, {});
          
-         const states = assets.reduce((acc:any, a) => {
+         const states = stats?.assetCounts ?? assets.reduce((acc: Record<string, number>, a) => {
             acc[a.status] = (acc[a.status] || 0) + 1; return acc;
          }, {});
 
          contextData = {
            totales: { 
-             inventario: assets.length, 
-             prestamos_activos: requests.filter(r => r.status === 'ACTIVE').length,
-             prestamos_vencidos: requests.filter(r => r.status === 'OVERDUE').length
+             inventario: stats?.assetCounts?.total ?? assets.length, 
+             prestamos_activos: stats?.requestCounts?.active ?? requests.filter(r => r.status === 'ACTIVE').length,
+             prestamos_vencidos: stats?.requestCounts?.overdue ?? requests.filter(r => r.status === 'OVERDUE').length
            },
            categorias: Object.entries(cats).map(([name, val]) => ({ name, value: val })),
            estados: Object.entries(states).map(([name, val]) => ({ name, value: val }))
@@ -106,7 +106,7 @@ export function ChatAssistant() {
       } else {
          contextData = {
            mis_prestamos: requests.filter(r => r.user_id === user?.id).length,
-           activos_disponibles: assets.filter(a => a.status === 'Disponible').length
+           activos_disponibles: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length
          };
       }
 

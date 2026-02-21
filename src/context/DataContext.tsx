@@ -7,6 +7,7 @@ import * as apiRequests from '../api/requests';
 import * as apiGuard from '../api/guard';
 import * as apiNotifications from '../api/notifications';
 import * as apiMaintenance from '../api/maintenance';
+import { useAuth } from './AuthContext';
 import type { Asset, Request, User, Institution, Notification, AuditLog, MaintenanceLog, Bundle } from '../types';
 import { toast } from 'sonner';
 
@@ -28,6 +29,7 @@ interface DataContextType {
   maintenanceLogs: MaintenanceLog[];
   bundles: Bundle[];
   auditLogs: AuditLog[];
+  stats: { assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number }; categoryCounts?: Record<string, number> } | null;
   isLoading: boolean;
   unreadCount: number;
 
@@ -35,7 +37,7 @@ interface DataContextType {
   updateAsset: (id: string, updates: Partial<Asset>) => Promise<void>;
   deleteAsset: (id: string) => Promise<void>;
   importAssets: (csvText: string) => Promise<void>;
-  getNextTag: () => string;
+  getNextTag: () => Promise<string>;
   validateMaintenanceAsset: (assetId: string) => Promise<void>;
 
   createBundle: (name: string, description: string, assetIds: string[]) => Promise<void>;
@@ -97,6 +99,7 @@ export const requestPushPermission = async () => {
 
 // ─── PROVIDER ─────────────────────────────────────────────────
 export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [requests, setRequests] = useState<Request[]>([]);
   const [institutions, setInstitutions] = useState<Institution[]>([]);
@@ -104,6 +107,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [maintenanceLogs, setMaintenanceLogs] = useState<MaintenanceLog[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [bundles, setBundles] = useState<Bundle[]>([]);
+  const [stats, setStats] = useState<{ assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number } } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -113,7 +117,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const fetchData = useCallback(async () => {
     try {
       setIsLoading(true);
-      const data = await api.getData();
+      const [data, statsData] = await Promise.all([api.getData(), api.getStats()]);
       setAssets(data.assets);
       setRequests(data.requests);
       setInstitutions(data.institutions);
@@ -121,6 +125,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setMaintenanceLogs(data.maintenanceLogs);
       setAuditLogs(data.auditLogs);
       setBundles(data.bundles);
+      setStats({ assetCounts: statsData.assetCounts, requestCounts: statsData.requestCounts, categoryCounts: statsData.categoryCounts });
       await apiNotifications.checkOverdue();
     } catch (err) {
       console.error('fetchData:', err);
@@ -129,20 +134,25 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  // Solo cargar datos cuando hay usuario logueado (hay token). Así no hacemos 401 en login y al entrar sí se hace fetch.
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (user) {
+      fetchData();
+    } else {
+      setIsLoading(false);
+    }
+  }, [user, fetchData]);
 
   // ─── ASSETS ──────────────────────────────────────────────────
-  const getNextTag = () => {
-    if (!assets.length) return 'ZF-001';
-    const nums = assets.map(a => a.tag).filter(t => t?.startsWith('ZF-')).map(t => parseInt(t.split('-')[1])).filter(n => !isNaN(n)).sort((a, b) => b - a);
-    return `ZF-${((nums[0] || 0) + 1).toString().padStart(3, '0')}`;
-  };
+  const getNextTag = useCallback(async () => {
+    const res = await apiAssets.getNextTag();
+    return res;
+  }, []);
 
   const addAsset = async (asset: Partial<Asset>) => {
     try {
-      const payload = { ...asset, tag: asset.tag || getNextTag(), status: asset.status || 'Disponible' };
+      const tag = asset.tag || (await getNextTag());
+      const payload = { ...asset, tag, status: asset.status || 'Disponible' };
       await apiAssets.createAsset(payload);
       toast.success(`✅ ${payload.tag} creado`);
       fetchData();
@@ -190,7 +200,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const validateMaintenanceAsset = async (assetId: string) => {
-    const asset = assets.find(a => a.id === assetId);
+    let asset = assets.find(a => a.id === assetId);
+    if (!asset) asset = await apiAssets.getAssetById(assetId);
     if (!asset) return;
     try {
       await apiAssets.validateMaintenance(assetId, asset.maintenance_period_days ?? 180);
@@ -273,7 +284,10 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const json = JSON.parse(qrData);
       const assetId = json.asset_id || json.id;
-      return { asset: assets.find(a => a.id === assetId || a.tag === assetId), request: requests.find(r => r.id === json.request_id || r.asset_id === assetId) };
+      let asset = assets.find(a => a.id === assetId || a.tag === assetId);
+      if (!asset && assetId) asset = (await apiAssets.getAssetById(assetId)) ?? undefined;
+      const request = requests.find(r => r.id === json.request_id || r.asset_id === assetId);
+      return { asset: asset ?? undefined, request };
     } catch { toast.error('QR inválido'); return null; }
   };
 
@@ -377,7 +391,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!req) return;
     try {
       const assetIdsToFree = ['PENDING', 'ACTION_REQUIRED'].includes(req.status)
-        ? (req.bundle_group_id ? requests.filter(r => r.bundle_group_id === req.bundle_group_id).map(r => r.asset_id) : req.asset_id ? [req.asset_id] : []).filter(id => assets.find(x => x.id === id)?.status === 'En trámite')
+        ? (req.bundle_group_id ? requests.filter(r => r.bundle_group_id === req.bundle_group_id).map(r => r.asset_id) : req.asset_id ? [req.asset_id] : []).filter(Boolean) as string[]
         : undefined;
       await apiRequests.cancelRequest(reqId, { bundleGroupId: req.bundle_group_id ?? undefined, assetIdsToFree });
       toast.success(req.bundle_group_id ? 'Solicitud (carrito/combo) cancelada' : 'Solicitud cancelada');
@@ -497,7 +511,7 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   return (
     <DataContext.Provider value={{
-      assets, requests, institutions, notifications, maintenanceLogs, bundles, auditLogs, isLoading, unreadCount,
+      assets, requests, institutions, notifications, maintenanceLogs, bundles, auditLogs, stats, isLoading, unreadCount,
       addAsset, updateAsset, deleteAsset, importAssets, getNextTag, validateMaintenanceAsset,
       createBundle, createBatchRequest, addInstitution, updateInstitution, deleteInstitution,
       processQRScan, approveRequest, rejectRequest, returnRequestWithFeedback, getTeamRequests,

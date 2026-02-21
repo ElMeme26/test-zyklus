@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
 import type { Asset, AssetState } from '../../types';
@@ -16,6 +16,8 @@ import { InstitutionsManager } from './InstitutionsManager';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { AssetQRPrint } from './AssetQRPrint';
+import { getAssetsPaginated } from '../../api/assets';
+import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { DashboardCharts } from '../auditor/AuditorOverview';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { format, differenceInDays } from 'date-fns';
@@ -314,18 +316,26 @@ function MaintenanceLogModal({ log, onClose }: {
 }
 
 // ─── MAINTENANCE PANEL ──────────────────────────────────────
-function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll: () => void }) {
-  const { maintenanceLogs, validateMaintenanceAsset, resolveMaintenance, requests } = useData();
+function MaintenancePanel({ onPrintAll }: { onPrintAll: (assets: Asset[]) => void }) {
+  const { maintenanceLogs, validateMaintenanceAsset, resolveMaintenance, requests, fetchData } = useData();
   const [searchMaint, setSearchMaint] = useState('');
   const [selectedLog, setSelectedLog] = useState<typeof maintenanceLogs[0] | null>(null);
+  const [maintenanceAssets, setMaintenanceAssets] = useState<Asset[]>([]);
+  const [maintLoading, setMaintLoading] = useState(false);
 
-  const maintenanceAssets = assets.filter(a =>
-    a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento' || a.maintenance_alert
-  );
+  const loadMaintenanceAssets = useCallback(() => {
+    setMaintLoading(true);
+    getAssetsPaginated(1, 500, { maintenanceOnly: true })
+      .then(res => setMaintenanceAssets(res.assets))
+      .catch(() => setMaintenanceAssets([]))
+      .finally(() => setMaintLoading(false));
+  }, []);
+
+  useEffect(() => { loadMaintenanceAssets(); }, [loadMaintenanceAssets, maintenanceLogs.length]);
 
   const filteredMaint = maintenanceAssets.filter(a =>
-    a.name.toLowerCase().includes(searchMaint.toLowerCase()) ||
-    a.tag.toLowerCase().includes(searchMaint.toLowerCase())
+    (a.name?.toLowerCase() || '').includes(searchMaint.toLowerCase()) ||
+    (a.tag?.toLowerCase() || '').includes(searchMaint.toLowerCase())
   );
 
   // Find related request for a log
@@ -360,7 +370,7 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
           </div>
           <Button
             variant="outline"
-            onClick={onPrintAll}
+            onClick={() => onPrintAll(maintenanceAssets)}
             className="border-primary/30 text-primary hover:bg-primary/10 h-10 whitespace-nowrap"
           >
             <Printer size={16} className="mr-2" /> Imprimir Todos los QR
@@ -372,7 +382,11 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
         <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3">
           Requieren Atención ({filteredMaint.length})
         </h3>
-        {filteredMaint.length === 0 ? (
+        {maintLoading ? (
+          <div className="flex justify-center py-16">
+            <DataLoadingScreen message="Cargando mantenimiento..." />
+          </div>
+        ) : filteredMaint.length === 0 ? (
           <div className="text-center py-10 border border-dashed border-slate-800 rounded-xl text-slate-500">
             <CheckCircle size={32} className="mx-auto mb-2 text-emerald-500/30" />
             <p className="text-sm">Todo el inventario en buen estado 🎉</p>
@@ -391,7 +405,7 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
                       </span>
                     </div>
                   </div>
-                  <Button size="sm" onClick={() => validateMaintenanceAsset(asset.id)} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex-shrink-0">
+                  <Button size="sm" onClick={async () => { await validateMaintenanceAsset(asset.id); loadMaintenanceAssets(); }} className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs flex-shrink-0">
                     <CheckCircle size={12} className="mr-1" /> Validar
                   </Button>
                 </div>
@@ -427,7 +441,7 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={e => { e.stopPropagation(); resolveMaintenance(log.id); }}
+                      onClick={e => { e.stopPropagation(); resolveMaintenance(log.id).then(loadMaintenanceAssets); }}
                       className="text-xs text-emerald-400 border-emerald-500/30"
                     >
                       Resolver
@@ -447,15 +461,23 @@ function MaintenancePanel({ assets, onPrintAll }: { assets: Asset[]; onPrintAll:
   );
 }
 
+const INVENTORY_PAGE_SIZE = 50;
+
 // ─── INVENTORY VIEW ──────────────────────────────────────────
 function InventoryView({ onPrintSelected, onPrintSingle }: {
-  onPrintSelected: (ids: Set<string>) => void;
+  onPrintSelected: (ids: Set<string>, assets: Asset[]) => void;
   onPrintSingle: (asset: Asset) => void;
 }) {
-  const { assets, addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBundle } = useData();
+  const { addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBundle } = useData();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState<string>('Todas');
+  const [inventoryPage, setInventoryPage] = useState(1);
+  const [inventoryAssets, setInventoryAssets] = useState<Asset[]>([]);
+  const [inventoryTotal, setInventoryTotal] = useState(0);
+  const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [selectedAssetsMap, setSelectedAssetsMap] = useState<Map<string, Asset>>(new Map());
   const [showModal, setShowModal] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentAsset, setCurrentAsset] = useState<Partial<Asset>>({});
@@ -464,18 +486,44 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
   const [bundleName, setBundleName] = useState('');
   const [bundleDesc, setBundleDesc] = useState('');
 
-  const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
+  const categoryOptions = ['Todas', ...categories];
 
-  const filteredAssets = assets.filter(a =>
-    ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-      (a.tag?.toLowerCase() || '').includes(search.toLowerCase())) &&
-    (catFilter === 'Todas' || a.category === catFilter)
-  );
+  const loadInventory = useCallback(async (page: number) => {
+    setInventoryLoading(true);
+    try {
+      const res = await getAssetsPaginated(page, INVENTORY_PAGE_SIZE, {
+        search: search || undefined,
+        category: catFilter !== 'Todas' ? catFilter : undefined,
+        unbundledOnly: false,
+      });
+      setInventoryAssets(res.assets);
+      setInventoryTotal(res.total);
+      if (res.categories?.length) setCategories(res.categories);
+    } catch (err) {
+      console.error('loadInventory:', err);
+      setInventoryAssets([]);
+    } finally {
+      setInventoryLoading(false);
+    }
+  }, [search, catFilter]);
 
-  const toggleSelection = (id: string) => {
+  useEffect(() => { setInventoryPage(1); }, [search, catFilter]);
+  useEffect(() => { loadInventory(inventoryPage); }, [loadInventory, inventoryPage]);
+
+  const inventoryTotalPages = Math.ceil(inventoryTotal / INVENTORY_PAGE_SIZE) || 1;
+
+  const toggleSelection = (asset: Asset) => {
     const n = new Set(selectedIds);
-    n.has(id) ? n.delete(id) : n.add(id);
+    const m = new Map(selectedAssetsMap);
+    if (n.has(asset.id)) {
+      n.delete(asset.id);
+      m.delete(asset.id);
+    } else {
+      n.add(asset.id);
+      m.set(asset.id, asset);
+    }
     setSelectedIds(n);
+    setSelectedAssetsMap(m);
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -512,9 +560,10 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
             </Button>
             <Button
               variant="neon"
-              onClick={() => {
+              onClick={async () => {
                 setIsEditing(false);
-                setCurrentAsset({ tag: getNextTag(), status: 'Disponible', maintenance_period_days: 180, maintenance_usage_threshold: 10 });
+                const tag = await getNextTag();
+                setCurrentAsset({ tag, status: 'Disponible', maintenance_period_days: 180, maintenance_usage_threshold: 10 });
                 setShowModal(true);
               }}
               className="flex-1 sm:flex-none"
@@ -530,7 +579,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
             <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800" />
           </div>
           <div className="flex gap-2 flex-wrap items-center overflow-x-auto pb-1">
-            {categories.map(cat => (
+            {categoryOptions.map(cat => (
               <button
                 key={cat}
                 onClick={() => setCatFilter(String(cat))}
@@ -547,10 +596,10 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-30 bg-primary text-black px-5 py-2.5 rounded-full shadow-[0_0_30px_rgba(6,182,212,0.5)] flex items-center gap-4 font-bold text-sm">
           <span>{selectedIds.size} seleccionados</span>
           <Button size="sm" variant="secondary" onClick={() => setShowBundleModal(true)} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">Crear</Button>
-          <Button size="sm" variant="secondary" onClick={() => onPrintSelected(selectedIds)} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">
+          <Button size="sm" variant="secondary" onClick={() => onPrintSelected(selectedIds, Array.from(selectedAssetsMap.values()))} className="h-8 text-xs bg-black text-primary hover:bg-slate-900 border-0">
             <Printer size={14} /> Imprimir QR
           </Button>
-          <button onClick={() => setSelectedIds(new Set())} className="hover:text-rose-600"><X size={18} /></button>
+          <button onClick={() => { setSelectedIds(new Set()); setSelectedAssetsMap(new Map()); }} className="hover:text-rose-600"><X size={18} /></button>
         </div>
       )}
 
@@ -564,7 +613,15 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
             <div className="flex gap-2 pt-2">
               <Button onClick={() => setShowBundleModal(false)} variant="ghost" className="flex-1">Cancelar</Button>
               <Button variant="neon" className="flex-1" disabled={!bundleName.trim()}
-                onClick={() => { createBundle(bundleName, bundleDesc, Array.from(selectedIds)); setShowBundleModal(false); setSelectedIds(new Set()); setBundleName(''); setBundleDesc(''); }}>
+                onClick={async () => {
+                  await createBundle(bundleName, bundleDesc, Array.from(selectedIds));
+                  setShowBundleModal(false);
+                  setSelectedIds(new Set());
+                  setSelectedAssetsMap(new Map());
+                  setBundleName('');
+                  setBundleDesc('');
+                  loadInventory(inventoryPage);
+                }}>
                 Guardar Combo
               </Button>
             </div>
@@ -572,6 +629,11 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
         </div>
       )}
 
+      {inventoryLoading ? (
+        <div className="flex justify-center py-16">
+          <DataLoadingScreen message="Cargando inventario..." />
+        </div>
+      ) : (
       <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden">
         <table className="w-full text-left text-sm text-slate-400">
           <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
@@ -584,10 +646,10 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/50">
-            {filteredAssets.map(a => (
+            {inventoryAssets.map(a => (
               <tr key={a.id} className="hover:bg-slate-800/30 transition-colors">
                 <td className="p-3">
-                  <button onClick={() => toggleSelection(a.id)}>
+                  <button onClick={() => toggleSelection(a)}>
                     {selectedIds.has(a.id) ? <CheckSquare size={16} className="text-primary" /> : <Square size={16} className="text-slate-600" />}
                   </button>
                 </td>
@@ -619,10 +681,25 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
             ))}
           </tbody>
         </table>
-        {filteredAssets.length === 0 && (
+        {inventoryAssets.length === 0 && (
           <div className="text-center py-12 text-slate-500">Sin activos con ese filtro.</div>
         )}
+        {(inventoryTotal > 0 || inventoryAssets.length > 0) && (
+          <div className="flex flex-col sm:flex-row justify-center items-center gap-3 p-4 border-t border-slate-800">
+            <span className="text-xs text-slate-500">
+              Mostrando {(inventoryPage - 1) * INVENTORY_PAGE_SIZE + 1}–{Math.min(inventoryPage * INVENTORY_PAGE_SIZE, inventoryTotal)} de {inventoryTotal} activos
+            </span>
+            {inventoryTotalPages > 1 && (
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" onClick={() => setInventoryPage(p => Math.max(1, p - 1))} disabled={inventoryPage <= 1}>Anterior</Button>
+                <span className="flex items-center px-4 text-sm text-slate-400">Página {inventoryPage} de {inventoryTotalPages}</span>
+                <Button variant="outline" size="sm" onClick={() => setInventoryPage(p => Math.min(inventoryTotalPages, p + 1))} disabled={inventoryPage >= inventoryTotalPages}>Siguiente</Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
@@ -682,7 +759,7 @@ function InventoryView({ onPrintSelected, onPrintSingle }: {
 // ─── MAIN ADMIN DASHBOARD ────────────────────────────────────
 export function AdminDashboard() {
   const { logout } = useAuth();
-  const { processQRScan, assets, requests, auditLogs } = useData();
+  const { processQRScan, requests, auditLogs, stats, isLoading, fetchData } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance'>('inventory');
 
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
@@ -690,7 +767,7 @@ export function AdminDashboard() {
   const [showQRPrint, setShowQRPrint] = useState(false);
   const [qrPrintAssets, setQrPrintAssets] = useState<Asset[]>([]);
 
-  const maintenanceCount = assets.filter(a => a.maintenance_alert || a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento').length;
+  const maintenanceCount = stats?.assetCounts?.mantenimiento ?? 0;
 
   // ─── Estado para Analytics (como auditor) ──────────────────────
   const [searchLog, setSearchLog] = useState('');
@@ -699,14 +776,14 @@ export function AdminDashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
 
   const kpis = useMemo(() => {
-    const total = assets.length;
-    const disponible = assets.filter(a => a.status === 'Disponible').length;
-    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
+    const total = stats?.assetCounts?.total ?? 0;
+    const disponible = stats?.assetCounts?.disponible ?? 0;
+    const mantenimiento = stats?.assetCounts?.mantenimiento ?? 0;
     const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
-    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
+    const overdueLoans = stats?.requestCounts?.overdue ?? requests.filter(r => r.status === 'OVERDUE').length;
 
     return { total, disponible, mantenimiento, disponibilidad, overdueLoans };
-  }, [assets, requests]);
+  }, [stats, requests]);
 
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
@@ -740,6 +817,14 @@ export function AdminDashboard() {
     const result = await processQRScan(code);
     if (result) setScannedInfo(result as { asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background font-sans">
+        <DataLoadingScreen message="Cargando panel de administración..." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background font-sans pb-24 relative">
@@ -817,7 +902,7 @@ export function AdminDashboard() {
       <main className="p-4 md:p-6">
         {currentView === 'inventory' && (
           <InventoryView
-            onPrintSelected={(ids) => { setQrPrintAssets(assets.filter(a => ids.has(a.id))); setShowQRPrint(true); }}
+            onPrintSelected={(_ids, assetsToPrint) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
             onPrintSingle={(a) => { setQrPrintAssets([a]); setShowQRPrint(true); }}
           />
         )}
@@ -971,8 +1056,7 @@ export function AdminDashboard() {
         {currentView === 'external' && <InstitutionsManager />}
         {currentView === 'maintenance' && (
           <MaintenancePanel
-            assets={assets}
-            onPrintAll={() => { setQrPrintAssets(assets); setShowQRPrint(true); }}
+            onPrintAll={(assetsToPrint) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
           />
         )}
       </main>

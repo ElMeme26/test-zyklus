@@ -1,5 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useData } from '../../context/DataContext';
+import { getAssetsPaginated } from '../../api/assets';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
@@ -15,6 +16,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request, Asset } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
 
 // ─── STATUS BADGE ────────────────────────────────────────────
@@ -432,9 +434,11 @@ function AssetCatalogTable({ assets, onSelect, onAddToCart }: { assets: Asset[];
   );
 }
 
+const CATALOG_PAGE_SIZE = 24;
+
 // ─── MAIN USER HOME ──────────────────────────────────────────
 export function UserHome({ isManagerView = false, onBack }: { isManagerView?: boolean; onBack?: () => void }) {
-  const { assets, bundles, createRequest, createBatchRequest, createMultipleRequests, institutions, fetchData } = useData();
+  const { bundles, createRequest, createBatchRequest, createMultipleRequests, institutions, fetchData, isLoading } = useData();
   const { user, logout } = useAuth();
   const [search, setSearch] = useState('');
   const [view, setView] = useState<'activos' | 'combos'>('activos');
@@ -442,7 +446,13 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   const [catFilter, setCatFilter] = useState<string>('Todas');
   const [activeTab, setActiveTab] = useState<'catalog' | 'loans'>('catalog');
 
-  const [selectedAsset, setSelectedAsset] = useState<typeof assets[0] | null>(null);
+  const [catalogAssets, setCatalogAssets] = useState<Asset[]>([]);
+  const [catalogPage, setCatalogPage] = useState(1);
+  const [catalogTotal, setCatalogTotal] = useState(0);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+
+  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
   const [selectedBundle, setSelectedBundle] = useState<typeof bundles[0] | null>(null);
   const [cart, setCart] = useState<Asset[]>([]);
   const [cartOpen, setCartOpen] = useState(false);
@@ -467,18 +477,37 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   };
   const removeFromCart = (assetId: string) => setCart(prev => prev.filter(a => a.id !== assetId));
 
-  const categories = ['Todas', ...Array.from(new Set(assets.map(a => a.category || '').filter(c => c !== '')))];
+  const categoryOptions = ['Todas', ...categories];
 
-  const filteredAssets = useMemo(() =>
-    assets.filter(a =>
-      a.status === 'Disponible' &&
-      !a.maintenance_alert &&
-      ((a.name?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (a.tag?.toLowerCase() || '').includes(search.toLowerCase()) ||
-        (a.category?.toLowerCase() || '').includes(search.toLowerCase())) &&
-      (catFilter === 'Todas' || a.category === catFilter)
-    ), [assets, search, catFilter]
-  );
+  const fetchCatalogAssets = useCallback(async (page: number) => {
+    if (activeTab !== 'catalog' || view !== 'activos') return;
+    setCatalogLoading(true);
+    try {
+      const res = await getAssetsPaginated(page, CATALOG_PAGE_SIZE, {
+        search: search || undefined,
+        category: catFilter !== 'Todas' ? catFilter : undefined,
+        availableOnly: true,
+      });
+      setCatalogAssets(res.assets);
+      setCatalogTotal(res.total);
+      if (res.categories?.length) setCategories(res.categories);
+    } catch (err) {
+      console.error('fetchCatalogAssets:', err);
+      setCatalogAssets([]);
+    } finally {
+      setCatalogLoading(false);
+    }
+  }, [activeTab, view, search, catFilter]);
+
+  useEffect(() => {
+    setCatalogPage(1);
+  }, [search, catFilter]);
+
+  useEffect(() => {
+    fetchCatalogAssets(catalogPage);
+  }, [fetchCatalogAssets, catalogPage]);
+
+  const catalogTotalPages = Math.ceil(catalogTotal / CATALOG_PAGE_SIZE) || 1;
 
   const handleSubmit = async () => {
     if (!user) return;
@@ -501,6 +530,14 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
     if (!isManagerView) setActiveTab('loans');
     if (isManagerView && onBack) onBack();
   };
+
+  if (isLoading) {
+    return (
+      <div className={`min-h-screen ${isManagerView ? 'bg-transparent' : 'bg-background'} font-sans`}>
+        <DataLoadingScreen message="Cargando catálogo..." />
+      </div>
+    );
+  }
 
   return (
     <div className={`min-h-screen ${isManagerView ? 'bg-transparent' : 'bg-background'} font-sans pb-24`}>
@@ -681,7 +718,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
 
                   {/* Category filters */}
                   <div className="flex gap-2 flex-wrap items-center">
-                    {categories.map(cat => (
+                    {categoryOptions.map(cat => (
                       <button
                         key={cat}
                         onClick={() => setCatFilter(String(cat))}
@@ -698,8 +735,14 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
             {view === 'activos' ? (
               displayMode === 'grid' ? (
                 /* GRID VIEW */
+                <>
+                {catalogLoading ? (
+                  <div className="flex justify-center py-16">
+                    <DataLoadingScreen message="Cargando activos..." />
+                  </div>
+                ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {filteredAssets.map(asset => (
+                  {catalogAssets.map(asset => (
                     <Card key={asset.id} className="group hover:-translate-y-1 transition-all duration-300 cursor-pointer" onClick={() => setPreviewAsset(asset)}>
                       <div className="aspect-video bg-slate-800 rounded-lg mb-3 overflow-hidden relative">
                         <img
@@ -734,17 +777,55 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                       </div>
                     </Card>
                   ))}
-                  {filteredAssets.length === 0 && (
+                  {catalogAssets.length === 0 && (
                     <div className="col-span-full text-center py-16 text-slate-500">
                       <Package size={40} className="mx-auto mb-3 opacity-30" />
                       <p>No hay activos disponibles con ese filtro.</p>
                     </div>
                   )}
                 </div>
+                )}
+                {!catalogLoading && catalogTotal > 0 && (
+                  <div className="flex flex-col sm:flex-row justify-center items-center gap-3 mt-6 pt-4 border-t border-slate-800">
+                    <span className="text-xs text-slate-500">
+                      Mostrando {(catalogPage - 1) * CATALOG_PAGE_SIZE + 1}–{Math.min(catalogPage * CATALOG_PAGE_SIZE, catalogTotal)} de {catalogTotal} activos
+                    </span>
+                    {catalogTotalPages > 1 && (
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCatalogPage(p => Math.max(1, p - 1))}
+                          disabled={catalogPage <= 1}
+                        >
+                          Anterior
+                        </Button>
+                        <span className="flex items-center px-4 text-sm text-slate-400">
+                          Página {catalogPage} de {catalogTotalPages}
+                        </span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCatalogPage(p => Math.min(catalogTotalPages, p + 1))}
+                          disabled={catalogPage >= catalogTotalPages}
+                        >
+                          Siguiente
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </>
               ) : (
                 /* LIST / TABLE VIEW */
+                <>
+                {catalogLoading ? (
+                  <div className="flex justify-center py-16">
+                    <DataLoadingScreen message="Cargando activos..." />
+                  </div>
+                ) : (
                 <AssetCatalogTable
-                  assets={filteredAssets}
+                  assets={catalogAssets}
                   onSelect={(a) => setPreviewAsset(a)}
                   onAddToCart={(a) => {
                     const added = addToCart(a);
@@ -752,6 +833,22 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                     else toast.warning('Este activo ya está en el carrito');
                   }}
                 />
+                )}
+                {!catalogLoading && catalogTotal > 0 && (
+                  <div className="flex flex-col sm:flex-row justify-center items-center gap-3 mt-6 pt-4 border-t border-slate-800">
+                    <span className="text-xs text-slate-500">
+                      Mostrando {(catalogPage - 1) * CATALOG_PAGE_SIZE + 1}–{Math.min(catalogPage * CATALOG_PAGE_SIZE, catalogTotal)} de {catalogTotal} activos
+                    </span>
+                    {catalogTotalPages > 1 && (
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => setCatalogPage(p => Math.max(1, p - 1))} disabled={catalogPage <= 1}>Anterior</Button>
+                        <span className="flex items-center px-4 text-sm text-slate-400">Página {catalogPage} de {catalogTotalPages}</span>
+                        <Button variant="outline" size="sm" onClick={() => setCatalogPage(p => Math.min(catalogTotalPages, p + 1))} disabled={catalogPage >= catalogTotalPages}>Siguiente</Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+                </>
               )
             ) : (
               /* COMBOS VIEW */

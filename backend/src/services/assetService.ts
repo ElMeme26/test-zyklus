@@ -4,6 +4,75 @@ import { notifyByRole } from './notificationService.js';
 
 const toDateString = (d: Date) => d.toISOString().split('T')[0];
 
+export interface AssetsPaginatedResult {
+  assets: Record<string, unknown>[];
+  total: number;
+  page: number;
+  limit: number;
+  categories?: string[];
+}
+
+export async function getAssetsPaginated(
+  page = 1,
+  limit = 24,
+  filters?: { search?: string; category?: string; status?: string; availableOnly?: boolean; maintenanceOnly?: boolean; unbundledOnly?: boolean }
+): Promise<AssetsPaginatedResult> {
+  const offset = (page - 1) * limit;
+  const conditions: string[] = [];
+  const params: unknown[] = [];
+  let paramIndex = 1;
+
+  if (filters?.search) {
+    conditions.push(`(LOWER(name) LIKE LOWER($${paramIndex}) OR LOWER(tag) LIKE LOWER($${paramIndex}) OR LOWER(category) LIKE LOWER($${paramIndex}))`);
+    params.push(`%${filters.search}%`);
+    paramIndex++;
+  }
+  if (filters?.category && filters.category !== 'Todas') {
+    conditions.push(`category = $${paramIndex}`);
+    params.push(filters.category);
+    paramIndex++;
+  }
+  if (filters?.status) {
+    conditions.push(`status = $${paramIndex}`);
+    params.push(filters.status);
+    paramIndex++;
+  }
+  if (filters?.availableOnly) {
+    conditions.push(`status = 'Disponible' AND (maintenance_alert = false OR maintenance_alert IS NULL)`);
+  }
+  if (filters?.maintenanceOnly) {
+    conditions.push(`(maintenance_alert = true OR status IN ('En mantenimiento', 'Requiere Mantenimiento'))`);
+  }
+  if (filters?.unbundledOnly) {
+    conditions.push(`bundle_id IS NULL`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const [countRes, assetsRes, categoriesRes] = await Promise.all([
+    query<{ count: string }>(
+      `SELECT COUNT(*)::int AS count FROM assets ${whereClause}`,
+      params
+    ),
+    query(
+      `SELECT * FROM assets ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      [...params, limit, offset]
+    ),
+    query<{ category: string }>(`SELECT DISTINCT category FROM assets WHERE category IS NOT NULL AND category != '' ORDER BY category`),
+  ]);
+
+  const total = Number(countRes.rows[0]?.count ?? 0);
+  const assets = (assetsRes.rows ?? []) as Record<string, unknown>[];
+  const categories = (categoriesRes.rows ?? []).map(r => r.category).filter(Boolean) as string[];
+
+  return { assets, total, page, limit, categories };
+}
+
+export async function getAssetById(id: string): Promise<Record<string, unknown> | null> {
+  const result = await query(`SELECT * FROM assets WHERE id = $1`, [id]);
+  return (result.rows[0] as Record<string, unknown>) ?? null;
+}
+
 export async function getNextTag(): Promise<string> {
   const result = await query<{ tag: string }>(
     `SELECT tag FROM assets WHERE tag LIKE 'ZF-%' ORDER BY created_at DESC LIMIT 1`

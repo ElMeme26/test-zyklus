@@ -23,6 +23,14 @@ Aplicación de control de activos y préstamos con **separación explícita entr
 
 Para desarrollo completo, ejecuta ambos (backend y frontend) en terminales separadas.
 
+## Optimización de base de datos
+
+Para mejorar el rendimiento con muchos activos (10k+), ejecuta el script de índices en el SQL Editor de Supabase:
+
+```
+backend/migrations/001_add_performance_indexes.sql
+```
+
 ## Scripts
 
 - `npm run dev` / `npm run dev:frontend` — inicia el frontend (Vite).

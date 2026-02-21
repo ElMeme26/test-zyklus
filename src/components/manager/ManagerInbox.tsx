@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { UserHome } from '../user/UserHome';
 
 // ─── QR Modal para el Líder ───────────────────────────────────
@@ -181,7 +182,7 @@ function TeamView() {
 
 // ─── MAIN MANAGER INBOX ──────────────────────────────────────
 export function ManagerInbox() {
-  const { getUserRequests, getTeamRequests, approveRequest, rejectRequest, returnRequestWithFeedback, requests } = useData();
+  const { getUserRequests, getTeamRequests, approveRequest, rejectRequest, returnRequestWithFeedback, requests, isLoading } = useData();
   const { logout, user } = useAuth();
 
   const [activeTab, setActiveTab] = useState<'inbox' | 'team' | 'myloans'>('inbox');
@@ -208,6 +209,14 @@ export function ManagerInbox() {
 
   if (isRequesting) {
     return <UserHome isManagerView={true} onBack={() => setIsRequesting(false)} />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background font-sans">
+        <DataLoadingScreen message="Cargando bandeja de solicitudes..." />
+      </div>
+    );
   }
 
   return (

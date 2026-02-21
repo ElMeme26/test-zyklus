@@ -22,3 +22,13 @@ export interface ApiDataResponse {
 export function getData(): Promise<ApiDataResponse> {
   return apiFetch<ApiDataResponse>('/api/data');
 }
+
+export interface DataStatsResponse {
+  assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number };
+  requestCounts: { overdue: number; active: number };
+  categoryCounts?: Record<string, number>;
+}
+
+export function getStats(): Promise<DataStatsResponse> {
+  return apiFetch<DataStatsResponse>('/api/data/stats');
+}
