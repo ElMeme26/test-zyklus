@@ -306,31 +306,20 @@ export function GuardScanner() {
     }
   };
 
-  // ─── CHECKIN CONFIRM ─────────────────────────────────────────
+// ─── CHECKIN CONFIRM ─────────────────────────────────────────
   const handleCheckinConfirm = async () => {
-    if (isDamaged && !damageNotes.trim()) {
-      toast.error('Por favor describe el daño antes de continuar');
-      return;
-    }
+    if (isDamaged && !damageNotes.trim()) { toast.error('Describe el daño'); return; }
 
     let result;
     if (comboState) {
       result = await confirmComboCheckin(comboState, isDamaged, damageNotes);
     } else {
-      result = await processGuardScan(rawQR, 'CHECKIN', '', isDamaged, damageNotes);
+      // 👇 Añadimos 'CONFIRM' como tercer parámetro en lugar del string vacío ''
+      result = await processGuardScan(rawQR, 'CHECKIN', 'CONFIRM', isDamaged, damageNotes);
     }
 
     if (result.success) {
-      // IMPORTANTE: capturar snapshot del estado actual ANTES de que
-      // cualquier re-render pueda cambiar isDamaged
-      const wasDamaged = isDamaged;
-      const msg = wasDamaged
-        ? 'Equipo recibido — enviado a revisión de mantenimiento'
-        : 'Devolución registrada correctamente';
-
-      setDoneMode('CHECKIN');
-      setDoneDamaged(wasDamaged);
-      setDoneMessage(msg);
+      setDoneMessage(isDamaged ? 'Equipo recibido — enviado a revisión de mantenimiento' : 'Devolución registrada correctamente');
       setStep('done');
     } else {
       toast.error(result.message);

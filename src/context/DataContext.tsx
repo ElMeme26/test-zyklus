@@ -666,7 +666,11 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const allReqs = (allComboReqs || []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
 
         if (allReqs.length === 1) {
-          return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
+          if (signature === 'CONFIRM') {
+            return { ...(await _doCheckin(allReqs, isDamaged, damageNotes)) };
+          } else {
+            return { success: true, message: 'Verificado', data: allReqs };
+          }
         }
 
         const comboState: ComboCheckinState = {
@@ -686,7 +690,12 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       }
 
-      return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
+      // LA CORRECCIÓN SE APLICA AQUÍ
+      if (signature === 'CONFIRM') {
+        return { ...(await _doCheckin([req], isDamaged, damageNotes)) };
+      } else {
+        return { success: true, message: 'Activo verificado. Continúa a revisión de daños.', data: [req] };
+      }
     } catch (err) {
       console.error('processGuardScan:', err);
       return { success: false, message: 'Error interno.' };
