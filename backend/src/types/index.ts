@@ -10,7 +10,7 @@ export interface User {
   name: string;
   email: string;
   role: UserRole;
-  disciplina: string;
+  disciplina?: string;
   avatar?: string;
   phone?: string;
   manager_id?: string;
