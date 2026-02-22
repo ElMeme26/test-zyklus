@@ -16,6 +16,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request, Asset } from '../../types';
 import { ThemeToggle } from '../ui/ThemeToggle';
+import { CategoryFilter } from '../ui/CategoryFilter';
 import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
 import { RefreshButton } from '../ui/RefreshButton';
@@ -478,8 +479,6 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   };
   const removeFromCart = (assetId: string) => setCart(prev => prev.filter(a => a.id !== assetId));
 
-  const categoryOptions = ['Todas', ...categories];
-
   const fetchCatalogAssets = useCallback(async (page: number) => {
     if (activeTab !== 'catalog' || view !== 'activos') return;
     setCatalogLoading(true);
@@ -720,18 +719,8 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                     </button>
                   </div>
 
-                  {/* Category filters */}
-                  <div className="flex gap-2 flex-wrap items-center">
-                    {categoryOptions.map(cat => (
-                      <button
-                        key={cat}
-                        onClick={() => setCatFilter(String(cat))}
-                        className={`px-4 py-2 rounded-xl text-xs font-bold transition-all border whitespace-nowrap ${catFilter === cat ? 'bg-primary text-black border-primary shadow-[0_0_15px_rgba(6,182,212,0.3)]' : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-600'}`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
+                  {/* Category filter dropdown */}
+                  <CategoryFilter categories={categories} value={catFilter} onChange={setCatFilter} />
                 </div>
               )}
             </div>

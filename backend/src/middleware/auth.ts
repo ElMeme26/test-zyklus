@@ -1,6 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../services/authService.js';
-import type { JwtPayload } from '../types/index.js';
+import type { JwtPayload, UserRole } from '../types/index.js';
 
 export interface AuthRequest extends Request {
   user?: JwtPayload;
@@ -20,4 +20,18 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   }
   req.user = payload;
   next();
+}
+
+export function requireRole(allowedRoles: UserRole[]) {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      res.status(401).json({ error: 'No token provided' });
+      return;
+    }
+    if (!allowedRoles.includes(req.user.role)) {
+      res.status(403).json({ error: 'No tiene permiso para esta acción.' });
+      return;
+    }
+    next();
+  };
 }

@@ -7,12 +7,12 @@ interface AuthContextType {
   user: User | null;
 
   // Nombres estándar
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 
   // Alias de compatibilidad (para componentes que usen estos nombres)
-  signIn: (email: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
   loading: boolean;
 }
@@ -30,17 +30,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  const login = async (email: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const { user: userData, token } = await api.login(email);
+      const { user: userData, token } = await api.login(email, password);
       setUser(userData);
       localStorage.setItem('zf_user', JSON.stringify(userData));
       localStorage.setItem('zf_token', token);
       toast.success(`Bienvenido, ${userData.name}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Error de conexión.';
-      toast.error(message);
+      // No toast on login error: LoginScreen shows inline message and clears fields
+      throw err;
     } finally {
       setIsLoading(false);
     }
