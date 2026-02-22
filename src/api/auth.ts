@@ -6,9 +6,9 @@ export interface LoginResponse {
   token: string;
 }
 
-export async function login(email: string): Promise<LoginResponse> {
+export async function login(email: string, password: string): Promise<LoginResponse> {
   return apiFetch<LoginResponse>('/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ email }),
+    body: JSON.stringify({ email, password }),
   });
 }

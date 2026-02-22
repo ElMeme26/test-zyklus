@@ -6,10 +6,23 @@ import { Loader2 } from 'lucide-react';
 export function LoginScreen() {
   const { login, isLoading } = useAuth();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
 
-  const handleQuickLogin = (roleEmail: string) => {
-    setEmail(roleEmail);
-    login(roleEmail);
+  const handleSubmit = async () => {
+    if (!email.trim() || !password) return;
+    setErrorMessage('');
+    try {
+      await login(email.trim(), password);
+    } catch {
+      setErrorMessage('Credenciales incorrectas. Verifica tu correo y contraseña.');
+      setEmail('');
+      setPassword('');
+    }
+  };
+
+  const clearError = () => {
+    if (errorMessage) setErrorMessage('');
   };
 
   return (
@@ -47,41 +60,36 @@ export function LoginScreen() {
           <div className="space-y-2">
             <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Correo Corporativo</label>
             <Input 
+              type="email"
               placeholder="nombre@zf.com" 
               value={email} 
-              onChange={e => setEmail(e.target.value)} 
+              onChange={e => { setEmail(e.target.value); clearError(); }} 
+              className="bg-slate-950 border-slate-800 focus:border-cyan-500 text-white login-text"
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Contraseña</label>
+            <Input 
+              type="password"
+              placeholder="••••••••" 
+              value={password} 
+              onChange={e => { setPassword(e.target.value); clearError(); }}
+              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
               className="bg-slate-950 border-slate-800 focus:border-cyan-500 text-white login-text"
             />
           </div>
           <Button 
-            onClick={() => login(email)} 
+            onClick={handleSubmit} 
             className="w-full h-11 btn-neon text-xs" 
-            disabled={isLoading}
+            disabled={isLoading || !email.trim() || !password}
           >
             {isLoading ? <Loader2 className="animate-spin w-4 h-4" /> : 'ACCEDER AL SISTEMA'}
           </Button>
-        </div>
-
-        {/* --- BOTONES DE ACCESO RÁPIDO AUTOMÁTICOS --- */}
-        <div className="mt-8 pt-6 border-t border-slate-800">
-           <p className="text-[10px] text-slate-500 uppercase mb-3 font-bold text-center">Fases de Prueba (Entrada Directa)</p>
-           <div className="grid grid-cols-2 gap-2 text-[10px]">
-              <button onClick={() => handleQuickLogin('sara.gómez_18@zf.com')} className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center gap-2">
-                👷‍♂️ Usuario
-              </button>
-              <button onClick={() => handleQuickLogin('lic..echeverría_39@zf.com')} className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center gap-2">
-                👔 Líder
-              </button>
-              <button onClick={() => handleQuickLogin('juana.pichardo_25@zf.com')} className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center gap-2">
-                ⚡ Admin
-              </button>
-              <button onClick={() => handleQuickLogin('isabela.gálvez_98@zf.com')} className="p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center gap-2">
-                📋 Auditor
-              </button>
-              <button onClick={() => handleQuickLogin('carlos.mendoza@zf.com')} className="col-span-2 p-2 bg-slate-950 border border-slate-800 rounded hover:border-cyan-500 text-slate-400 hover:text-cyan-400 transition-colors flex items-center justify-center gap-2 font-bold">
-                🛡️ Guardia de Seguridad
-              </button>
-           </div>
+          {errorMessage && (
+            <p className="text-sm text-rose-400 text-center mt-2" role="alert">
+              {errorMessage}
+            </p>
+          )}
         </div>
       </Card>
     </div>

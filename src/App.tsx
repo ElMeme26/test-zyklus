@@ -1,4 +1,5 @@
 import React from 'react';
+import { Toaster } from 'sonner';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { DataProvider } from './context/DataContext';
@@ -9,6 +10,7 @@ import './index.css';
 function App() {
   return (
     <BrowserRouter>
+      <Toaster richColors position="top-center" closeButton />
       <ThemeProvider>
         <AuthProvider>
           <DataProvider>
