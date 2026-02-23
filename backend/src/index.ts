@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
+import compression from 'compression';
 import { healthCheck } from './db/index.js';
 import authRoutes from './routes/auth.js';
 import dataRoutes from './routes/data.js';
@@ -27,6 +28,8 @@ app.use(cors({
   },
   credentials: true
 }));
+
+app.use(compression()); 
 
 app.use(express.json());
 
