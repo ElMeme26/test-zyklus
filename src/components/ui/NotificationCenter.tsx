@@ -221,7 +221,7 @@ function MobileDrawer({
                 {role === 'AUDITOR' ? 'Sin vencimientos activos' : 'Sin notificaciones'}
               </p>
               <p className="text-slate-600 text-xs mt-1">
-                {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados 👁' : 'Estás al día 👍'}
+                {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados' : 'Estás al día'}
               </p>
             </div>
           ) : (
@@ -404,7 +404,7 @@ export function NotificationCenter() {
                   {role === 'AUDITOR' ? 'Sin vencimientos activos' : 'Sin notificaciones'}
                 </p>
                 <p className="text-slate-600 text-xs mt-1">
-                  {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados 👁' : 'Estás al día 👍'}
+                  {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados' : 'Estás al día'}
                 </p>
               </div>
             ) : (

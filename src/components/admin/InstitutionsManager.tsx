@@ -34,7 +34,7 @@ export const InstitutionsManager = () => {
   };
 
   const handleEdit = (inst: Institution) => {
-    // ✨ CORRECCIÓN: Forzamos un string vacío ('') como fallback si el campo viene undefined de Supabase
+    // Fallback a string vacío si el campo viene undefined desde Supabase
     setFormData({
       id: inst.id,
       name: inst.name || '',

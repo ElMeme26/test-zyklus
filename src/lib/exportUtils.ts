@@ -11,7 +11,7 @@ const safeDate = (d?: string) =>
   d ? format(new Date(d), 'dd/MM/yyyy', { locale: es }) : '—';
 
 // ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR REQUESTS A CSV  (con BOM para tildes en Excel)
+// Exportar requests a CSV (BOM para tildes en Excel)
 // ═══════════════════════════════════════════════════════════════
 export const exportRequestsToCSV = (requests: Request[]) => {
   const headers = ['ID', 'Activo', 'Tag', 'Solicitante', 'Disciplina', 'Estado', 'Dias', 'Fecha Solicitud', 'Fecha Retorno'];
@@ -33,7 +33,7 @@ export const exportRequestsToCSV = (requests: Request[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 📄 EXPORTAR REQUESTS A PDF
+// Exportar requests a PDF
 // ═══════════════════════════════════════════════════════════════
 export const exportRequestsToPDF = (requests: Request[]) => {
   const doc = new jsPDF();
@@ -77,7 +77,7 @@ export const exportRequestsToPDF = (requests: Request[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR REQUESTS A EXCEL
+// Exportar requests a Excel
 // ═══════════════════════════════════════════════════════════════
 export const exportRequestsToExcel = (requests: Request[]) => {
   const data = requests.map(r => ({
@@ -111,7 +111,7 @@ export const exportRequestsToExcel = (requests: Request[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR PRÉSTAMOS POR USUARIO / DISCIPLINA (Excel)
+// Exportar préstamos por usuario / disciplina (Excel)
 // ═══════════════════════════════════════════════════════════════
 export const exportRequestsByUser = (requests: Request[]) => {
   const workbook = XLSX.utils.book_new();
@@ -204,7 +204,7 @@ export const exportRequestsByUser = (requests: Request[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🔧 EXPORTAR INCIDENCIAS Y MANTENIMIENTOS (Excel)
+// Exportar incidencias y mantenimientos (Excel)
 // ═══════════════════════════════════════════════════════════════
 export const exportMaintenanceReport = (maintenanceLogs: MaintenanceLog[], assets: Asset[]) => {
   const workbook = XLSX.utils.book_new();
@@ -339,7 +339,7 @@ export const exportInventoryToPDF = (assets: Asset[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR AUDIT LOGS A EXCEL
+// Exportar audit logs a Excel
 // ═══════════════════════════════════════════════════════════════
 export const exportAuditLogsToExcel = (logs: AuditLog[]) => {
   const data = logs.map(log => ({
@@ -363,7 +363,7 @@ export const exportAuditLogsToExcel = (logs: AuditLog[]) => {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 🛠️ HELPER: Download File
+// Helper: descargar archivo
 // ═══════════════════════════════════════════════════════════════
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });

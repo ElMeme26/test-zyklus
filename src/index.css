@@ -145,7 +145,7 @@
   html.light .text-slate-500 { color: #64748b !important; }
   html.light .text-slate-300 { color: #334155 !important; }
 
-  /* ✨ Regla clave: Si tiene la clase .keep-white NUNCA cambia a oscuro en light mode */
+  /* .keep-white: en modo claro el texto no pasa a oscuro */
   html.light .text-white:not(.keep-white) {
     color: #0f172a !important;
   }

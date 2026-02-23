@@ -2,7 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './index.css';
-import './registerSW'; // El módulo se auto-ejecuta al importarse
+import './registerSW'; // Registro del service worker (PWA)
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

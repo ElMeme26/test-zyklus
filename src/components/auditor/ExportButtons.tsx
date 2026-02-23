@@ -55,34 +55,34 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
       switch (type) {
         case 'requests_csv':
           exportRequestsToCSV(requests);
-          toast.success('✅ CSV generado correctamente');
+          toast.success('CSV generado correctamente');
           break;
         case 'requests_pdf':
           exportRequestsToPDF(requests);
-          toast.success('✅ PDF generado correctamente');
+          toast.success('PDF generado correctamente');
           break;
         case 'requests_excel':
           exportRequestsToExcel(requests);
-          toast.success('✅ Excel generado correctamente');
+          toast.success('Excel generado correctamente');
           break;
         case 'inventory_pdf': {
           const assetsToExport = await fetchAllAssets();
           exportInventoryToPDF(assetsToExport);
-          toast.success('✅ Inventario PDF generado');
+          toast.success('Inventario PDF generado');
           break;
         }
         case 'audit_excel':
           exportAuditLogsToExcel(auditLogs);
-          toast.success('✅ Audit Trail exportado');
+          toast.success('Audit Trail exportado');
           break;
         case 'by_user_excel':
           exportRequestsByUser(requests);
-          toast.success('✅ Reporte por usuario generado');
+          toast.success('Reporte por usuario generado');
           break;
         case 'maintenance_excel': {
           const assetsToExport = await fetchAllAssets();
           exportMaintenanceReport(maintenanceLogs, assetsToExport);
-          toast.success('✅ Reporte de mantenimiento generado');
+          toast.success('Reporte de mantenimiento generado');
           break;
         }
       }

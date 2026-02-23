@@ -212,7 +212,7 @@ export function ChatAssistant() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
-  const initialMessage: Message = { role: 'bot', text: 'Hola, soy Zykla 🤖. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?' };
+  const initialMessage: Message = { role: 'bot', text: 'Hola, soy Zykla. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?' };
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -313,7 +313,7 @@ INSTRUCCIONES ESTRICTAS:
     if (!input.trim() || isLoading) return;
 
     if (!GEMINI_API_KEY) {
-      setMessages(prev => [...prev, { role: 'bot', text: '⚠️ API Key de Gemini no configurada en las variables de entorno (VITE_GEMINI_API_KEY).' }]);
+      setMessages(prev => [...prev, { role: 'bot', text: 'API Key de Gemini no configurada en las variables de entorno (VITE_GEMINI_API_KEY).' }]);
       return;
     }
 
@@ -359,7 +359,7 @@ INSTRUCCIONES ESTRICTAS:
       console.error('Zykla AI error:', msg);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `❌ Error al conectar con Zykla AI: ${msg}. Verifica que VITE_GEMINI_API_KEY esté configurada correctamente.`,
+        text: `Error al conectar con Zykla AI: ${msg}. Verifica que VITE_GEMINI_API_KEY esté configurada correctamente.`,
       }]);
     } finally {
       setIsLoading(false);

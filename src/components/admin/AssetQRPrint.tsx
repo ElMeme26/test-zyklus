@@ -125,7 +125,7 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
           </div>
           <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
             <Button onClick={onClose} variant="secondary">Cerrar</Button>
-            <Button onClick={handlePrint}>🖨️ Imprimir PNGs</Button>
+            <Button onClick={handlePrint}>Imprimir PNGs</Button>
           </div>
        </Card>
     </div>

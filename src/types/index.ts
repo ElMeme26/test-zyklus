@@ -1,6 +1,4 @@
-// ============================================================
-// ZYKLUS 2.0 — TYPE DEFINITIONS
-// ============================================================
+/** Tipos e interfaces compartidos del frontend (activos, usuarios, solicitudes, etc.). */
 
 export type UserRole = 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO' | 'GUARDIA';
 
@@ -30,7 +28,6 @@ export type NotificationChannel = 'IN_APP' | 'CHAT' | 'EMAIL';
 export type NotificationType = 'WARNING' | 'ALERT' | 'INFO' | 'CRITICAL';
 export type AuditAction = 'CREATE' | 'APPROVE' | 'REJECT' | 'CHECKOUT' | 'CHECKIN' | 'UPDATE' | 'ALERT' | 'MAINTENANCE';
 
-// ─── USER ────────────────────────────────────────────────────
 export interface User {
   id: string;
   name: string;
@@ -70,7 +67,6 @@ export interface Asset {
   created_at: string;
 }
 
-// ─── INSTITUTION ─────────────────────────────────────────────
 export interface Institution {
   id: number;
   name: string;
@@ -81,7 +77,6 @@ export interface Institution {
   created_at?: string;
 }
 
-// ─── BUNDLE / KIT ────────────────────────────────────────────
 export interface Bundle {
   id: string;
   name: string;
@@ -91,7 +86,6 @@ export interface Bundle {
   assets?: Asset[];
 }
 
-// ─── REQUEST (PRÉSTAMO) ──────────────────────────────────────
 export interface Request {
   id: number;
   asset_id: string;
@@ -138,7 +132,6 @@ export interface Request {
   institutions?: Institution;
 }
 
-// ─── MAINTENANCE LOG ─────────────────────────────────────────
 export interface MaintenanceLog {
   id: number;
   asset_id: string;
@@ -152,7 +145,6 @@ export interface MaintenanceLog {
   users?: User;
 }
 
-// ─── NOTIFICATION ────────────────────────────────────────────
 export interface Notification {
   id: string;
   user_id: string;
@@ -166,7 +158,6 @@ export interface Notification {
   created_at: string;
 }
 
-// ─── AUDIT LOG ───────────────────────────────────────────────
 export interface AuditLog {
   id: string;
   timestamp: string;
