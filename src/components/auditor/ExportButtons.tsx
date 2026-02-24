@@ -1,4 +1,4 @@
-// src/components/auditor/ExportButtons.tsx
+/** Panel de exportación del auditor: genera CSV/PDF/Excel de solicitudes, inventario y auditoría. */
 import React, { useState } from 'react';
 import { Button } from '../ui/core';
 import { Download, FileText, FileSpreadsheet, Loader2, ChevronDown, Users, Wrench } from 'lucide-react';
@@ -35,6 +35,7 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
     | 'by_user_excel'
     | 'maintenance_excel';
 
+  /** Carga todos los activos paginando el backend cuando no se pasaron por props. */
   const fetchAllAssets = async (): Promise<Asset[]> => {
     if (assets.length > 0) return assets;
     const all: Asset[] = [];
@@ -49,6 +50,7 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
     return all;
   };
 
+  /** Orquesta cada tipo de exportación y muestra feedback visual. */
   const handleExport = async (type: ExportType) => {
     setIsExporting(true);
     try {

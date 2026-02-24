@@ -7,6 +7,7 @@ import {
 } from 'recharts';
 import { COLORS } from './constants';
 
+/** Gráficas del dashboard del auditor (categorías, estados, tendencias). */
 export function DashboardCharts() {
   const { assets, requests, stats } = useData();
 

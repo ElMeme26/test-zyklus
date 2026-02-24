@@ -4,6 +4,7 @@ import { notifyByRole } from './notificationService.js';
 
 const toDateString = (d: Date) => d.toISOString().split('T')[0];
 
+/** Resultado de la búsqueda paginada de activos. */
 export interface AssetsPaginatedResult {
   assets: Record<string, unknown>[];
   total: number;
@@ -12,6 +13,7 @@ export interface AssetsPaginatedResult {
   categories?: string[];
 }
 
+/** Lista activos con filtros, paginación y categorías distintas para el catálogo. */
 export async function getAssetsPaginated(
   page = 1,
   limit = 24,
@@ -68,11 +70,13 @@ export async function getAssetsPaginated(
   return { assets, total, page, limit, categories };
 }
 
+/** Obtiene un activo por ID (o null si no existe). */
 export async function getAssetById(id: string): Promise<Record<string, unknown> | null> {
   const result = await query(`SELECT * FROM assets WHERE id = $1`, [id]);
   return (result.rows[0] as Record<string, unknown>) ?? null;
 }
 
+/** Calcula la siguiente tag secuencial con prefijo ZF-XYZ. */
 export async function getNextTag(): Promise<string> {
   const result = await query<{ tag: string }>(
     `SELECT tag FROM assets WHERE tag LIKE 'ZF-%' ORDER BY created_at DESC LIMIT 1`
@@ -84,6 +88,7 @@ export async function getNextTag(): Promise<string> {
   return `ZF-${String(num + 1).padStart(3, '0')}`;
 }
 
+/** Crea un nuevo activo con valores por defecto y registra auditoría y notificación. */
 export async function addAsset(payload: Record<string, unknown>): Promise<Record<string, unknown>> {
   const tag = (payload.tag as string) || (await getNextTag());
   const status = payload.status ?? 'Disponible';
@@ -124,10 +129,11 @@ export async function addAsset(payload: Record<string, unknown>): Promise<Record
   );
   const row = result.rows[0] as Record<string, unknown>;
   await logAudit('CREATE', 'system', 'Admin', row.id as string, 'ASSET', `Nuevo: ${payload.name}`);
-  await notifyByRole('ADMIN_PATRIMONIAL', '📦 Nuevo Activo Registrado', `${payload.name} (${tag}).`, 'INFO');
+  await notifyByRole('ADMIN_PATRIMONIAL', 'Nuevo Activo Registrado', `${payload.name} (${tag}).`, 'INFO');
   return row;
 }
 
+/** Actualiza campos permitidos de un activo. */
 export async function updateAsset(
   id: string,
   updates: Record<string, unknown>
@@ -156,10 +162,12 @@ export async function updateAsset(
   await query(`UPDATE assets SET ${set.join(', ')} WHERE id = $${i}`, values);
 }
 
+/** Elimina un activo. */
 export async function deleteAsset(id: string): Promise<void> {
   await query(`UPDATE assets SET status = 'Dada de baja' WHERE id = $1`, [id]);
 }
 
+/** Importa activos desde un array de filas (CSV). Devuelve cantidad insertada. */
 export async function importAssets(rows: Record<string, unknown>[]): Promise<number> {
   if (rows.length === 0) return 0;
   const nextDate = toDateString(new Date(Date.now() + 180 * 24 * 60 * 60 * 1000));
@@ -180,6 +188,7 @@ export async function importAssets(rows: Record<string, unknown>[]): Promise<num
   return rows.length;
 }
 
+/** Valida el mantenimiento de un activo y actualiza next_maintenance_date. */
 export async function validateMaintenanceAsset(
   assetId: string,
   maintenancePeriodDays: number

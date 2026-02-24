@@ -7,6 +7,7 @@ interface RejectionModalProps {
   onCancel: () => void;
 }
 
+/** Modal para que el líder rechace una solicitud o la devuelva con comentarios al usuario. */
 export function RejectionModal({ onConfirm, onCancel, type }: RejectionModalProps) {
   const [reason, setReason] = useState('');
 
@@ -14,7 +15,7 @@ export function RejectionModal({ onConfirm, onCancel, type }: RejectionModalProp
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">
       <Card className={`w-full max-w-sm border ${type === 'reject' ? 'border-rose-500/30' : 'border-amber-500/30'}`}>
         <h3 className="text-white font-bold mb-1">
-          {type === 'reject' ? '❌ Rechazar Solicitud' : '↩️ Devolver para Corrección'}
+          {type === 'reject' ? 'Rechazar Solicitud' : 'Devolver para Corrección'}
         </h3>
         <p className="text-slate-400 text-xs mb-4">
           {type === 'reject'

@@ -6,6 +6,7 @@ export interface AuthRequest extends Request {
   user?: JwtPayload;
 }
 
+/** Valida el JWT y adjunta req.user. Devuelve 401 si no hay token o es inválido. */
 export function authMiddleware(req: AuthRequest, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null;
@@ -22,6 +23,7 @@ export function authMiddleware(req: AuthRequest, res: Response, next: NextFuncti
   next();
 }
 
+/** Middleware que restringe el acceso por rol (403 si no está permitido). */
 export function requireRole(allowedRoles: UserRole[]) {
   return (req: AuthRequest, res: Response, next: NextFunction): void => {
     if (!req.user) {

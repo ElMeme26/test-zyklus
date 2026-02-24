@@ -1,6 +1,8 @@
+/** Cliente API para solicitudes: crear, aprobar, rechazar, renovar, cancelar. */
 import { apiFetch } from './client';
 import type { User } from '../types';
 
+/** Crea una solicitud individual de préstamo. */
 export async function createRequest(
   assetId: string,
   user: User,
@@ -25,6 +27,7 @@ export async function createRequest(
   });
 }
 
+/** Crea solicitudes en lote (carrito). */
 export async function createBatchRequest(
   assetIds: string[],
   user: User,
@@ -49,6 +52,7 @@ export async function createBatchRequest(
   });
 }
 
+/** Crea solicitudes para un combo (kit). */
 export async function createBundleRequest(
   bundleId: string,
   assetIds: string[],
@@ -75,6 +79,7 @@ export async function createBundleRequest(
   });
 }
 
+/** Aprueba una solicitud (individual o combo). */
 export async function approveRequest(
   reqId: number,
   approverId: string,
@@ -93,6 +98,7 @@ export async function approveRequest(
   });
 }
 
+/** Rechaza una solicitud con motivo. */
 export async function rejectRequest(
   reqId: number,
   reason: string,
@@ -104,6 +110,7 @@ export async function rejectRequest(
   });
 }
 
+/** Devuelve la solicitud al usuario con feedback. */
 export async function returnRequestWithFeedback(
   reqId: number,
   feedback: string,
@@ -115,6 +122,7 @@ export async function returnRequestWithFeedback(
   });
 }
 
+/** Cancela una solicitud. */
 export async function cancelRequest(
   reqId: number,
   body?: { bundleGroupId?: string; assetIdsToFree?: string[] }
@@ -125,6 +133,7 @@ export async function cancelRequest(
   });
 }
 
+/** Responde al feedback del líder. */
 export async function respondToFeedback(
   reqId: number,
   feedback: string,
@@ -136,6 +145,7 @@ export async function respondToFeedback(
   });
 }
 
+/** Extiende la fecha de retorno de un préstamo. */
 export async function renewRequest(reqId: number, additionalDays: number): Promise<void> {
   await apiFetch(`/api/requests/${reqId}/renew`, {
     method: 'PUT',

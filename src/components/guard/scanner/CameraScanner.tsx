@@ -9,6 +9,7 @@ interface CameraScannerProps {
   onClose: () => void;
 }
 
+/** Escáner de cámara para leer códigos QR. */
 export function CameraScanner({ onCode, onClose }: CameraScannerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);

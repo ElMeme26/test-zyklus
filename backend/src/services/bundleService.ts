@@ -1,5 +1,6 @@
 import { query } from '../db/index.js';
 
+/** Crea un combo (bundle) con nombre, descripción y activos. */
 export async function createBundle(
   name: string,
   description: string,
@@ -18,6 +19,7 @@ export async function createBundle(
   return bundle;
 }
 
+/** Actualiza un combo (nombre, descripción o lista de activos). */
 export async function updateBundle(
   id: string,
   patch: { name?: string; description?: string; assetIds?: string[] }

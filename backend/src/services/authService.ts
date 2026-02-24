@@ -26,7 +26,7 @@ function rowToUser(row: UserRow): User {
     name: row.name,
     email: row.email,
     role: row.role,
-    disciplina: row.disciplina ?? undefined,
+    disciplina: row.disciplina ?? '',
     avatar: row.avatar ?? undefined,
     phone: row.phone ?? undefined,
     manager_id: row.manager_id ?? undefined,
@@ -34,6 +34,7 @@ function rowToUser(row: UserRow): User {
   };
 }
 
+/** Busca un usuario por email (sin password_hash). */
 export async function findUserByEmail(email: string): Promise<User | null> {
   const result = await query<UserRow>(
     `SELECT id, name, email, role, disciplina, avatar, phone, manager_id, created_at, password_hash
@@ -45,7 +46,7 @@ export async function findUserByEmail(email: string): Promise<User | null> {
   return rowToUser(row);
 }
 
-/** Used by login: returns user and password_hash for verification. Never expose password_hash to client. */
+/** Usado por login: devuelve usuario y hash de contraseña. Nunca exponer password_hash al cliente. */
 export async function findUserByEmailForLogin(email: string): Promise<{ user: User; password_hash: string | null } | null> {
   const result = await query<UserRow>(
     `SELECT id, name, email, role, disciplina, avatar, phone, manager_id, created_at, password_hash
@@ -57,6 +58,7 @@ export async function findUserByEmailForLogin(email: string): Promise<{ user: Us
   return { user: rowToUser(row), password_hash: row.password_hash };
 }
 
+/** Genera hash bcrypt de la contraseña. */
 export async function hashPassword(plain: string): Promise<string> {
   return bcrypt.hash(plain, SALT_ROUNDS);
 }
@@ -65,6 +67,7 @@ export async function verifyPassword(plain: string, hash: string): Promise<boole
   return bcrypt.compare(plain, hash);
 }
 
+/** Genera JWT con sub, email y role (expira en 7 días). */
 export function createToken(user: User): string {
   return jwt.sign(
     { sub: user.id, email: user.email, role: user.role } as JwtPayload,
@@ -73,6 +76,7 @@ export function createToken(user: User): string {
   );
 }
 
+/** Verifica y decodifica el JWT. Devuelve null si es inválido o expirado. */
 export function verifyToken(token: string): JwtPayload | null {
   try {
     const decoded = jwt.verify(token, JWT_SECRET) as JwtPayload;

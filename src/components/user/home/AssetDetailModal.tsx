@@ -10,6 +10,7 @@ interface AssetDetailModalProps {
   onAddToCart?: (asset: Asset) => boolean | void;
 }
 
+/** Modal con detalle del activo y acciones (solicitar o añadir al carrito). */
 export function AssetDetailModal({ asset, onClose, onRequest, onAddToCart }: AssetDetailModalProps) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm animate-in fade-in">

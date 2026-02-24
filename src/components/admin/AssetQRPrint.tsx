@@ -1,4 +1,5 @@
 // src/components/admin/AssetQRPrint.tsx
+/** Modal para imprimir etiquetas QR de activos. */
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Package } from 'lucide-react';
@@ -10,7 +11,6 @@ interface AssetQRPrintProps {
   onClose: () => void;
 }
 
-// Generamos el JSON estricto
 const buildAssetQRPayload = (asset: Asset): string => {
   const payload: QRAssetPayload = {
     type: 'ASSET_PHYSICAL',
@@ -21,12 +21,10 @@ const buildAssetQRPayload = (asset: Asset): string => {
   return JSON.stringify(payload);
 };
 
-// Componente de Tarjeta que genera su propio PNG
 function QRCard({ asset }: { asset: Asset }) {
   const [qrSrc, setQrSrc] = useState<string>('');
 
   useEffect(() => {
-    // Generar PNG Base64
     QRCode.toDataURL(buildAssetQRPayload(asset), {
       width: 200,
       margin: 2,
@@ -54,13 +52,9 @@ function QRCard({ asset }: { asset: Asset }) {
   );
 }
 
-// ... El resto del componente (Modal Principal) se mantiene igual, 
-// pero actualizamos la función handlePrint para usar las imágenes generadas.
-
 export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
 
-  // Precargar todos los QRs como PNG antes de abrir el diálogo de impresión
   useEffect(() => {
     const generateAll = async () => {
       const images: Record<string, string> = {};
@@ -78,7 +72,6 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) return;
 
-    // Inyectamos HTML limpio para impresión
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -118,9 +111,7 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
   };
 
   return (
-    // ... Tu renderizado del Modal (puedes usar <QRCard> dentro para el preview)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-       {/* ... Contenido del modal ... */}
        <Card className="w-full max-w-3xl h-[80vh] flex flex-col">
           <div className="flex-1 overflow-auto p-4 bg-slate-100 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4">
              {assets.map(asset => <QRCard key={asset.id} asset={asset} />)}

@@ -1,3 +1,4 @@
+/** Reproduce un sonido corto al escanear un QR. */
 export function playBeep(): void {
   try {
     const audioContext = new (window.AudioContext || (window as Window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext)();
