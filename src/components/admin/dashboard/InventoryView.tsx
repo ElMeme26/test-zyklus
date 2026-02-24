@@ -216,7 +216,7 @@ export function InventoryView({ onPrintSelected, onPrintSingle }: InventoryViewP
                 </td>
                 <td className="p-3 text-right">
                   <div className="flex justify-end gap-2">
-                    <button onClick={() => onPrintSingle(a)} className="text-slate-400 hover:text-cyan-400 transition-colors" title="Imprimir QR">
+                    <button onClick={() => onPrintSingle(a)} className="text-slate-400 hover:text-cyan-400 transition-colors" title="Imprimir / Guardar como PDF">
                       <QrCode size={14} />
                     </button>
                     <button onClick={() => { setIsEditing(true); setCurrentAsset(a); setShowModal(true); }} className="text-slate-400 hover:text-primary transition-colors">

@@ -139,7 +139,7 @@ export function AdminDashboard() {
       <header className="sticky top-0 z-30 flex justify-between items-center px-4 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
         <div className="flex items-center gap-3">
           <h1 className="text-lg font-bold text-white flex items-center gap-2">
-            <Database className="text-primary" size={20} /> Panel Maestro
+            <Database className="text-primary" size={20} /> Panel de Administración
           </h1>
           <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
             {[
@@ -173,7 +173,14 @@ export function AdminDashboard() {
       <main className="p-4 md:p-6">
         {currentView === 'inventory' && (
           <InventoryView
-            onPrintSelected={(_ids: Set<string>, assetsToPrint: Asset[]) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
+            onPrintSelected={(_ids: Set<string>, assetsToPrint: Asset[]) => {
+              if (assetsToPrint.length === 0) {
+                toast.warning('No hay activos para imprimir');
+                return;
+              }
+              setQrPrintAssets(assetsToPrint);
+              setShowQRPrint(true);
+            }}
             onPrintSingle={(a: Asset) => { setQrPrintAssets([a]); setShowQRPrint(true); }}
           />
         )}
@@ -322,7 +329,14 @@ export function AdminDashboard() {
         {currentView === 'external' && <InstitutionsManager />}
         {currentView === 'maintenance' && (
           <MaintenancePanel
-            onPrintAll={(assetsToPrint) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
+            onPrintAll={(assetsToPrint) => {
+              if (assetsToPrint.length === 0) {
+                toast.warning('No hay activos para imprimir');
+                return;
+              }
+              setQrPrintAssets(assetsToPrint);
+              setShowQRPrint(true);
+            }}
           />
         )}
         {currentView === 'users' && user?.role === 'ADMIN_PATRIMONIAL' && <UsersView />}

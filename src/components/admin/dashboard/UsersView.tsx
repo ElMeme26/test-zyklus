@@ -18,8 +18,24 @@ export function UsersView() {
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [createForm, setCreateForm] = useState({ name: '', email: '', role: 'USUARIO' as UserRole, disciplina: '', password: '', passwordConfirm: '' });
-  const [editForm, setEditForm] = useState({ name: '', role: 'USUARIO' as UserRole, disciplina: '', password: '', passwordConfirm: '' });
+  const [createForm, setCreateForm] = useState({
+    name: '',
+    email: '',
+    role: 'USUARIO' as UserRole,
+    disciplina: '',
+    password: '',
+    passwordConfirm: '',
+    manager_id: '',
+  });
+  const [editForm, setEditForm] = useState({
+    name: '',
+    role: 'USUARIO' as UserRole,
+    disciplina: '',
+    password: '',
+    passwordConfirm: '',
+    manager_id: '',
+  });
+  const [leaders, setLeaders] = useState<User[]>([]);
 
   const loadUsers = useCallback(async (pageNum: number) => {
     setLoading(true);
@@ -43,6 +59,23 @@ export function UsersView() {
   useEffect(() => { setPage(1); }, [search, roleFilter, disciplinaFilter]);
   useEffect(() => { loadUsers(page); }, [loadUsers, page]);
 
+  useEffect(() => {
+    const loadLeaders = async () => {
+      try {
+        const res = await usersApi.listUsersPaginated({
+          page: 1,
+          limit: 1000,
+          role: 'LIDER_EQUIPO',
+        });
+        setLeaders(res.users);
+      } catch (err) {
+        console.error(err);
+        toast.error('Error al cargar líderes de equipo');
+      }
+    };
+    loadLeaders();
+  }, []);
+
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (createForm.password !== createForm.passwordConfirm) {
@@ -60,10 +93,19 @@ export function UsersView() {
         role: createForm.role,
         password: createForm.password,
         disciplina: createForm.disciplina.trim() || undefined,
+        ...(createForm.role === 'USUARIO' && { manager_id: createForm.manager_id || undefined }),
       });
       toast.success('Usuario creado');
       setShowCreate(false);
-      setCreateForm({ name: '', email: '', role: 'USUARIO', disciplina: '', password: '', passwordConfirm: '' });
+      setCreateForm({
+        name: '',
+        email: '',
+        role: 'USUARIO',
+        disciplina: '',
+        password: '',
+        passwordConfirm: '',
+        manager_id: '',
+      });
       loadUsers(page);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Error al crear usuario');
@@ -72,7 +114,14 @@ export function UsersView() {
 
   const openEdit = (u: User) => {
     setEditingUser(u);
-    setEditForm({ name: u.name, role: u.role, disciplina: u.disciplina ?? '', password: '', passwordConfirm: '' });
+    setEditForm({
+      name: u.name,
+      role: u.role,
+      disciplina: u.disciplina ?? '',
+      password: '',
+      passwordConfirm: '',
+      manager_id: u.manager_id ?? '',
+    });
   };
 
   const handleEdit = async (e: React.FormEvent) => {
@@ -91,6 +140,7 @@ export function UsersView() {
         name: editForm.name.trim(),
         role: editForm.role,
         disciplina: editForm.disciplina.trim() || undefined,
+        ...(editForm.role === 'USUARIO' && { manager_id: editForm.manager_id || undefined }),
         password: editForm.password || undefined,
       });
       toast.success('Usuario actualizado');
@@ -227,6 +277,23 @@ export function UsersView() {
                   {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                 </select>
               </div>
+              {createForm.role === 'USUARIO' && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
+                  <select
+                    value={createForm.manager_id}
+                    onChange={e => setCreateForm(f => ({ ...f, manager_id: e.target.value }))}
+                    className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
+                  >
+                    <option value="">Sin líder asignado</option>
+                    {leaders.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
                 <Input value={createForm.disciplina} onChange={e => setCreateForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Opcional" />
@@ -266,6 +333,23 @@ export function UsersView() {
                   {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                 </select>
               </div>
+              {editForm.role === 'USUARIO' && (
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
+                  <select
+                    value={editForm.manager_id}
+                    onChange={e => setEditForm(f => ({ ...f, manager_id: e.target.value }))}
+                    className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
+                  >
+                    <option value="">Sin líder asignado</option>
+                    {leaders.map(l => (
+                      <option key={l.id} value={l.id}>
+                        {l.name} ({l.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div>
                 <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
                 <Input value={editForm.disciplina} onChange={e => setEditForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" />
