@@ -2,6 +2,8 @@
 
 Aplicación de control de activos y préstamos con **separación explícita entre backend y frontend**.
 
+> **Documentación completa:** Ver [DOCUMENTACION.md](./DOCUMENTACION.md) para arquitectura detallada, variables de entorno, API, despliegue y más.
+
 ## Arquitectura
 
 - **Backend:** API REST en Node.js + Express + TypeScript, en la carpeta `backend/`. Gestiona la lógica de negocio, autenticación (JWT) y acceso a PostgreSQL.
