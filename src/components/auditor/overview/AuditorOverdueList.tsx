@@ -8,6 +8,7 @@ interface AuditorOverdueListProps {
   requests: Request[];
 }
 
+/** Lista de préstamos vencidos para el auditor. */
 export function AuditorOverdueList({ requests }: AuditorOverdueListProps) {
   const now = new Date();
   const overdueList = requests

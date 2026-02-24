@@ -9,6 +9,7 @@ interface AuditorKPICardProps {
   sublabel?: string;
 }
 
+/** Tarjeta de indicador (KPI) para el panel del auditor. */
 export function AuditorKPICard({ label, value, color, icon, sublabel }: AuditorKPICardProps) {
   return (
     <Card className={`border-l-4 ${color}`}>

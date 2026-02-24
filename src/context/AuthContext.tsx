@@ -36,7 +36,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('zf_token', token);
       toast.success(`Bienvenido, ${userData.name}`);
     } catch (err) {
-      throw err; // LoginScreen muestra el error en pantalla
+      throw err;
     } finally {
       setIsLoading(false);
     }

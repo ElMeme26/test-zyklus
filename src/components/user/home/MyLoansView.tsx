@@ -16,6 +16,7 @@ interface MyLoansViewProps {
   onFeedback: (req: Request) => void;
 }
 
+/** Vista de mis préstamos activos con opción de ver QR o dar feedback. */
 export function MyLoansView({ onShowQR, onFeedback }: MyLoansViewProps) {
   const { getUserRequests, requests, cancelRequest } = useData();
   const { user } = useAuth();

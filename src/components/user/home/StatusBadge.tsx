@@ -4,6 +4,7 @@ interface StatusBadgeProps {
   status: string;
 }
 
+/** Badge que muestra el estado de una solicitud (color y etiqueta). */
 export function StatusBadge({ status }: StatusBadgeProps) {
   const cfg = statusConfig[status] || { label: status, color: 'text-slate-400 bg-slate-700' };
   return (

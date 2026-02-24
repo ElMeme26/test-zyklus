@@ -1,4 +1,4 @@
-// src/components/ui/ChatAssistant.tsx
+/** Asistente de chat con IA (Gemini) para consultas y gráficas del sistema patrimonial. */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, Send, X, Loader2, Sparkles, Trash2, Download } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -10,11 +10,9 @@ import {
 } from 'recharts';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-// Usar 2.5 Flash — más inteligente y sigue instrucciones de formato mejor
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-// ─── TIPOS ────────────────────────────────────────────────────
 interface GraphData {
   type: 'bar' | 'pie' | 'line';
   title?: string;
@@ -27,14 +25,10 @@ interface Message {
   graph?: GraphData;
 }
 
-// ─── COLORES ──────────────────────────────────────────────────
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6'];
 
-// ─── EXTRACTOR DE GRAPH_DATA (robusto con conteo de llaves) ──────────────────
-// El regex {.*?} falla con JSON anidado porque para en el primer "}"
-// Esta versión busca "[GRAPH_DATA:" y extrae el JSON contando llaves
+/** Extrae [GRAPH_DATA: {...}] del texto de Gemini y devuelve el texto limpio y la gráfica. */
 function extractGraph(text: string): { clean: string; graph?: GraphData } {
-  // 1. Limpiar wrappers de markdown que Gemini a veces añade
   const cleaned = text
     .replace(/```json\s*/g, '')
     .replace(/```\s*/g, '');
@@ -42,12 +36,8 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   const marker = '[GRAPH_DATA:';
   const markerIdx = cleaned.indexOf(marker);
   if (markerIdx === -1) return { clean: cleaned.trim() };
-
-  // 2. Encontrar el inicio del JSON (primer '{' después del marker)
   const jsonStart = cleaned.indexOf('{', markerIdx + marker.length);
   if (jsonStart === -1) return { clean: cleaned.trim() };
-
-  // 3. Contar llaves para encontrar el cierre correcto del objeto JSON
   let depth = 0;
   let jsonEnd = -1;
   for (let i = jsonStart; i < cleaned.length; i++) {
@@ -60,14 +50,10 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   if (jsonEnd === -1) return { clean: cleaned.trim() };
 
   const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
-
-  // 4. Calcular el bloque completo "[GRAPH_DATA: {...}]" para removerlo del texto
   const closingBracket = cleaned.indexOf(']', jsonEnd);
   const blockEnd = closingBracket !== -1 ? closingBracket + 1 : jsonEnd + 1;
   const fullBlock = cleaned.slice(markerIdx, blockEnd);
   const cleanText = cleaned.replace(fullBlock, '').trim();
-
-  // 5. Parsear y validar el JSON
   try {
     const raw = JSON.parse(jsonStr) as {
       type?: string;
@@ -87,13 +73,11 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   }
 }
 
-// ─── COMPONENTE GRÁFICA ───────────────────────────────────────
 function ChartWidget({ graph }: { graph: GraphData }) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   const handleExport = useCallback(() => {
     if (!chartRef.current) return;
-    // Crear SVG snapshot via canvas
     const svgEl = chartRef.current.querySelector('svg');
     if (!svgEl) return;
     const svgData = new XMLSerializer().serializeToString(svgEl);
@@ -140,7 +124,6 @@ function ChartWidget({ graph }: { graph: GraphData }) {
         </LineChart>
       );
     }
-    // default: bar
     return (
       <BarChart data={graph.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
         <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
@@ -173,7 +156,7 @@ function ChartWidget({ graph }: { graph: GraphData }) {
   );
 }
 
-// ─── LLAMADA A GEMINI ─────────────────────────────────────────
+/** Llama a la API de Gemini con el prompt dado. */
 async function callGemini(prompt: string): Promise<string> {
   if (!GEMINI_API_KEY) throw new Error('Sin API Key');
 
@@ -206,7 +189,6 @@ async function callGemini(prompt: string): Promise<string> {
   return text;
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────
 export function ChatAssistant() {
   const { assets, requests, stats } = useData();
   const { user } = useAuth();
@@ -228,7 +210,6 @@ export function ChatAssistant() {
 
   const clearChat = () => setMessages([initialMessage]);
 
-  // ─── CONSTRUCCIÓN DEL CONTEXTO ────────────────────────────
   const buildContext = useCallback(() => {
     const isAdmin = user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR';
     if (!isAdmin && user?.id) {
@@ -241,20 +222,17 @@ export function ChatAssistant() {
       };
     }
 
-    // Categorías
     const cats = assets.reduce((acc: Record<string, number>, a) => {
       const c = a.category || 'Sin categoría';
       acc[c] = (acc[c] || 0) + 1;
       return acc;
     }, {});
 
-    // Estados
     const states = assets.reduce((acc: Record<string, number>, a) => {
       acc[a.status] = (acc[a.status] || 0) + 1;
       return acc;
     }, {});
 
-    // Top activos solicitados
     const topAssets = Object.entries(
       requests.reduce((acc: Record<string, number>, r) => {
         const name = r.assets?.name || 'Desconocido';
@@ -263,14 +241,12 @@ export function ChatAssistant() {
       }, {})
     ).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count }));
 
-    // Por disciplina
     const byDisciplina = requests.reduce((acc: Record<string, number>, r) => {
       const d = r.requester_disciplina || 'Sin asignar';
       acc[d] = (acc[d] || 0) + 1;
       return acc;
     }, {});
 
-    // Vencidos
     const overdueList = requests
       .filter(r => r.status === 'OVERDUE')
       .slice(0, 5)
@@ -294,7 +270,6 @@ export function ChatAssistant() {
     };
   }, [assets, requests, user]);
 
-  // ─── SYSTEM PROMPT ────────────────────────────────────────
   const buildSystemPrompt = useCallback((context: object, forUserOnly: boolean) => {
     if (forUserOnly) {
       return `Eres Zykla AI, asistente integrado en Zyklus Halo para USUARIOS.
@@ -329,7 +304,6 @@ INSTRUCCIONES ESTRICTAS:
 10. Siempre basa tus respuestas en los datos reales proporcionados arriba.`;
   }, []);
 
-  // ─── SEND ─────────────────────────────────────────────────
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -344,7 +318,6 @@ INSTRUCCIONES ESTRICTAS:
     setIsLoading(true);
 
     try {
-      // Construir contexto con datos agrupados (stats/backend) para que la IA grafique mejor
       let contextData: Record<string, unknown> = {};
       if (user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR') {
         const cats = stats?.categoryCounts ?? assets.reduce((acc: Record<string, number>, a) => {

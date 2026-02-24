@@ -24,6 +24,7 @@ import {
   actionBadge,
 } from './overview';
 
+/** Panel del auditor: KPIs, gráficas, préstamos vencidos y exportación. */
 export function AuditorOverview() {
   const { assets, requests, auditLogs, maintenanceLogs, stats, isLoading } = useData();
   const { logout } = useAuth();

@@ -13,6 +13,7 @@ interface CategoryFilterProps {
 
 const ALL_LABEL = 'Todas';
 
+/** Selector de categorías para filtrar activos. */
 export function CategoryFilter({ categories, value, onChange, label = 'Categorías', className }: CategoryFilterProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);

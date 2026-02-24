@@ -7,6 +7,7 @@ const isValidUUID = (s: string) =>
 
 const toDateString = (d: Date) => d.toISOString().split('T')[0];
 
+/** Registra una incidencia de mantenimiento y notifica al admin. */
 export async function reportMaintenance(
   assetId: string,
   userId: string,
@@ -22,9 +23,10 @@ export async function reportMaintenance(
     [assetId]
   );
   await logAudit('MAINTENANCE', userId, 'Sistema', assetId, 'ASSET', description);
-  await notifyByRole('ADMIN_PATRIMONIAL', '🔧 Mantenimiento', description, 'WARNING', undefined, assetId);
+  await notifyByRole('ADMIN_PATRIMONIAL', 'Mantenimiento', description, 'WARNING', undefined, assetId);
 }
 
+/** Marca una incidencia como resuelta y libera el activo. */
 export async function resolveMaintenance(logId: number, cost?: number): Promise<void> {
   const result = await query(
     `UPDATE maintenance_logs SET status = 'RESOLVED', resolved_at = $1, cost = $2 WHERE id = $3 RETURNING asset_id`,

@@ -9,6 +9,7 @@ const pool = new Pool({
 
 export { pool };
 
+/** Ejecuta una consulta SQL con parámetros. */
 export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   text: string,
   params?: unknown[]
@@ -16,6 +17,7 @@ export async function query<T extends pg.QueryResultRow = pg.QueryResultRow>(
   return pool.query<T>(text, params);
 }
 
+/** Verifica que la conexión a PostgreSQL esté activa. */
 export async function healthCheck(): Promise<boolean> {
   try {
     const result = await query('SELECT 1 as ok');

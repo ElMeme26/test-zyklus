@@ -14,6 +14,7 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import { RefreshButton } from '../ui/RefreshButton';
 import { CameraScanner, playBeep, type ScanMode, type Step } from './scanner';
 
+/** Escáner QR del guardia para check-in y check-out de activos. */
 export function GuardScanner() {
   const { processGuardScan, confirmComboCheckin } = useData();
   const { user, logout } = useAuth();

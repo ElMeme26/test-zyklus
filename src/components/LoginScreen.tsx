@@ -3,6 +3,7 @@ import { useAuth } from '../context/AuthContext';
 import { Button, Input, Card } from './ui/core';
 import { Loader2 } from 'lucide-react';
 
+/** Pantalla de inicio de sesión con email y contraseña. */
 export function LoginScreen() {
   const { login, isLoading } = useAuth();
   const [email, setEmail] = useState('');

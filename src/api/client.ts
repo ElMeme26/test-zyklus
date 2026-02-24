@@ -1,11 +1,11 @@
-/** URL base del API (backend). */
+/** URL base del backend. */
 const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
 
 function getToken(): string | null {
   return localStorage.getItem('zf_token');
 }
 
-/** Petición HTTP autenticada; lanza si la respuesta no es ok. */
+/** Petición HTTP autenticada con JWT. Lanza error si la respuesta no es ok. */
 export async function apiFetch<T = unknown>(
   path: string,
   options: RequestInit = {}

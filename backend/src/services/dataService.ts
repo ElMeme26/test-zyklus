@@ -10,6 +10,7 @@ export interface DataPayload {
   bundles: unknown[];
 }
 
+/** Obtiene todos los datos del sistema (requests, institutions, notifications, etc.). */
 export async function getAllData(): Promise<DataPayload> {
   const client = await pool.connect();
   try {
@@ -93,6 +94,7 @@ export interface DataStats {
   categoryCounts?: Record<string, number>;
 }
 
+/** Obtiene estadísticas (conteos de activos, solicitudes activas/vencidas, categorías). */
 export async function getStats(): Promise<DataStats> {
   const client = await pool.connect();
   try {

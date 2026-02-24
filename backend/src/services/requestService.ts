@@ -13,6 +13,7 @@ function toReturnDate(days: number): string {
   return d.toISOString();
 }
 
+/** Crea una solicitud individual de préstamo. */
 export async function createRequest(body: {
   assetId: string;
   userId: string;
@@ -44,8 +45,8 @@ export async function createRequest(body: {
   const row = result.rows[0] as { id: number };
   await query(`UPDATE assets SET status = $1 WHERE id = $2`, [autoApprove ? 'Prestada' : 'En trámite', assetId]);
   if (!autoApprove) {
-    if (managerId) await createNotif(managerId, '📋 Nueva Solicitud', `${userName} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}. ${motive || ''}`, 'INFO', row.id);
-    await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud', `${userName} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}.`, 'INFO', row.id, assetId);
+    if (managerId) await createNotif(managerId, 'Nueva Solicitud', `${userName} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}. ${motive || ''}`, 'INFO', row.id);
+    await notifyByRole('ADMIN_PATRIMONIAL', 'Nueva Solicitud', `${userName} solicita "${asset.name}"${institutionId ? ' — institución externa' : ''}.`, 'INFO', row.id, assetId);
   } else {
     await logAudit('APPROVE', userId, userName, String(row.id), 'REQUEST', `Auto-aprobado: ${asset.name}`);
   }
@@ -88,11 +89,12 @@ export async function createBatchRequest(body: {
   if (autoApprove) {
     await logAudit('APPROVE', userId, userName, cartGroupId, 'REQUEST', `Auto-aprobado carrito: ${assetIds.length} activos`);
   } else {
-    if (managerId) await createNotif(managerId, '📋 Nueva Solicitud — Carrito', `${userName} solicita ${assetIds.length} activo(s).`, 'INFO');
-    await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Carrito', `${userName} solicita ${assetIds.length} activo(s).`, 'INFO');
+    if (managerId) await createNotif(managerId, 'Nueva Solicitud — Carrito', `${userName} solicita ${assetIds.length} activo(s).`, 'INFO');
+    await notifyByRole('ADMIN_PATRIMONIAL', 'Nueva Solicitud — Carrito', `${userName} solicita ${assetIds.length} activo(s).`, 'INFO');
   }
 }
 
+/** Crea solicitudes para un combo (kit). */
 export async function createBundleRequest(body: {
   bundleId: string;
   assetIds: string[];
@@ -130,11 +132,12 @@ export async function createBundleRequest(body: {
   if (autoApprove) {
     await logAudit('APPROVE', userId, userName, bundleGroupId, 'REQUEST', `Auto-combo: ${bundleName}`);
   } else {
-    if (managerId) await createNotif(managerId, '📋 Nueva Solicitud — Kit', `${userName} solicita kit "${bundleName}".`, 'INFO');
-    await notifyByRole('ADMIN_PATRIMONIAL', '📋 Nueva Solicitud — Kit', `${userName} solicita kit "${bundleName}".`, 'INFO');
+    if (managerId) await createNotif(managerId, 'Nueva Solicitud — Kit', `${userName} solicita kit "${bundleName}".`, 'INFO');
+    await notifyByRole('ADMIN_PATRIMONIAL', 'Nueva Solicitud — Kit', `${userName} solicita kit "${bundleName}".`, 'INFO');
   }
 }
 
+/** Aprueba una solicitud (individual o combo). */
 export async function approveRequest(
   reqId: number,
   approverId: string,
@@ -151,9 +154,10 @@ export async function approveRequest(
     await query(`UPDATE requests SET status = 'APPROVED', approved_at = $1 WHERE id = $2`, [now, reqId]);
     await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado: ${assetName ?? reqId}`);
   }
-  if (userId) await createNotif(userId, '✅ Solicitud Aprobada', `"${assetName ?? 'equipo'}" aprobado por ${approverName}. Preséntate al guardia.`, 'INFO', reqId);
+  if (userId) await createNotif(userId, 'Solicitud Aprobada', `"${assetName ?? 'equipo'}" aprobado por ${approverName}. Preséntate al guardia.`, 'INFO', reqId);
 }
 
+/** Rechaza una solicitud y libera los activos. */
 export async function rejectRequest(
   reqId: number,
   reason: string,
@@ -174,9 +178,10 @@ export async function rejectRequest(
     await query(`UPDATE assets SET status = 'Disponible' WHERE id = (SELECT asset_id FROM requests WHERE id = $1) AND status = 'En trámite'`, [reqId]);
     await logAudit('REJECT', 'system', 'Líder/Admin', String(reqId), 'REQUEST', reason);
   }
-  if (userId) await createNotif(userId, '❌ Solicitud Rechazada', `Motivo: ${reason}`, 'ALERT', reqId);
+  if (userId) await createNotif(userId, 'Solicitud Rechazada', `Motivo: ${reason}`, 'ALERT', reqId);
 }
 
+/** Devuelve la solicitud al usuario con feedback para completar información. */
 export async function returnRequestWithFeedback(
   reqId: number,
   feedback: string,
@@ -188,9 +193,10 @@ export async function returnRequestWithFeedback(
   } else {
     await query(`UPDATE requests SET status = 'ACTION_REQUIRED', feedback_log = $1 WHERE id = $2`, [feedback, reqId]);
   }
-  if (userId) await createNotif(userId, '📋 Acción Requerida', `Tu solicitud necesita más info: ${feedback}`, 'WARNING', reqId);
+  if (userId) await createNotif(userId, 'Acción Requerida', `Tu solicitud necesita más info: ${feedback}`, 'WARNING', reqId);
 }
 
+/** Cancela una solicitud y libera activos en trámite. */
 export async function cancelRequest(
   reqId: number,
   bundleGroupId?: string | null,
@@ -208,6 +214,7 @@ export async function cancelRequest(
   }
 }
 
+/** Responde al feedback y vuelve a poner la solicitud en PENDING. */
 export async function respondToFeedback(reqId: number, feedback: string, bundleGroupId?: string | null): Promise<void> {
   if (bundleGroupId) {
     await query(
@@ -222,6 +229,7 @@ export async function respondToFeedback(reqId: number, feedback: string, bundleG
   }
 }
 
+/** Extiende la fecha de retorno de un préstamo activo. */
 export async function renewRequest(reqId: number, additionalDays: number): Promise<void> {
   const r = await query(`SELECT expected_return_date, days_requested FROM requests WHERE id = $1`, [reqId]);
   const row = r.rows[0] as { expected_return_date: string; days_requested: number } | undefined;

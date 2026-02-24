@@ -1,4 +1,4 @@
-// src/components/ui/RefreshButton.tsx
+/** Botón para refrescar datos del contexto. */
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useData } from '../../context/DataContext';

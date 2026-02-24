@@ -5,6 +5,7 @@ import { createNotif, notifyByRole } from './notificationService.js';
 const isValidUUID = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s ?? '');
 
+/** Estado intermedio cuando se hace check‑in de un combo (múltiples activos). */
 export interface ComboCheckinState {
   bundleGroupId: string;
   totalAssets: number;
@@ -13,6 +14,7 @@ export interface ComboCheckinState {
   allRequests: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
 }
 
+/** Respuesta estándar para escaneo de QR por parte del guardia. */
 export interface GuardScanResult {
   success: boolean;
   message: string;
@@ -20,6 +22,7 @@ export interface GuardScanResult {
   comboState?: ComboCheckinState;
 }
 
+/** Procesa el QR escaneado por el guardia (salida o devolución). */
 export async function processGuardScan(
   qrData: string,
   type: 'CHECKOUT' | 'CHECKIN',
@@ -31,7 +34,7 @@ export async function processGuardScan(
   try {
     parsed = JSON.parse(qrData);
   } catch {
-    return { success: false, message: '⚠️ QR inválido.' };
+    return { success: false, message: 'QR inválido.' };
   }
 
   const reqId = parsed.request_id ?? parsed.id;
@@ -47,7 +50,7 @@ export async function processGuardScan(
         [bundleId]
       );
       reqsToProcess = (result.rows ?? []) as Array<Record<string, unknown>>;
-      if (reqsToProcess.length === 0) return { success: false, message: '⚠️ Combo sin solicitudes aprobadas.' };
+      if (reqsToProcess.length === 0) return { success: false, message: 'Combo sin solicitudes aprobadas.' };
     } else {
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
@@ -56,7 +59,7 @@ export async function processGuardScan(
         [reqId]
       );
       const row = result.rows[0];
-      if (!row) return { success: false, message: '⚠️ Solicitud no aprobada.' };
+      if (!row) return { success: false, message: 'Solicitud no aprobada.' };
       reqsToProcess = [row] as Array<Record<string, unknown>>;
     }
     if (signature) {
@@ -78,21 +81,20 @@ export async function processGuardScan(
         await logAudit('CHECKOUT', 'guard', 'Guardia', String(r.id), 'REQUEST', `Salida: ${(assets.name as string) ?? ''}`);
       }
       const first = reqsToProcess[0] as { requester_name?: string; user_id?: string; assets?: { name?: string } };
-      await notifyByRole('ADMIN_PATRIMONIAL', '📤 Activo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name ?? 'equipo')}".`, 'INFO');
+      await notifyByRole('ADMIN_PATRIMONIAL', 'Activo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name ?? 'equipo')}".`, 'INFO');
       const userId = first.user_id as string | undefined;
       if (userId && isValidUUID(userId)) {
         const uResult = await query(`SELECT manager_id FROM users WHERE id = $1`, [userId]);
         const managerId = (uResult.rows[0] as { manager_id?: string } | undefined)?.manager_id;
-        if (managerId) await createNotif(managerId, '📤 Equipo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name ?? 'equipo')}".`, 'INFO');
+        if (managerId) await createNotif(managerId, 'Equipo Retirado', `${first.requester_name} retiró "${bundleId ? 'combo' : (first.assets?.name ?? 'equipo')}".`, 'INFO');
       }
-      return { success: true, message: '✅ Salida confirmada.' };
+      return { success: true, message: 'Salida confirmada.' };
     }
     return { success: true, message: 'Verificado', data: reqsToProcess };
   }
 
-  // CHECKIN
   const assetId = (parsed.id ?? parsed.asset_id) as string;
-  if (!assetId) return { success: false, message: '⚠️ QR sin ID de activo.' };
+  if (!assetId) return { success: false, message: 'QR sin ID de activo.' };
 
   const reqResult = await query(
     `SELECT r.*, row_to_json(a) AS assets FROM requests r
@@ -102,7 +104,7 @@ export async function processGuardScan(
     [assetId]
   );
   const reqRow = reqResult.rows[0] as { id: number; asset_id: string; user_id: string; bundle_group_id?: string; assets?: { name?: string; tag?: string } } | undefined;
-  if (!reqRow) return { success: false, message: '⚠️ No hay préstamo activo para este activo.' };
+  if (!reqRow) return { success: false, message: 'No hay préstamo activo para este activo.' };
 
   if (reqRow.bundle_group_id) {
     const allResult = await query(
@@ -128,7 +130,7 @@ export async function processGuardScan(
     };
     return {
       success: true,
-      message: `📦 Combo detectado (${allReqs.length} activos). Escanea los ${allReqs.length - 1} restantes.`,
+      message: `Combo detectado (${allReqs.length} activos). Escanea los ${allReqs.length - 1} restantes.`,
       comboState,
     };
   }
@@ -136,6 +138,7 @@ export async function processGuardScan(
   return await doCheckin([reqRow], isDamaged ?? false, damageNotes ?? '');
 }
 
+/** Confirma el check-in de un combo (varios activos devueltos a la vez). */
 export async function confirmComboCheckin(
   allRequests: Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string } }>,
   isDamaged: boolean,
@@ -171,16 +174,16 @@ async function doCheckin(
       );
       await query(`UPDATE assets SET maintenance_alert = true WHERE id = $1`, [r.asset_id]);
     }
-    await notifyByRole('ADMIN_PATRIMONIAL', '🔧 Daños en Devolución', `${reqs.length} equipo(s) devueltos con daños. ${damageNotes}`, 'ALERT');
+    await notifyByRole('ADMIN_PATRIMONIAL', 'Daños en Devolución', `${reqs.length} equipo(s) devueltos con daños. ${damageNotes}`, 'ALERT');
     const userId = reqs[0]?.user_id;
     if (userId && isValidUUID(userId)) {
       const uResult = await query(`SELECT manager_id FROM users WHERE id = $1`, [userId]);
       const managerId = (uResult.rows[0] as { manager_id?: string } | undefined)?.manager_id;
-      if (managerId) await createNotif(managerId, '🔧 Equipo Devuelto con Daños', `Daños en ${reqs.length} equipo(s). ${damageNotes}`, 'ALERT');
+      if (managerId) await createNotif(managerId, 'Equipo Devuelto con Daños', `Daños en ${reqs.length} equipo(s). ${damageNotes}`, 'ALERT');
     }
   } else {
     const names = reqs.map((r) => r.assets?.name).filter(Boolean).join(', ');
-    await notifyByRole('ADMIN_PATRIMONIAL', '📥 Devolución Registrada', `Devueltos: ${names}.`, 'INFO');
+    await notifyByRole('ADMIN_PATRIMONIAL', 'Devolución Registrada', `Devueltos: ${names}.`, 'INFO');
   }
 
   return { success: true, message: isDamaged ? 'Devuelto con daño' : 'Devuelto correctamente' };
