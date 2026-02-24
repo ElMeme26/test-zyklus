@@ -3,15 +3,12 @@ import * as api from '../api/auth';
 import type { User } from '../types';
 import { toast } from 'sonner';
 
+/** Contexto de autenticación: usuario actual, login, logout y estado de carga. */
 interface AuthContextType {
   user: User | null;
-
-  // Nombres estándar
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
-
-  // Alias de compatibilidad (para componentes que usen estos nombres)
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => void;
   loading: boolean;
@@ -39,7 +36,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('zf_token', token);
       toast.success(`Bienvenido, ${userData.name}`);
     } catch (err) {
-      // No toast on login error: LoginScreen shows inline message and clears fields
       throw err;
     } finally {
       setIsLoading(false);
@@ -59,7 +55,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       login, 
       logout, 
       isLoading,
-      // Alias
       signIn: login,
       signOut: logout,
       loading: isLoading

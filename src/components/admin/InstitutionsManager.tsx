@@ -4,6 +4,7 @@ import { useData } from '../../context/DataContext';
 import { Building, Plus, Trash2, Edit2, Phone, Mail, MapPin, ExternalLink, X } from 'lucide-react';
 import { InstitutionDetail } from './InstitutionDetail';
 
+/** Gestión de instituciones externas: listado, alta, edición y eliminación. */
 export const InstitutionsManager = () => {
   const { institutions, isLoading: loading, addInstitution, updateInstitution, deleteInstitution } = useData();
   const [showForm, setShowForm] = useState(false);
@@ -34,7 +35,6 @@ export const InstitutionsManager = () => {
   };
 
   const handleEdit = (inst: Institution) => {
-    // ✨ CORRECCIÓN: Forzamos un string vacío ('') como fallback si el campo viene undefined de Supabase
     setFormData({
       id: inst.id,
       name: inst.name || '',

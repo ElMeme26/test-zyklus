@@ -2,6 +2,7 @@ import React from 'react';
 import { Sun, Moon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 
+/** Interruptor para alternar tema claro/oscuro. */
 export function ThemeToggle() {
   const { theme, toggleTheme } = useTheme();
 

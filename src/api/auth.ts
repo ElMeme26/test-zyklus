@@ -6,6 +6,7 @@ export interface LoginResponse {
   token: string;
 }
 
+/** Inicia sesión y devuelve usuario y token JWT. */
 export async function login(email: string, password: string): Promise<LoginResponse> {
   return apiFetch<LoginResponse>('/auth/login', {
     method: 'POST',

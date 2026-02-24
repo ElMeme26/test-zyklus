@@ -4,13 +4,13 @@ import { ManagerInbox } from './manager/ManagerInbox';
 import { GuardScanner } from './guard/GuardScanner';
 import { AuditorOverview } from './auditor/AuditorOverview';
 import { UserHome } from './user/UserHome';
-import { LoginScreen } from './LoginScreen'; // <--- Importante: Importamos el Login
+import { LoginScreen } from './LoginScreen';
 import { Loader2 } from 'lucide-react';
 
+/** Enruta al dashboard según el rol del usuario tras el login. */
 export default function RoleRouter() {
   const { user, isLoading } = useAuth();
 
-  // 1. Mostrar carga mientras verificamos sesión
   if (isLoading) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center text-primary">
@@ -19,12 +19,10 @@ export default function RoleRouter() {
     );
   }
 
-  // 2. Si no hay usuario, MOSTRAR LOGIN (Antes devolvía null y la pantalla se veía negra/blanca)
   if (!user) {
     return <LoginScreen />;
   }
 
-  // 3. Si hay usuario, mostrar su dashboard correspondiente
   switch (user.role) {
     case 'ADMIN_PATRIMONIAL':
       return <AdminDashboard />;

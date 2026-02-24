@@ -1,144 +1,20 @@
-// src/components/guard/GuardScanner.tsx
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useData, type ComboCheckinState } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card } from '../ui/core';
 import {
   ScanLine, LogOut, Check, X, AlertTriangle, Package,
   CheckCircle2, Loader2, Scan, RefreshCcw,
-  QrCode, User as UserIcon
+  QrCode
 } from 'lucide-react';
 import { toast } from 'sonner';
-import jsQR from 'jsqr';
 import SignatureCanvas from 'react-signature-canvas';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { RefreshButton } from '../ui/RefreshButton';
+import { CameraScanner, playBeep, type ScanMode, type Step } from './scanner';
 
-type ScanMode = 'CHECKOUT' | 'CHECKIN';
-type Step =
-  | 'idle'
-  | 'scanning'
-  | 'verifying'
-  | 'asset_verification'
-  | 'signing'
-  | 'combo_checkin'
-  | 'damage_check'
-  | 'done';
-
-// ─── FUNCIÓN PARA REPRODUCIR PITIDO ──────────────────────────────
-function playBeep() {
-  try {
-    const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    oscillator.frequency.value = 800;
-    oscillator.type = 'sine';
-    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.1);
-  } catch {
-    if (navigator.vibrate) navigator.vibrate(50);
-  }
-}
-
-// ─── CAMERA QR SCANNER ───────────────────────────────────────
-function CameraScanner({ onCode, onClose }: { onCode: (code: string) => void; onClose: () => void }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const rafRef = useRef<number>(0);
-  const streamRef = useRef<MediaStream | null>(null);
-  const hasScanned = useRef(false);
-
-  useEffect(() => {
-    let active = true;
-    hasScanned.current = false;
-
-    const scan = () => {
-      if (!active || hasScanned.current) return;
-      const video = videoRef.current;
-      const canvas = canvasRef.current;
-      if (!video || !canvas) return;
-      if (video.readyState < video.HAVE_ENOUGH_DATA) {
-        rafRef.current = requestAnimationFrame(scan);
-        return;
-      }
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      const code = jsQR(imageData.data, imageData.width, imageData.height, { inversionAttempts: 'dontInvert' });
-      if (code && code.data) {
-        hasScanned.current = true;
-        playBeep();
-        streamRef.current?.getTracks().forEach(t => t.stop());
-        onCode(code.data);
-        return;
-      }
-      rafRef.current = requestAnimationFrame(scan);
-    };
-
-    const startCamera = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } }
-        });
-        streamRef.current = stream;
-        if (videoRef.current && active) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play();
-          rafRef.current = requestAnimationFrame(scan);
-        }
-      } catch (err) {
-        console.error('Camera error:', err);
-        toast.error('No se pudo acceder a la cámara. Verifica los permisos.');
-        onClose();
-      }
-    };
-
-    startCamera();
-    return () => {
-      active = false;
-      cancelAnimationFrame(rafRef.current);
-      streamRef.current?.getTracks().forEach(t => t.stop());
-    };
-  }, [onCode, onClose]);
-
-  return (
-    <div className="fixed inset-0 z-50 bg-black flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 bg-black/80">
-        <h2 className="text-white font-bold">Escanear QR</h2>
-        <button onClick={onClose} className="text-white p-2 rounded-xl bg-white/10"><X size={20} /></button>
-      </div>
-      <div className="flex-1 relative overflow-hidden">
-        <video ref={videoRef} className="w-full h-full object-cover" playsInline muted autoPlay />
-        <canvas ref={canvasRef} className="hidden" />
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="absolute inset-0 bg-black/50" style={{ clipPath: 'polygon(0 0, 100% 0, 100% 100%, 0 100%, 0 0, calc(50% - 110px) calc(50% - 110px), calc(50% - 110px) calc(50% + 110px), calc(50% + 110px) calc(50% + 110px), calc(50% + 110px) calc(50% - 110px), calc(50% - 110px) calc(50% - 110px))' }} />
-          <div className="relative w-56 h-56">
-            <div className="absolute top-0 left-0 w-10 h-10 border-t-4 border-l-4 border-primary rounded-tl-xl" />
-            <div className="absolute top-0 right-0 w-10 h-10 border-t-4 border-r-4 border-primary rounded-tr-xl" />
-            <div className="absolute bottom-0 left-0 w-10 h-10 border-b-4 border-l-4 border-primary rounded-bl-xl" />
-            <div className="absolute bottom-0 right-0 w-10 h-10 border-b-4 border-r-4 border-primary rounded-br-xl" />
-            <div className="absolute left-2 right-2 h-0.5 bg-primary/80 shadow-[0_0_8px_rgba(6,182,212,0.8)]" style={{ animation: 'scanLine 2s linear infinite', top: '0%' }} />
-          </div>
-        </div>
-      </div>
-      <div className="px-4 py-4 bg-black/80 text-center">
-        <p className="text-slate-400 text-xs">Apunta la cámara al código QR del activo o solicitud</p>
-      </div>
-      <style>{`@keyframes scanLine { 0% { transform: translateY(0); } 50% { transform: translateY(220px); } 100% { transform: translateY(0); } }`}</style>
-    </div>
-  );
-}
-
+/** Escáner QR del guardia para check-in y check-out de activos. */
 export function GuardScanner() {
   const { processGuardScan, confirmComboCheckin } = useData();
   const { user, logout } = useAuth();
@@ -153,16 +29,12 @@ export function GuardScanner() {
 
   const [comboState, setComboState] = useState<ComboCheckinState | null>(null);
 
-  // ── Estado del daño (se resetea en cada ciclo)
   const [isDamaged, setIsDamaged] = useState(false);
   const [damageNotes, setDamageNotes] = useState('');
 
   const [scannedAssets, setScannedAssets] = useState<Set<string>>(new Set());
   const [expectedAssetIds, setExpectedAssetIds] = useState<string[]>([]);
 
-  // ── Estado "snapshot" para la pantalla done
-  // Se captura justo antes de setStep('done') para evitar que el reset
-  // borre los valores antes de que la pantalla los lea.
   const [doneMessage, setDoneMessage] = useState('');
   const [doneMode, setDoneMode] = useState<ScanMode>('CHECKOUT');
   const [doneDamaged, setDoneDamaged] = useState(false);
@@ -183,7 +55,6 @@ export function GuardScanner() {
     sigRef.current?.clear();
   }, []);
 
-  // ─── QR CODE HANDLER ────────────────────────────────────────
   const handleQR = useCallback(async (code: string) => {
     setScanning(false);
     setStep('verifying');
@@ -212,13 +83,11 @@ export function GuardScanner() {
           setStep('idle');
         }
       } else {
-        // CHECKIN
         if (result.comboState) {
           setComboState(result.comboState);
           setStep('combo_checkin');
           toast.success('Primer activo del combo escaneado ✓');
         } else {
-          // Activo individual — ir a inspección de daños
           setStep('damage_check');
         }
       }
@@ -229,7 +98,6 @@ export function GuardScanner() {
     }
   }, [mode, processGuardScan]);
 
-  // ─── VERIFICAR ACTIVO FÍSICO EN CHECKOUT ────────────────────────
   const handleAssetVerification = useCallback(async (code: string) => {
     setScanning(false);
     playBeep();
@@ -238,7 +106,7 @@ export function GuardScanner() {
 
     const scannedId = (parsed.id || parsed.asset_id) as string;
     if (!scannedId) { toast.error('QR sin ID de activo'); return; }
-    if (!expectedAssetIds.includes(scannedId)) { toast.error('⚠️ Este activo no corresponde a la solicitud'); return; }
+    if (!expectedAssetIds.includes(scannedId)) { toast.error('Este activo no corresponde a la solicitud'); return; }
     if (scannedAssets.has(scannedId)) { toast.warning('Este activo ya fue escaneado'); return; }
 
     const newScanned = new Set(scannedAssets);
@@ -255,7 +123,6 @@ export function GuardScanner() {
     }
   }, [scannedAssets, expectedAssetIds, verifiedData]);
 
-  // ─── COMBO: scan next asset ──────────────────────────────────
   const handleNextComboScan = useCallback(async (code: string) => {
     if (!comboState) return;
     setScanning(false);
@@ -282,13 +149,11 @@ export function GuardScanner() {
     if (newPending.length === 0) setStep('damage_check');
   }, [comboState]);
 
-  // ─── CHECKOUT CONFIRM ────────────────────────────────────────
   const handleCheckoutConfirm = async () => {
     if (!sigRef.current || sigRef.current.isEmpty()) { toast.error('Firma digital requerida'); return; }
     const sig = sigRef.current.toDataURL();
     const result = await processGuardScan(rawQR, 'CHECKOUT', sig);
     if (result.success) {
-      // Capturar snapshot antes de transicionar
       setDoneMode('CHECKOUT');
       setDoneDamaged(false);
       setDoneMessage('Salida confirmada correctamente');
@@ -299,7 +164,6 @@ export function GuardScanner() {
     }
   };
 
-// ─── CHECKIN CONFIRM ─────────────────────────────────────────
   const handleCheckinConfirm = async () => {
     if (isDamaged && !damageNotes.trim()) { toast.error('Describe el daño'); return; }
 
@@ -307,12 +171,12 @@ export function GuardScanner() {
     if (comboState) {
       result = await confirmComboCheckin(comboState, isDamaged, damageNotes);
     } else {
-      // 👇 Añadimos 'CONFIRM' como tercer parámetro en lugar del string vacío ''
       result = await processGuardScan(rawQR, 'CHECKIN', 'CONFIRM', isDamaged, damageNotes);
     }
 
     if (result.success) {
       setDoneMessage(isDamaged ? 'Equipo recibido — enviado a revisión de mantenimiento' : 'Devolución registrada correctamente');
+      setDoneDamaged(isDamaged);
       setStep('done');
     } else {
       toast.error(result.message);
@@ -325,14 +189,13 @@ export function GuardScanner() {
         <CameraScanner
           onCode={
             step === 'combo_checkin' ? handleNextComboScan :
-            step === 'asset_verification' ? handleAssetVerification :
-            handleQR
+              step === 'asset_verification' ? handleAssetVerification :
+                handleQR
           }
           onClose={() => { setScanning(false); if (step === 'scanning') setStep('idle'); }}
         />
       )}
 
-      {/* Header */}
       <header className="sticky top-0 z-30 bg-background/90 backdrop-blur border-b border-slate-800">
         <div className="flex items-center justify-between px-4 py-3">
           <div className="flex items-center gap-3">
@@ -354,7 +217,6 @@ export function GuardScanner() {
           </div>
         </div>
 
-        {/* Mode Toggle */}
         <div className="flex px-4 pb-3 gap-2">
           {(['CHECKOUT', 'CHECKIN'] as ScanMode[]).map(m => (
             <button
@@ -362,7 +224,7 @@ export function GuardScanner() {
               onClick={() => { setMode(m); reset(); }}
               className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-primary text-black shadow-lg shadow-primary/30' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
             >
-              {m === 'CHECKOUT' ? '📤 Salida' : '📥 Entrada'}
+              {m === 'CHECKOUT' ? 'Salida' : 'Entrada'}
             </button>
           ))}
         </div>
@@ -370,7 +232,6 @@ export function GuardScanner() {
 
       <main className="px-4 py-6 max-w-lg mx-auto space-y-4">
 
-        {/* ── IDLE */}
         {step === 'idle' && (
           <div className="space-y-4">
             <div className="text-center py-10">
@@ -395,7 +256,6 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── VERIFYING (loading) */}
         {step === 'verifying' && !verifiedData && (
           <div className="text-center py-16">
             <Loader2 size={40} className="text-primary animate-spin mx-auto mb-4" />
@@ -403,7 +263,6 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── CHECKOUT: VERIFICACIÓN DE ACTIVOS FÍSICOS */}
         {step === 'asset_verification' && verifiedData && mode === 'CHECKOUT' && (
           <div className="space-y-4">
             <Card className="border-amber-500/30">
@@ -469,7 +328,6 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── SIGNING */}
         {step === 'signing' && (
           <div className="space-y-4">
             <h2 className="text-white font-bold text-lg">Firma Digital</h2>
@@ -494,7 +352,6 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── COMBO CHECKIN */}
         {step === 'combo_checkin' && comboState && (
           <div className="space-y-4">
             <Card className="border-cyan-500/30">
@@ -551,7 +408,6 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── DAMAGE CHECK */}
         {step === 'damage_check' && (
           <div className="space-y-4">
             <Card>
@@ -559,7 +415,6 @@ export function GuardScanner() {
               <p className="text-slate-400 text-sm mb-5">Inspecciona el equipo físicamente antes de confirmar.</p>
 
               <div className="grid grid-cols-2 gap-3">
-                {/* Sin daños */}
                 <button
                   onClick={() => { setIsDamaged(false); setDamageNotes(''); }}
                   className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
@@ -577,7 +432,6 @@ export function GuardScanner() {
                   )}
                 </button>
 
-                {/* Con daños */}
                 <button
                   onClick={() => setIsDamaged(true)}
                   className={`py-5 rounded-2xl border-2 flex flex-col items-center gap-2 transition-all active:scale-95 ${
@@ -596,7 +450,6 @@ export function GuardScanner() {
                 </button>
               </div>
 
-              {/* Descripción del daño — solo si isDamaged */}
               {isDamaged && (
                 <div className="mt-5 space-y-2 animate-in slide-in-from-top-2 duration-200">
                   <label className="text-xs font-bold text-rose-400 uppercase tracking-wider flex items-center gap-1">
@@ -618,7 +471,6 @@ export function GuardScanner() {
               )}
             </Card>
 
-            {/* Botón confirmar */}
             <button
               onClick={handleCheckinConfirm}
               disabled={isDamaged && !damageNotes.trim()}
@@ -636,11 +488,8 @@ export function GuardScanner() {
           </div>
         )}
 
-        {/* ── DONE ── */}
         {step === 'done' && (
           <div className="flex flex-col items-center text-center py-10 space-y-6 animate-in fade-in duration-300">
-
-            {/* Ícono */}
             <div className={`w-28 h-28 rounded-3xl flex items-center justify-center border-2 shadow-2xl ${
               doneDamaged
                 ? 'bg-amber-500/10 border-amber-500/40 shadow-amber-500/20'
@@ -651,13 +500,11 @@ export function GuardScanner() {
                 : <CheckCircle2 size={56} className="text-emerald-400" />}
             </div>
 
-            {/* Texto */}
             <div className="space-y-2">
               <h2 className="text-white font-black text-3xl">¡Listo!</h2>
               <p className="text-slate-400 text-base max-w-xs mx-auto leading-relaxed">{doneMessage}</p>
             </div>
 
-            {/* Badge de daño */}
             {doneDamaged && doneMode === 'CHECKIN' && (
               <div className="flex items-center gap-2 bg-amber-500/10 border border-amber-500/30 rounded-2xl px-5 py-3">
                 <AlertTriangle size={16} className="text-amber-400 flex-shrink-0" />
@@ -665,7 +512,6 @@ export function GuardScanner() {
               </div>
             )}
 
-            {/* Badge de tipo de operación */}
             <div className={`flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black uppercase tracking-widest border ${
               doneMode === 'CHECKOUT'
                 ? 'bg-primary/10 border-primary/30 text-primary'
@@ -673,10 +519,9 @@ export function GuardScanner() {
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
                   : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
             }`}>
-              {doneMode === 'CHECKOUT' ? '📤 Salida registrada' : doneDamaged ? '⚠️ Entrada con daño' : '📥 Entrada registrada'}
+              {doneMode === 'CHECKOUT' ? 'Salida registrada' : doneDamaged ? 'Entrada con daño' : 'Entrada registrada'}
             </div>
 
-            {/* Botón siguiente */}
             <button
               onClick={reset}
               className="flex items-center gap-3 px-10 py-4 rounded-2xl bg-primary text-black font-black text-lg shadow-lg shadow-primary/40 hover:bg-cyan-400 active:scale-[0.97] transition-all"

@@ -1,7 +1,8 @@
 // src/components/admin/AssetQRPrint.tsx
-import React, { useEffect, useState, useRef } from 'react';
-import QRCode from 'qrcode'; // <--- Importamos la librería nueva
-import { X, Printer, Package } from 'lucide-react';
+/** Modal para imprimir etiquetas QR de activos. */
+import React, { useEffect, useState } from 'react';
+import QRCode from 'qrcode';
+import { Package } from 'lucide-react';
 import { Button, Card } from '../ui/core';
 import type { Asset, QRAssetPayload } from '../../types';
 
@@ -10,7 +11,6 @@ interface AssetQRPrintProps {
   onClose: () => void;
 }
 
-// Generamos el JSON estricto
 const buildAssetQRPayload = (asset: Asset): string => {
   const payload: QRAssetPayload = {
     type: 'ASSET_PHYSICAL',
@@ -21,12 +21,10 @@ const buildAssetQRPayload = (asset: Asset): string => {
   return JSON.stringify(payload);
 };
 
-// Componente de Tarjeta que genera su propio PNG
 function QRCard({ asset }: { asset: Asset }) {
   const [qrSrc, setQrSrc] = useState<string>('');
 
   useEffect(() => {
-    // Generar PNG Base64
     QRCode.toDataURL(buildAssetQRPayload(asset), {
       width: 200,
       margin: 2,
@@ -54,13 +52,9 @@ function QRCard({ asset }: { asset: Asset }) {
   );
 }
 
-// ... El resto del componente (Modal Principal) se mantiene igual, 
-// pero actualizamos la función handlePrint para usar las imágenes generadas.
-
 export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
   const [qrImages, setQrImages] = useState<Record<string, string>>({});
 
-  // Precargar todos los QRs como PNG antes de abrir el diálogo de impresión
   useEffect(() => {
     const generateAll = async () => {
       const images: Record<string, string> = {};
@@ -72,11 +66,12 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
     generateAll();
   }, [assets]);
 
+  const readyToPrint = assets.length > 0 && Object.keys(qrImages).length === assets.length;
+
   const handlePrint = () => {
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) return;
 
-    // Inyectamos HTML limpio para impresión
     const htmlContent = `
       <!DOCTYPE html>
       <html>
@@ -116,16 +111,19 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
   };
 
   return (
-    // ... Tu renderizado del Modal (puedes usar <QRCard> dentro para el preview)
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-sm">
-       {/* ... Contenido del modal ... */}
        <Card className="w-full max-w-3xl h-[80vh] flex flex-col">
           <div className="flex-1 overflow-auto p-4 bg-slate-100 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4">
              {assets.map(asset => <QRCard key={asset.id} asset={asset} />)}
           </div>
-          <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
+          <div className="p-4 border-t border-slate-800 flex justify-end items-center gap-2">
+            {!readyToPrint && assets.length > 0 && (
+              <span className="text-xs text-slate-500 mr-2">Generando QRs...</span>
+            )}
             <Button onClick={onClose} variant="secondary">Cerrar</Button>
-            <Button onClick={handlePrint}>🖨️ Imprimir PNGs</Button>
+            <Button onClick={handlePrint} disabled={!readyToPrint}>
+              {readyToPrint ? 'Imprimir / Guardar como PDF' : 'Generando QRs...'}
+            </Button>
           </div>
        </Card>
     </div>

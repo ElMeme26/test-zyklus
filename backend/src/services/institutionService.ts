@@ -1,5 +1,6 @@
 import { query } from '../db/index.js';
 
+/** Registra una nueva institución externa. */
 export async function addInstitution(inst: Record<string, unknown>): Promise<void> {
   await query(
     `INSERT INTO institutions (name, contact_name, contact_email, contact_phone, address)
@@ -14,6 +15,7 @@ export async function addInstitution(inst: Record<string, unknown>): Promise<voi
   );
 }
 
+/** Actualiza una institución existente. */
 export async function updateInstitution(
   id: number,
   updates: Record<string, unknown>
@@ -33,6 +35,7 @@ export async function updateInstitution(
   await query(`UPDATE institutions SET ${set.join(', ')} WHERE id = $${i}`, values);
 }
 
+/** Elimina una institución. */
 export async function deleteInstitution(id: number): Promise<void> {
   await query('DELETE FROM institutions WHERE id = $1', [id]);
 }

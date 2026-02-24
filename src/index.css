@@ -145,7 +145,7 @@
   html.light .text-slate-500 { color: #64748b !important; }
   html.light .text-slate-300 { color: #334155 !important; }
 
-  /* ✨ Regla clave: Si tiene la clase .keep-white NUNCA cambia a oscuro en light mode */
+  /* .keep-white: en modo claro el texto no pasa a oscuro */
   html.light .text-white:not(.keep-white) {
     color: #0f172a !important;
   }
@@ -185,5 +185,11 @@
 
   html.light .text-slate-500.italic {
     color: #334155 !important;
+  }
+
+  /* Tabs Activos/Combos: contraste en modo claro */
+  html.light .flex.bg-slate-900.rounded-xl.p-1\.5.border.border-slate-800 button.bg-cyan-500 {
+    background-color: #0891b2 !important;
+    color: #ffffff !important;
   }
 }

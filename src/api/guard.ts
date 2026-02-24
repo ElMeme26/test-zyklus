@@ -1,3 +1,4 @@
+/** Cliente API para el guardia: escaneo QR (check-in/check-out) y confirmación de combos. */
 import { apiFetch } from './client';
 
 export interface ComboCheckinStatePayload {
@@ -32,6 +33,7 @@ export async function guardScan(
   });
 }
 
+/** Confirma el check-in de un combo (varios activos escaneados). */
 export async function confirmComboCheckin(
   comboState: ComboCheckinStatePayload,
   isDamaged: boolean,

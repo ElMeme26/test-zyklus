@@ -8,6 +8,7 @@ interface Props {
   onBack: () => void;
 }
 
+/** Detalle de una institución externa con datos de contacto. */
 export const InstitutionDetail = ({ institution, onBack }: Props) => {
   const { requests } = useData();
   const loans = requests

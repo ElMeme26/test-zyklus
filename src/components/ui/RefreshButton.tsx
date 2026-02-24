@@ -1,4 +1,4 @@
-// src/components/ui/RefreshButton.tsx
+/** Botón para refrescar datos del contexto. */
 import React, { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -12,7 +12,7 @@ export function RefreshButton() {
     setIsRefreshing(true);
     try {
       await fetchData({ silent: true });
-      toast.success('✅ Datos actualizados');
+      toast.success('Datos actualizados');
     } catch {
       toast.error('Error al actualizar');
     } finally {

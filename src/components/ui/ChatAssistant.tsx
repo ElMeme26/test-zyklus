@@ -1,4 +1,4 @@
-// src/components/ui/ChatAssistant.tsx
+/** Asistente de chat con IA (Gemini) para consultas y gráficas del sistema patrimonial. */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Bot, Send, X, Loader2, Sparkles, Trash2, Download } from 'lucide-react';
 import { useData } from '../../context/DataContext';
@@ -10,11 +10,9 @@ import {
 } from 'recharts';
 
 const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-// Usar 2.5 Flash — más inteligente y sigue instrucciones de formato mejor
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
-// ─── TIPOS ────────────────────────────────────────────────────
 interface GraphData {
   type: 'bar' | 'pie' | 'line';
   title?: string;
@@ -27,14 +25,10 @@ interface Message {
   graph?: GraphData;
 }
 
-// ─── COLORES ──────────────────────────────────────────────────
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6'];
 
-// ─── EXTRACTOR DE GRAPH_DATA (robusto con conteo de llaves) ──────────────────
-// El regex {.*?} falla con JSON anidado porque para en el primer "}"
-// Esta versión busca "[GRAPH_DATA:" y extrae el JSON contando llaves
+/** Extrae [GRAPH_DATA: {...}] del texto de Gemini y devuelve el texto limpio y la gráfica. */
 function extractGraph(text: string): { clean: string; graph?: GraphData } {
-  // 1. Limpiar wrappers de markdown que Gemini a veces añade
   const cleaned = text
     .replace(/```json\s*/g, '')
     .replace(/```\s*/g, '');
@@ -42,12 +36,8 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   const marker = '[GRAPH_DATA:';
   const markerIdx = cleaned.indexOf(marker);
   if (markerIdx === -1) return { clean: cleaned.trim() };
-
-  // 2. Encontrar el inicio del JSON (primer '{' después del marker)
   const jsonStart = cleaned.indexOf('{', markerIdx + marker.length);
   if (jsonStart === -1) return { clean: cleaned.trim() };
-
-  // 3. Contar llaves para encontrar el cierre correcto del objeto JSON
   let depth = 0;
   let jsonEnd = -1;
   for (let i = jsonStart; i < cleaned.length; i++) {
@@ -60,14 +50,10 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   if (jsonEnd === -1) return { clean: cleaned.trim() };
 
   const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
-
-  // 4. Calcular el bloque completo "[GRAPH_DATA: {...}]" para removerlo del texto
   const closingBracket = cleaned.indexOf(']', jsonEnd);
   const blockEnd = closingBracket !== -1 ? closingBracket + 1 : jsonEnd + 1;
   const fullBlock = cleaned.slice(markerIdx, blockEnd);
   const cleanText = cleaned.replace(fullBlock, '').trim();
-
-  // 5. Parsear y validar el JSON
   try {
     const raw = JSON.parse(jsonStr) as {
       type?: string;
@@ -87,13 +73,11 @@ function extractGraph(text: string): { clean: string; graph?: GraphData } {
   }
 }
 
-// ─── COMPONENTE GRÁFICA ───────────────────────────────────────
 function ChartWidget({ graph }: { graph: GraphData }) {
   const chartRef = useRef<HTMLDivElement>(null);
 
   const handleExport = useCallback(() => {
     if (!chartRef.current) return;
-    // Crear SVG snapshot via canvas
     const svgEl = chartRef.current.querySelector('svg');
     if (!svgEl) return;
     const svgData = new XMLSerializer().serializeToString(svgEl);
@@ -140,7 +124,6 @@ function ChartWidget({ graph }: { graph: GraphData }) {
         </LineChart>
       );
     }
-    // default: bar
     return (
       <BarChart data={graph.data} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
         <XAxis dataKey="name" tick={{ fontSize: 10, fill: '#94a3b8' }} />
@@ -173,7 +156,7 @@ function ChartWidget({ graph }: { graph: GraphData }) {
   );
 }
 
-// ─── LLAMADA A GEMINI ─────────────────────────────────────────
+/** Llama a la API de Gemini con el prompt dado. */
 async function callGemini(prompt: string): Promise<string> {
   if (!GEMINI_API_KEY) throw new Error('Sin API Key');
 
@@ -184,7 +167,7 @@ async function callGemini(prompt: string): Promise<string> {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     }),
   });
@@ -206,13 +189,18 @@ async function callGemini(prompt: string): Promise<string> {
   return text;
 }
 
-// ─── MAIN COMPONENT ───────────────────────────────────────────
 export function ChatAssistant() {
   const { assets, requests, stats } = useData();
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
-  const initialMessage: Message = { role: 'bot', text: 'Hola, soy Zykla 🤖. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?' };
+  const isUserRole = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
+  const initialMessage: Message = {
+    role: 'bot',
+    text: isUserRole
+      ? 'Hola, soy Zykla. Puedo ayudarte con tu información de préstamos y recomendarte activos según lo que vayas a hacer. ¿En qué te ayudo?'
+      : 'Hola, soy Zykla. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?',
+  };
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -222,30 +210,29 @@ export function ChatAssistant() {
 
   const clearChat = () => setMessages([initialMessage]);
 
-  // ─── CONSTRUCCIÓN DEL CONTEXTO ────────────────────────────
   const buildContext = useCallback(() => {
     const isAdmin = user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR';
-    if (!isAdmin) {
+    if (!isAdmin && user?.id) {
+      const misReqs = requests.filter(r => r.user_id === user.id);
       return {
-        mis_prestamos: requests.filter(r => r.user_id === user?.id).length,
-        activos_disponibles: assets.filter(a => a.status === 'Disponible').length,
+        mis_prestamos: misReqs.length,
+        mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
+        activos_disponibles_total: assets.filter(a => a.status === 'Disponible').length,
+        categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
       };
     }
 
-    // Categorías
     const cats = assets.reduce((acc: Record<string, number>, a) => {
       const c = a.category || 'Sin categoría';
       acc[c] = (acc[c] || 0) + 1;
       return acc;
     }, {});
 
-    // Estados
     const states = assets.reduce((acc: Record<string, number>, a) => {
       acc[a.status] = (acc[a.status] || 0) + 1;
       return acc;
     }, {});
 
-    // Top activos solicitados
     const topAssets = Object.entries(
       requests.reduce((acc: Record<string, number>, r) => {
         const name = r.assets?.name || 'Desconocido';
@@ -254,14 +241,12 @@ export function ChatAssistant() {
       }, {})
     ).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count }));
 
-    // Por disciplina
     const byDisciplina = requests.reduce((acc: Record<string, number>, r) => {
       const d = r.requester_disciplina || 'Sin asignar';
       acc[d] = (acc[d] || 0) + 1;
       return acc;
     }, {});
 
-    // Vencidos
     const overdueList = requests
       .filter(r => r.status === 'OVERDUE')
       .slice(0, 5)
@@ -285,8 +270,19 @@ export function ChatAssistant() {
     };
   }, [assets, requests, user]);
 
-  // ─── SYSTEM PROMPT ────────────────────────────────────────
-  const buildSystemPrompt = useCallback((context: object) => {
+  const buildSystemPrompt = useCallback((context: object, forUserOnly: boolean) => {
+    if (forUserOnly) {
+      return `Eres Zykla AI, asistente integrado en Zyklus Halo para USUARIOS.
+
+DATOS DEL USUARIO (solo esta información):
+${JSON.stringify(context, null, 2)}
+
+INSTRUCCIONES ESTRICTAS:
+1. Solo puedes hablar de: (a) la información de préstamos del propio usuario (sus solicitudes, fechas de retorno), y (b) recomendaciones de activos según lo que el usuario vaya a hacer (por categoría, tipo de uso, etc.).
+2. NUNCA des información analítica del sistema, estadísticas globales, gráficas de todo el inventario ni datos de otros usuarios.
+3. Responde en español, de forma breve y útil.
+4. Para recomendaciones, usa las categorías y el número de activos disponibles; sugiere opciones concretas.`;
+    }
     return `Eres Zykla AI, asistente experto integrado en Zyklus Halo, un sistema de control patrimonial.
 
 DATOS ACTUALES DEL SISTEMA:
@@ -308,12 +304,11 @@ INSTRUCCIONES ESTRICTAS:
 10. Siempre basa tus respuestas en los datos reales proporcionados arriba.`;
   }, []);
 
-  // ─── SEND ─────────────────────────────────────────────────
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
     if (!GEMINI_API_KEY) {
-      setMessages(prev => [...prev, { role: 'bot', text: '⚠️ API Key de Gemini no configurada en las variables de entorno (VITE_GEMINI_API_KEY).' }]);
+      setMessages(prev => [...prev, { role: 'bot', text: 'API Key de Gemini no configurada en las variables de entorno (VITE_GEMINI_API_KEY).' }]);
       return;
     }
 
@@ -323,7 +318,6 @@ INSTRUCCIONES ESTRICTAS:
     setIsLoading(true);
 
     try {
-      // Construir contexto con datos agrupados (stats/backend) para que la IA grafique mejor
       let contextData: Record<string, unknown> = {};
       if (user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR') {
         const cats = stats?.categoryCounts ?? assets.reduce((acc: Record<string, number>, a) => {
@@ -343,12 +337,16 @@ INSTRUCCIONES ESTRICTAS:
           estados: Object.entries(states).map(([name, val]) => ({ name, value: val })),
         };
       } else {
+        const misReqs = requests.filter(r => r.user_id === user?.id);
         contextData = {
-          mis_prestamos: requests.filter(r => r.user_id === user?.id).length,
-          activos_disponibles: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length,
+          mis_prestamos: misReqs.length,
+          mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
+          activos_disponibles_total: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length,
+          categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
         };
       }
-      const systemPrompt = buildSystemPrompt(contextData);
+      const forUserOnly = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
+      const systemPrompt = buildSystemPrompt(contextData, forUserOnly);
       const fullPrompt = `${systemPrompt}\n\nUsuario: ${userMsg}`;
       const rawText = await callGemini(fullPrompt);
       const { clean, graph } = extractGraph(rawText);
@@ -359,7 +357,7 @@ INSTRUCCIONES ESTRICTAS:
       console.error('Zykla AI error:', msg);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `❌ Error al conectar con Zykla AI: ${msg}. Verifica que VITE_GEMINI_API_KEY esté configurada correctamente.`,
+        text: `Error al conectar con Zykla AI: ${msg}. Verifica que VITE_GEMINI_API_KEY esté configurada correctamente.`,
       }]);
     } finally {
       setIsLoading(false);
@@ -426,12 +424,10 @@ INSTRUCCIONES ESTRICTAS:
             {/* Quick suggestions */}
             {messages.length === 1 && (
               <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
-                {[
-                  'Gráfica de estados',
-                  'Top activos solicitados',
-                  'Distribución por categoría',
-                  '¿Cuántos vencidos?',
-                ].map(s => (
+                {(isUserRole
+                  ? ['¿Cuántos préstamos tengo?', 'Recomiéndame activos para grabar video', '¿Qué categorías hay disponibles?', 'Mis fechas de devolución']
+                  : ['Gráfica de estados', 'Top activos solicitados', 'Distribución por categoría', '¿Cuántos vencidos?']
+                ).map(s => (
                   <button
                     key={s}
                     onClick={() => { setInput(s); }}
@@ -451,7 +447,7 @@ INSTRUCCIONES ESTRICTAS:
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                   className="bg-slate-950 border-slate-700 text-white text-xs h-10 rounded-full pl-4"
-                  placeholder="Ej: Muéstrame la gráfica de estados"
+                  placeholder={isUserRole ? 'Ej: ¿Qué préstamos tengo?' : 'Ej: Muéstrame la gráfica de estados'}
                   disabled={isLoading}
                 />
                 <Button

@@ -1,4 +1,4 @@
-// src/lib/exportUtils.ts
+/** Utilidades de exportación: CSV, PDF, Excel para solicitudes, inventario, auditoría y mantenimiento. */
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -6,13 +6,11 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request, Asset, AuditLog, MaintenanceLog } from '../types';
 
-// Helper para formatear fechas de forma segura
+/** Formatea fechas de forma segura. */
 const safeDate = (d?: string) =>
   d ? format(new Date(d), 'dd/MM/yyyy', { locale: es }) : '—';
 
-// ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR REQUESTS A CSV  (con BOM para tildes en Excel)
-// ═══════════════════════════════════════════════════════════════
+/** Exporta solicitudes a CSV (BOM para tildes en Excel). */
 export const exportRequestsToCSV = (requests: Request[]) => {
   const headers = ['ID', 'Activo', 'Tag', 'Solicitante', 'Disciplina', 'Estado', 'Dias', 'Fecha Solicitud', 'Fecha Retorno'];
   const rows = requests.map(r => [
@@ -27,14 +25,11 @@ export const exportRequestsToCSV = (requests: Request[]) => {
     safeDate(r.expected_return_date),
   ]);
 
-  // BOM inline para que Excel abra CSVs con tildes correctamente
   const csv = '\uFEFF' + [headers, ...rows].map(r => r.join(',')).join('\n');
   downloadFile(csv, `zyklus_solicitudes_${format(new Date(), 'yyyy-MM-dd')}.csv`, 'text/csv;charset=utf-8;');
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 📄 EXPORTAR REQUESTS A PDF
-// ═══════════════════════════════════════════════════════════════
+/** Exporta solicitudes a PDF. */
 export const exportRequestsToPDF = (requests: Request[]) => {
   const doc = new jsPDF();
 
@@ -76,9 +71,7 @@ export const exportRequestsToPDF = (requests: Request[]) => {
   doc.save(`zyklus_solicitudes_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR REQUESTS A EXCEL
-// ═══════════════════════════════════════════════════════════════
+/** Exporta solicitudes a Excel. */
 export const exportRequestsToExcel = (requests: Request[]) => {
   const data = requests.map(r => ({
     'ID': r.id,
@@ -110,13 +103,10 @@ export const exportRequestsToExcel = (requests: Request[]) => {
   XLSX.writeFile(workbook, `zyklus_solicitudes_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR PRÉSTAMOS POR USUARIO / DISCIPLINA (Excel)
-// ═══════════════════════════════════════════════════════════════
+/** Exporta préstamos por usuario y disciplina a Excel. */
 export const exportRequestsByUser = (requests: Request[]) => {
   const workbook = XLSX.utils.book_new();
 
-  // ── Hoja 1: Resumen por Usuario ──
   const byUser: Record<string, {
     nombre: string; disciplina: string;
     total: number; activos: number; devueltos: number; vencidos: number; _dias: number[];
@@ -154,7 +144,6 @@ export const exportRequestsByUser = (requests: Request[]) => {
   ws1['!cols'] = [{ wch: 25 }, { wch: 25 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(workbook, ws1, 'Por Usuario');
 
-  // ── Hoja 2: Resumen por Disciplina / Centro de Costo ──
   const byDisciplina: Record<string, { total: number; activos: number; vencidos: number }> = {};
   for (const r of requests) {
     const d = r.requester_disciplina ?? 'Sin asignar';
@@ -164,7 +153,7 @@ export const exportRequestsByUser = (requests: Request[]) => {
     if (r.status === 'OVERDUE') byDisciplina[d].vencidos++;
   }
 
-  const total = requests.length || 1; // evitar división por cero
+  const total = requests.length || 1;
   const disciplinaData = Object.entries(byDisciplina).map(([d, v]) => ({
     'Disciplina / Centro de Costo': d,
     'Total Solicitudes': v.total,
@@ -177,7 +166,6 @@ export const exportRequestsByUser = (requests: Request[]) => {
   ws2['!cols'] = [{ wch: 28 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 14 }];
   XLSX.utils.book_append_sheet(workbook, ws2, 'Por Disciplina');
 
-  // ── Hoja 3: Detalle completo ──
   const detail = requests.map(r => ({
     'ID': r.id,
     'Activo': r.assets?.name ?? r.asset_id,
@@ -203,13 +191,10 @@ export const exportRequestsByUser = (requests: Request[]) => {
   XLSX.writeFile(workbook, `zyklus_prestamos_por_usuario_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 🔧 EXPORTAR INCIDENCIAS Y MANTENIMIENTOS (Excel)
-// ═══════════════════════════════════════════════════════════════
+/** Exporta incidencias y mantenimientos a Excel. */
 export const exportMaintenanceReport = (maintenanceLogs: MaintenanceLog[], assets: Asset[]) => {
   const workbook = XLSX.utils.book_new();
 
-  // ── Hoja 1: Todas las incidencias ──
   const logsData = maintenanceLogs.map(log => {
     const statusLabel =
       log.status === 'RESOLVED' ? 'Resuelto' :
@@ -240,7 +225,6 @@ export const exportMaintenanceReport = (maintenanceLogs: MaintenanceLog[], asset
   ];
   XLSX.utils.book_append_sheet(workbook, ws1, 'Incidencias');
 
-  // ── Hoja 2: Activos con más incidencias ──
   const byAsset: Record<string, { nombre: string; tag: string; total: number; resueltos: number; costo: number }> = {};
   for (const log of maintenanceLogs) {
     const aid = log.asset_id;
@@ -269,7 +253,6 @@ export const exportMaintenanceReport = (maintenanceLogs: MaintenanceLog[], asset
   ws2['!cols'] = [{ wch: 25 }, { wch: 10 }, { wch: 14 }, { wch: 10 }, { wch: 10 }, { wch: 20 }];
   XLSX.utils.book_append_sheet(workbook, ws2, 'Ranking por Activo');
 
-  // ── Hoja 3: Activos que requieren mantenimiento ahora ──
   const needsMaint = assets
     .filter(a => a.maintenance_alert || a.status === 'En mantenimiento' || a.status === 'Requiere Mantenimiento')
     .map(a => ({
@@ -298,9 +281,7 @@ export const exportMaintenanceReport = (maintenanceLogs: MaintenanceLog[], asset
   XLSX.writeFile(workbook, `zyklus_mantenimientos_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 📄 EXPORTAR INVENTARIO A PDF
-// ═══════════════════════════════════════════════════════════════
+/** Exporta inventario completo a PDF. */
 export const exportInventoryToPDF = (assets: Asset[]) => {
   const doc = new jsPDF();
 
@@ -338,9 +319,7 @@ export const exportInventoryToPDF = (assets: Asset[]) => {
   doc.save(`zyklus_inventario_${format(new Date(), 'yyyy-MM-dd')}.pdf`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 📊 EXPORTAR AUDIT LOGS A EXCEL
-// ═══════════════════════════════════════════════════════════════
+/** Exporta registros de auditoría a Excel. */
 export const exportAuditLogsToExcel = (logs: AuditLog[]) => {
   const data = logs.map(log => ({
     'Timestamp': format(new Date(log.timestamp), 'dd/MM/yyyy HH:mm:ss', { locale: es }),
@@ -362,9 +341,7 @@ export const exportAuditLogsToExcel = (logs: AuditLog[]) => {
   XLSX.writeFile(workbook, `zyklus_audit_trail_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 };
 
-// ═══════════════════════════════════════════════════════════════
-// 🛠️ HELPER: Download File
-// ═══════════════════════════════════════════════════════════════
+/** Descarga un archivo en el navegador. */
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
   const url = URL.createObjectURL(blob);

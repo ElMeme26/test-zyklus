@@ -13,6 +13,7 @@ export type AuditAction =
   | 'ALERT'
   | 'MAINTENANCE';
 
+/** Registra una acción en audit_logs para trazabilidad. */
 export async function logAudit(
   action: AuditAction,
   actorId: string,

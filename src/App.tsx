@@ -7,6 +7,7 @@ import { ThemeProvider } from './context/ThemeContext';
 import RoleRouter from './components/RoleRouter';
 import './index.css';
 
+/** Punto de entrada de la app: proveedores globales y enrutador por rol. */
 function App() {
   return (
     <BrowserRouter>
