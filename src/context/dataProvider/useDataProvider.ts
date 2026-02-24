@@ -141,6 +141,16 @@ export function useDataProvider() {
     }
   };
 
+  const updateBundle = async (id: string, patch: { name?: string; description?: string; assetIds?: string[] }) => {
+    try {
+      await apiBundles.updateBundle(id, patch);
+      toast.success('Combo actualizado');
+      fetchData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al actualizar combo');
+    }
+  };
+
   const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
     if (!bundle.assets?.length) { toast.error('Combo sin activos'); return; }
     const unavail = bundle.assets.filter(a => a.status !== 'Disponible');
@@ -439,6 +449,7 @@ export function useDataProvider() {
     getNextTag,
     validateMaintenanceAsset,
     createBundle,
+    updateBundle,
     createBatchRequest,
     addInstitution,
     updateInstitution,

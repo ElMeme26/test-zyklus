@@ -31,7 +31,7 @@ export async function callGemini(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxOutputTokens ?? 1500,
+        maxOutputTokens: options.maxOutputTokens ?? 2048,
       },
     }),
   });
@@ -76,17 +76,13 @@ export async function generatePredictiveReport(
     .map(([name, count]) => `${name} (${count} préstamos)`)
     .join(', ');
 
-  const prompt = `Eres Zykla AI, experto en gestión y control patrimonial de activos tecnológicos.
+  const prompt = `Eres Zykla AI, experto en gestión patrimonial de activos tecnológicos.
 
-Analiza el siguiente historial real de activos prestados con su frecuencia:
-${topItems}
+Historial de activos prestados (frecuencia): ${topItems}
 
-Genera un reporte predictivo profesional de máximo 3 párrafos cortos dirigido al ${audience}, que incluya:
-1. Los activos con mayor demanda y por qué son críticos.
-2. Qué tipo de activos se deben adquirir con mayor prioridad.
-3. Una recomendación concreta de gestión de inventario.
+Genera un reporte predictivo BREVE dirigido al ${audience}. Máximo 3 párrafos cortos (2-4 oraciones cada uno). Sé conciso; evita rodeos.
+Incluye: (1) Activos con mayor demanda y por qué son críticos. (2) Qué tipo de activos priorizar para adquisición. (3) Una recomendación concreta de inventario.
+Tono analítico y ejecutivo. Solo español. Cierra el último párrafo con punto final.`;
 
-Usa un tono analítico y ejecutivo. Responde solo en español.`;
-
-  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 1500 });
+  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 2048 });
 }

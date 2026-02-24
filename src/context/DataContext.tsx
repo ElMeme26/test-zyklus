@@ -25,6 +25,7 @@ interface DataContextType {
   validateMaintenanceAsset: (assetId: string) => Promise<void>;
 
   createBundle: (name: string, description: string, assetIds: string[]) => Promise<void>;
+  updateBundle: (id: string, patch: { name?: string; description?: string; assetIds?: string[] }) => Promise<void>;
   createBatchRequest: (bundle: Bundle, user: User, days: number, motive: string, autoApprove?: boolean) => Promise<void>;
 
   addInstitution: (inst: Partial<Institution>) => Promise<void>;

@@ -184,7 +184,7 @@ async function callGemini(prompt: string): Promise<string> {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     }),
   });
@@ -212,7 +212,13 @@ export function ChatAssistant() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
 
-  const initialMessage: Message = { role: 'bot', text: 'Hola, soy Zykla. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?' };
+  const isUserRole = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
+  const initialMessage: Message = {
+    role: 'bot',
+    text: isUserRole
+      ? 'Hola, soy Zykla. Puedo ayudarte con tu información de préstamos y recomendarte activos según lo que vayas a hacer. ¿En qué te ayudo?'
+      : 'Hola, soy Zykla. Puedo mostrarte estadísticas, gráficas y análisis del sistema. ¿Qué necesitas?',
+  };
   const [messages, setMessages] = useState<Message[]>([initialMessage]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -225,10 +231,13 @@ export function ChatAssistant() {
   // ─── CONSTRUCCIÓN DEL CONTEXTO ────────────────────────────
   const buildContext = useCallback(() => {
     const isAdmin = user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR';
-    if (!isAdmin) {
+    if (!isAdmin && user?.id) {
+      const misReqs = requests.filter(r => r.user_id === user.id);
       return {
-        mis_prestamos: requests.filter(r => r.user_id === user?.id).length,
-        activos_disponibles: assets.filter(a => a.status === 'Disponible').length,
+        mis_prestamos: misReqs.length,
+        mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
+        activos_disponibles_total: assets.filter(a => a.status === 'Disponible').length,
+        categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
       };
     }
 
@@ -286,7 +295,19 @@ export function ChatAssistant() {
   }, [assets, requests, user]);
 
   // ─── SYSTEM PROMPT ────────────────────────────────────────
-  const buildSystemPrompt = useCallback((context: object) => {
+  const buildSystemPrompt = useCallback((context: object, forUserOnly: boolean) => {
+    if (forUserOnly) {
+      return `Eres Zykla AI, asistente integrado en Zyklus Halo para USUARIOS.
+
+DATOS DEL USUARIO (solo esta información):
+${JSON.stringify(context, null, 2)}
+
+INSTRUCCIONES ESTRICTAS:
+1. Solo puedes hablar de: (a) la información de préstamos del propio usuario (sus solicitudes, fechas de retorno), y (b) recomendaciones de activos según lo que el usuario vaya a hacer (por categoría, tipo de uso, etc.).
+2. NUNCA des información analítica del sistema, estadísticas globales, gráficas de todo el inventario ni datos de otros usuarios.
+3. Responde en español, de forma breve y útil.
+4. Para recomendaciones, usa las categorías y el número de activos disponibles; sugiere opciones concretas.`;
+    }
     return `Eres Zykla AI, asistente experto integrado en Zyklus Halo, un sistema de control patrimonial.
 
 DATOS ACTUALES DEL SISTEMA:
@@ -343,12 +364,16 @@ INSTRUCCIONES ESTRICTAS:
           estados: Object.entries(states).map(([name, val]) => ({ name, value: val })),
         };
       } else {
+        const misReqs = requests.filter(r => r.user_id === user?.id);
         contextData = {
-          mis_prestamos: requests.filter(r => r.user_id === user?.id).length,
-          activos_disponibles: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length,
+          mis_prestamos: misReqs.length,
+          mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
+          activos_disponibles_total: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length,
+          categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
         };
       }
-      const systemPrompt = buildSystemPrompt(contextData);
+      const forUserOnly = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
+      const systemPrompt = buildSystemPrompt(contextData, forUserOnly);
       const fullPrompt = `${systemPrompt}\n\nUsuario: ${userMsg}`;
       const rawText = await callGemini(fullPrompt);
       const { clean, graph } = extractGraph(rawText);
@@ -426,12 +451,10 @@ INSTRUCCIONES ESTRICTAS:
             {/* Quick suggestions */}
             {messages.length === 1 && (
               <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
-                {[
-                  'Gráfica de estados',
-                  'Top activos solicitados',
-                  'Distribución por categoría',
-                  '¿Cuántos vencidos?',
-                ].map(s => (
+                {(isUserRole
+                  ? ['¿Cuántos préstamos tengo?', 'Recomiéndame activos para grabar video', '¿Qué categorías hay disponibles?', 'Mis fechas de devolución']
+                  : ['Gráfica de estados', 'Top activos solicitados', 'Distribución por categoría', '¿Cuántos vencidos?']
+                ).map(s => (
                   <button
                     key={s}
                     onClick={() => { setInput(s); }}
@@ -451,7 +474,7 @@ INSTRUCCIONES ESTRICTAS:
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => e.key === 'Enter' && !e.shiftKey && handleSend()}
                   className="bg-slate-950 border-slate-700 text-white text-xs h-10 rounded-full pl-4"
-                  placeholder="Ej: Muéstrame la gráfica de estados"
+                  placeholder={isUserRole ? 'Ej: ¿Qué préstamos tengo?' : 'Ej: Muéstrame la gráfica de estados'}
                   disabled={isLoading}
                 />
                 <Button

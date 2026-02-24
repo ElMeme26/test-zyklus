@@ -171,7 +171,7 @@ export function UsersView() {
                   <tr key={u.id} className="border-b border-slate-800 hover:bg-slate-800/30">
                     <td className="p-3 text-white font-medium">{u.name}</td>
                     <td className="p-3 text-slate-400 text-sm">{u.email}</td>
-                    <td className="p-3"><span className="text-xs font-bold px-2 py-1 rounded bg-slate-700 text-slate-300">{ROLE_LABELS[u.role]}</span></td>
+                    <td className="p-3"><span className="text-xs font-bold px-2 py-1 rounded bg-slate-800 text-white keep-white border border-slate-600/70">{ROLE_LABELS[u.role]}</span></td>
                     <td className="p-3 text-slate-400 text-sm">{u.disciplina || '—'}</td>
                     <td className="p-3 flex gap-2">
                       <button onClick={() => openEdit(u)} className="p-2 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50" title="Editar"><Edit size={14} /></button>

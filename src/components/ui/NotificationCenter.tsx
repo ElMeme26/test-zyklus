@@ -18,7 +18,17 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; bg: str
 
 const AUDITOR_ALLOWED_TITLES = [
   '🚨 Préstamo Vencido',
-  '🚨 Incumplimiento — 3 días',
+  '🚨 Incumplimiento —3 dias',
+];
+
+/** Títulos que el administrador NO debe ver (solicitudes, retiros, devoluciones sin daño). */
+const ADMIN_HIDDEN_TITLES = [
+  '📋 Nueva Solicitud',
+  '📋 Nueva Solicitud — Carrito',
+  '📋 Nueva Solicitud — Kit',
+  '📤 Activo Retirado',
+  '📤 Equipo Retirado',
+  '📥 Devolución Registrada',
 ];
 
 function NotifItem({ notif, onRead }: { notif: Notification; onRead: (id: string) => void }) {
@@ -279,6 +289,12 @@ export function NotificationCenter() {
       return notifications.filter(n =>
         n.user_id === userId &&
         AUDITOR_ALLOWED_TITLES.some(t => n.title.includes(t) || n.title === t)
+      );
+    }
+    if (role === 'ADMIN_PATRIMONIAL') {
+      return notifications.filter(n =>
+        n.user_id === userId &&
+        !ADMIN_HIDDEN_TITLES.some(t => n.title === t || n.title.startsWith(t))
       );
     }
     return notifications.filter(n => n.user_id === userId);
