@@ -151,25 +151,11 @@ Crear archivo `.env` dentro de `backend/`:
 
 | Variable | Requerida | Descripción | Ejemplo |
 |----------|-----------|-------------|---------|
-| `PORT` | No | Puerto del servidor | `3000` |
-| `FRONTEND_ORIGIN` | No | Origen CORS permitido | `http://localhost:5173` |
+| `PORT` | **Sí** | Puerto del servidor | `3000` |
+| `FRONTEND_ORIGIN` | **Sí** | Origen CORS permitido | `http://localhost:5173` |
 | `DATABASE_URL` | **Sí** | Cadena de conexión PostgreSQL | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | **Sí** (prod) | Secreto para firmar JWT | Cadena aleatoria segura |
 
-### Archivos `.env`
-`backend/.env`
-PORT=3000
-FRONTEND_ORIGIN=http://localhost:5173
-DATABASE_URL="API_EN DOCUMENTO_EXTRA"
-JWT_SECRET="API_EN DOCUMENTO_EXTRA"
-
-`/.env`
-VITE_GEMINI_API_KEY="API_EN DOCUMENTO_EXTRA"
-VITE_API_URL=http://localhost:3000
-
-Ver archivos `.env.` en la raíz y en `backend/` para copiar y configurar.
-
----
 
 ## 6. Cómo Ejecutar el Proyecto
 

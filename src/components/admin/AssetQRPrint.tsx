@@ -1,8 +1,7 @@
-// src/components/admin/AssetQRPrint.tsx
 /** Modal para imprimir etiquetas QR de activos. */
 import React, { useEffect, useState } from 'react';
 import QRCode from 'qrcode';
-import { Package } from 'lucide-react';
+import { X, Printer, Package } from 'lucide-react';
 import { Button, Card } from '../ui/core';
 import type { Asset, QRAssetPayload } from '../../types';
 
