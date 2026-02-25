@@ -1,3 +1,4 @@
+/** Paleta de colores para gráficas del auditor. */
 export const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
 
 export const actionBadge: Record<string, { label: string; style: string }> = {

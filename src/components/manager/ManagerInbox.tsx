@@ -15,6 +15,7 @@ import { UserHome } from '../user/UserHome';
 import { RefreshButton } from '../ui/RefreshButton';
 import { LeaderQRModal, RejectionModal, TeamView } from './inbox';
 
+/** Inbox del líder: aprobar/rechazar solicitudes, ver equipo y mis préstamos. */
 export function ManagerInbox() {
   const { getUserRequests, getTeamRequests, approveRequest, rejectRequest, returnRequestWithFeedback, requests, isLoading } = useData();
   const { logout, user } = useAuth();

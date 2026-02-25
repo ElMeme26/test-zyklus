@@ -7,6 +7,7 @@ import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import type { Request } from '../../../types';
 
+/** Vista de líder: muestra los préstamos activos, aprobados y vencidos del equipo (incluye combos). */
 export function TeamView() {
   const { requests } = useData();
   const { user } = useAuth();
@@ -77,7 +78,7 @@ export function TeamView() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-[10px] font-bold px-2 py-1 rounded border ${isOverdue ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'}`}>
-                    {isOverdue ? '🚨 VENCIDO' : '● ACTIVO'}
+                    {isOverdue ? 'VENCIDO' : 'ACTIVO'}
                   </span>
                   {r.expected_return_date && (
                     <p className="text-[10px] text-slate-500 mt-1">

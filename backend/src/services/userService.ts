@@ -41,6 +41,7 @@ export interface ListUsersResult {
   total: number;
 }
 
+/** Lista todos los usuarios con datos básicos. */
 export async function listUsers(): Promise<User[]> {
   const result = await query<UserRow>(
     `SELECT id, name, email, role, disciplina, avatar, phone, manager_id, created_at
@@ -49,6 +50,7 @@ export async function listUsers(): Promise<User[]> {
   return result.rows.map(rowToUser);
 }
 
+/** Lista usuarios con paginación y filtros (rol, disciplina, búsqueda). */
 export async function listUsersPaginated(filters: ListUsersFilters): Promise<ListUsersResult> {
   const page = Math.max(1, filters.page ?? 1);
   const limit = Math.min(100, Math.max(1, filters.limit ?? 20));
@@ -95,6 +97,7 @@ export async function listUsersPaginated(filters: ListUsersFilters): Promise<Lis
   return { users: result.rows.map(rowToUser), total };
 }
 
+/** Obtiene un usuario por ID. */
 export async function getUserById(id: string): Promise<User | null> {
   const result = await query<UserRow>(
     `SELECT id, name, email, role, disciplina, avatar, phone, manager_id, created_at
@@ -105,6 +108,7 @@ export async function getUserById(id: string): Promise<User | null> {
   return row ? rowToUser(row) : null;
 }
 
+/** Crea un usuario con contraseña hasheada. */
 export async function createUser(data: {
   name: string;
   email: string;
@@ -167,6 +171,7 @@ export async function updateUser(
   return getUserById(id);
 }
 
+/** Elimina un usuario. Devuelve true si se eliminó. */
 export async function deleteUser(id: string): Promise<boolean> {
   const result = await query('DELETE FROM users WHERE id = $1', [id]);
   return (result.rowCount ?? 0) > 0;

@@ -6,6 +6,7 @@ interface CancelConfirmModalProps {
   onCancel: () => void;
 }
 
+/** Modal de confirmación para cancelar una solicitud. */
 export function CancelConfirmModal({ onConfirm, onCancel }: CancelConfirmModalProps) {
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">

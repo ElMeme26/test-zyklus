@@ -10,6 +10,7 @@ interface FeedbackModalProps {
   onRefresh: () => void;
 }
 
+/** Modal para responder al feedback del líder sobre una solicitud. */
 export function FeedbackModal({ request, onClose, onRefresh }: FeedbackModalProps) {
   const [text, setText] = useState('');
 

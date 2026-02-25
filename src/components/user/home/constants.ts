@@ -1,3 +1,4 @@
+/** Mapeo de estados de solicitud a etiqueta y color. */
 export const statusConfig: Record<string, { label: string; color: string }> = {
   PENDING:         { label: 'Pendiente',       color: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
   ACTION_REQUIRED: { label: 'Acción Req.',     color: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },

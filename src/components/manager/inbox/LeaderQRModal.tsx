@@ -8,6 +8,7 @@ interface LeaderQRModalProps {
   onClose: () => void;
 }
 
+/** Modal con QR para que el líder retire el activo aprobado. */
 export function LeaderQRModal({ request, onClose }: LeaderQRModalProps) {
   const qrData = JSON.stringify({
     request_id: request.id,

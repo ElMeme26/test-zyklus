@@ -1,6 +1,4 @@
-// src/registerSW.ts
-// Registra el Service Worker para push notifications nativas
-// Importar en main.tsx: import './registerSW';
+/** Registra el Service Worker para notificaciones push y caché offline. */
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {

@@ -14,6 +14,7 @@ interface AssetCatalogTableProps {
   onAddToCart?: (a: Asset) => void;
 }
 
+/** Tabla del catálogo de activos con vista cuadrícula o lista. */
 export function AssetCatalogTable({ assets, onSelect, onAddToCart }: AssetCatalogTableProps) {
   return (
     <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-hidden">

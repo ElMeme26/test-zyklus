@@ -10,6 +10,7 @@ interface QRModalProps {
   onClose: () => void;
 }
 
+/** Modal que muestra el QR de una solicitud aprobada para retirar el activo. */
 export function QRModal({ request, onClose }: QRModalProps) {
   const qrData = JSON.stringify({
     request_id: request.id,

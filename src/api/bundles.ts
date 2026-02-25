@@ -1,5 +1,7 @@
+/** Cliente API para combos (bundles): crear y actualizar. */
 import { apiFetch } from './client';
 
+/** Crea un combo con nombre, descripción y lista de IDs de activos. */
 export async function createBundle(
   name: string,
   description: string,
@@ -11,6 +13,7 @@ export async function createBundle(
   });
 }
 
+/** Actualiza un combo (nombre, descripción o activos). */
 export async function updateBundle(
   id: string,
   patch: { name?: string; description?: string; assetIds?: string[] }

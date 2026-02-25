@@ -1,5 +1,4 @@
-// src/lib/geminiUtils.ts
-// Utilidades compartidas para llamadas a Gemini AI en Zyklus Halo
+/** Utilidades para llamadas a la API de Gemini AI. */
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -13,10 +12,7 @@ interface GeminiResponse {
   error?: { message: string; code?: number };
 }
 
-/**
- * Llama a Gemini 2.5 Flash y retorna el texto generado.
- * Lanza Error con mensaje descriptivo si algo falla.
- */
+/** Llama a Gemini y retorna el texto generado. Lanza Error si falla. */
 export async function callGemini(
   prompt: string,
   options: { temperature?: number; maxOutputTokens?: number } = {}
@@ -52,9 +48,8 @@ export async function callGemini(
   return text;
 }
 
-/**
- * Genera un reporte predictivo de demanda de activos.
- * @param requestedAssets - array de nombres de activos en préstamos recientes
+/** Genera un reporte predictivo de demanda de activos.
+ * @param requestedAssets - Nombres de activos en préstamos recientes
  * @param audience - 'administrador' | 'auditor'
  */
 export async function generatePredictiveReport(
@@ -65,7 +60,6 @@ export async function generatePredictiveReport(
     return 'No hay suficiente historial de préstamos para generar un análisis predictivo.';
   }
 
-  // Contar frecuencia para dar contexto real a la IA
   const freq: Record<string, number> = {};
   for (const name of requestedAssets) {
     freq[name] = (freq[name] || 0) + 1;

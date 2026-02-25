@@ -3,6 +3,7 @@ import { query } from '../db/index.js';
 const isValidUUID = (s: string) =>
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(s ?? '');
 
+/** Crea una notificación para un usuario. */
 export async function createNotif(
   userId: string,
   title: string,
@@ -19,6 +20,7 @@ export async function createNotif(
   );
 }
 
+/** Crea notificaciones para todos los usuarios con un rol dado. */
 export async function notifyByRole(
   role: string,
   title: string,

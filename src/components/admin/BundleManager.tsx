@@ -10,6 +10,7 @@ const PAGE_SIZE = 24;
 
 type Tab = 'list' | 'create';
 
+/** Gestión de combos (kits): crear, editar y asignar activos a bundles. */
 export const BundleManager = () => {
   const { bundles, createBundle, updateBundle, fetchData } = useData();
   const [tab, setTab] = useState<Tab>('list');

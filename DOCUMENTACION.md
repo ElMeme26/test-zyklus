@@ -151,16 +151,11 @@ Crear archivo `.env` dentro de `backend/`:
 
 | Variable | Requerida | Descripción | Ejemplo |
 |----------|-----------|-------------|---------|
-| `PORT` | No | Puerto del servidor | `3000` |
-| `FRONTEND_ORIGIN` | No | Origen CORS permitido | `http://localhost:5173` |
+| `PORT` | **Sí** | Puerto del servidor | `3000` |
+| `FRONTEND_ORIGIN` | **Sí** | Origen CORS permitido | `http://localhost:5173` |
 | `DATABASE_URL` | **Sí** | Cadena de conexión PostgreSQL | `postgresql://user:pass@host:5432/db` |
 | `JWT_SECRET` | **Sí** (prod) | Secreto para firmar JWT | Cadena aleatoria segura |
 
-### Ejemplo de archivos `.env.example`
-
-Ver archivos `.env.example` en la raíz y en `backend/` para copiar y configurar.
-
----
 
 ## 6. Cómo Ejecutar el Proyecto
 
@@ -183,8 +178,8 @@ Ver archivos `.env.example` en la raíz y en `backend/` para copiar y configurar
 
 2. **Configurar variables de entorno**
 
-   - Copiar `backend/.env.example` → `backend/.env`
-   - Copiar `.env.example` → `.env`
+   - Copiar  → `backend/.env`
+   - Copiar  → `.env`
    - Editar y completar `DATABASE_URL`, `JWT_SECRET`, etc.
 
 3. **Ejecutar backend** (terminal 1)
@@ -225,7 +220,7 @@ Ver archivos `.env.example` en la raíz y en `backend/` para copiar y configurar
 
 ## 7. Despliegue
 
-### Frontend (Netlify, Vercel, etc.)
+### Frontend (Netlify)
 
 1. **Build**
 
@@ -238,13 +233,13 @@ Ver archivos `.env.example` en la raíz y en `backend/` para copiar y configurar
 2. **Variables de entorno en el host**
 
    - `VITE_API_URL` = URL pública del backend (ej. `https://api.tudominio.com`)
-   - `VITE_GEMINI_API_KEY` (opcional)
+   - `VITE_GEMINI_API_KEY`
 
 3. **Directorio de publicación:** `dist`
 
 4. **Netlify:** El backend ya permite `*.netlify.app` en CORS.
 
-### Backend (Railway, Render, Fly.io, etc.)
+### Backend (Railway)
 
 1. **Build**
 
@@ -274,38 +269,27 @@ Ver archivos `.env.example` en la raíz y en `backend/` para copiar y configurar
   -- Contenido de backend/migrations/001_add_performance_indexes.sql
   ```
 
-### Docker (ejemplo conceptual)
-
-```dockerfile
-# Backend
-FROM node:20-alpine
-WORKDIR /app
-COPY backend/package*.json backend/
-RUN npm ci --prefix . --omit=dev
-COPY backend/ .
-RUN npm run build
-CMD ["node", "dist/index.js"]
-```
-
 ---
 
 ## 8. Arquitectura Técnica Detallada
 
 ### Stack Tecnológico
 
-| Capa | Tecnología | Versión |
-|------|------------|---------|
-| Frontend | React | 18.2 |
-| Frontend | Vite | 7.x |
-| Frontend | TypeScript | 5.x |
-| Frontend | TailwindCSS | 3.4 |
-| Frontend | React Router | 7.x |
-| Backend | Node.js | 18+ |
-| Backend | Express | 4.x |
-| Backend | TypeScript | 5.x |
-| Base de datos | PostgreSQL | (Supabase) |
-| Auth | JWT (jsonwebtoken) | 9.x |
-| Passwords | bcrypt | 5.x |
+| Capa          | Tecnología         | Versión |
+|---------------|--------------------|---------|
+| Frontend      | React              | 18.2    |
+| Frontend      | Vite               | 7.x     |
+| Frontend      | TypeScript         | 5.x     |
+| Frontend      | TailwindCSS        | 3.4     |
+| Frontend      | React Router       | 7.x     |
+| Frontend      | Netilify           | 23.15.1 |
+| Backend       | Node.js            | 18+     |
+| Backend       | Express            | 4.x     |
+| Backend       | TypeScript         | 5.x     |
+| Backend       | Railway            | 4.30.3  |
+| Base de datos | PostgreSQL         | (Supabase) |
+| Auth          | JWT (jsonwebtoken) | 9.x     |
+| Passwords     | bcrypt             | 5.x     |
 
 ### Flujo de Autenticación
 
@@ -329,50 +313,50 @@ CMD ["node", "dist/index.js"]
 
 ### Endpoints Públicos
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/health` | Health check + estado DB |
-| POST | `/auth/login` | Login (email, password) → user + token |
+| Método | Ruta          | Descripción                            |
+|--------|---------------|----------------------------------------|
+| GET    | `/health`     | Health check + estado DB               |
+| POST   | `/auth/login` | Login (email, password) → user + token |
 
 ### Endpoints Protegidos (requieren JWT)
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| GET | `/api/data` | Todos los datos (requests, institutions, notifications, etc.) |
-| GET | `/api/data/stats` | Estadísticas (assetCounts, requestCounts, categoryCounts) |
-| GET | `/api/assets` | Lista de activos (paginado, filtros) |
-| GET | `/api/assets/next-tag` | Siguiente etiqueta disponible |
-| GET | `/api/assets/:id` | Activo por ID |
-| POST | `/api/assets` | Crear activo |
-| POST | `/api/assets/import` | Importar activos (CSV) |
-| PUT | `/api/assets/:id` | Actualizar activo |
-| DELETE | `/api/assets/:id` | Eliminar activo |
-| POST | `/api/assets/:id/validate-maintenance` | Validar mantenimiento |
-| POST | `/api/institutions` | Crear institución |
-| PUT | `/api/institutions/:id` | Actualizar institución |
-| DELETE | `/api/institutions/:id` | Eliminar institución |
-| POST | `/api/bundles` | Crear bundle |
-| PATCH | `/api/bundles/:id` | Actualizar bundle |
-| POST | `/api/requests` | Crear solicitud |
-| POST | `/api/requests/batch` | Crear solicitudes en lote |
-| POST | `/api/requests/bundle` | Solicitar bundle completo |
-| PUT | `/api/requests/:id/approve` | Aprobar solicitud |
-| PUT | `/api/requests/:id/reject` | Rechazar solicitud |
-| PUT | `/api/requests/:id/feedback` | Devolver con feedback |
-| PUT | `/api/requests/:id/cancel` | Cancelar solicitud |
-| PUT | `/api/requests/:id/respond-feedback` | Responder feedback |
-| PUT | `/api/requests/:id/renew` | Renovar préstamo |
-| POST | `/api/guard/scan` | Escaneo QR (check-in/check-out) |
-| POST | `/api/guard/scan/confirm-combo` | Confirmar check-in combo |
-| POST | `/api/notifications/check-overdue` | Revisar préstamos vencidos |
-| PUT | `/api/notifications/:id/read` | Marcar notificación leída |
-| PUT | `/api/notifications/read-all` | Marcar todas leídas |
-| POST | `/api/maintenance` | Reportar mantenimiento |
-| PUT | `/api/maintenance/:id/resolve` | Resolver mantenimiento |
-| GET | `/api/users` | Lista usuarios (admin) |
-| POST | `/api/users` | Crear usuario (admin) |
-| PUT | `/api/users/:id` | Actualizar usuario (admin) |
-| DELETE | `/api/users/:id` | Eliminar usuario (admin) |
+| Método | Ruta                                   | Descripción                                                   |
+|--------|----------------------------------------|---------------------------------------------------------------|
+| GET    | `/api/data`                            | Todos los datos (requests, institutions, notifications, etc.) |
+| GET    | `/api/data/stats`                      | Estadísticas (assetCounts, requestCounts, categoryCounts)     |
+| GET    | `/api/assets`                          | Lista de activos (paginado, filtros)                          |
+| GET    | `/api/assets/next-tag`                 | Siguiente etiqueta disponible                                 |
+| GET    | `/api/assets/:id`                      | Activo por ID                                                 |
+| POST   | `/api/assets`                          | Crear activo                                                  |
+| POST   | `/api/assets/import`                   | Importar activos (CSV)                                        |
+| PUT    | `/api/assets/:id`                      | Actualizar activo                                             |
+| DELETE | `/api/assets/:id`                      | Eliminar activo                                               |
+| POST   | `/api/assets/:id/validate-maintenance` | Validar mantenimiento                                         |
+| POST   | `/api/institutions`                    | Crear institución                                             |
+| PUT    | `/api/institutions/:id`                | Actualizar institución                                        |
+| DELETE | `/api/institutions/:id`                | Eliminar institución                                          |
+| POST   | `/api/bundles`                         | Crear bundle                                                  |
+| PATCH  | `/api/bundles/:id`                     | Actualizar bundle                                             |
+| POST   | `/api/requests`                        | Crear solicitud                                               |
+| POST   | `/api/requests/batch`                  | Crear solicitudes en lote                                     |
+| POST   | `/api/requests/bundle`                 | Solicitar bundle completo                                     |
+| PUT    | `/api/requests/:id/approve`            | Aprobar solicitud                                             |
+| PUT    | `/api/requests/:id/reject`             | Rechazar solicitud                                            |
+| PUT    | `/api/requests/:id/feedback`           | Devolver con feedback                                         |
+| PUT    | `/api/requests/:id/cancel`             | Cancelar solicitud                                            |
+| PUT    | `/api/requests/:id/respond-feedback`   | Responder feedback                                            |
+| PUT    | `/api/requests/:id/renew`              | Renovar préstamo                                              |
+| POST   | `/api/guard/scan`                      | Escaneo QR (check-in/check-out)                               |
+| POST   | `/api/guard/scan/confirm-combo`        | Confirmar check-in combo                                      |
+| POST   | `/api/notifications/check-overdue`     | Revisar préstamos vencidos                                    |
+| PUT    | `/api/notifications/:id/read`          | Marcar notificación leída                                     |
+| PUT    | `/api/notifications/read-all`          | Marcar todas leídas                                           |
+| POST   | `/api/maintenance`                     | Reportar mantenimiento                                        |
+| PUT    | `/api/maintenance/:id/resolve`         | Resolver mantenimiento                                        |
+| GET    | `/api/users`                           | Lista usuarios (admin)                                        |
+| POST   | `/api/users`                           | Crear usuario (admin)                                         |
+| PUT    | `/api/users/:id`                       | Actualizar usuario (admin)                                    |
+| DELETE | `/api/users/:id`                       | Eliminar usuario (admin)                                      |
 
 ### Parámetros de Query (Assets)
 
@@ -388,16 +372,16 @@ CMD ["node", "dist/index.js"]
 
 ### Tablas Principales (inferidas del código)
 
-| Tabla | Descripción |
-|-------|-------------|
-| `assets` | Activos patrimoniales |
-| `requests` | Solicitudes y préstamos |
-| `users` | Usuarios del sistema |
-| `institutions` | Instituciones externas |
-| `bundles` | Conjuntos de activos |
+| Tabla              | Descripción                |
+|--------------------|----------------------------|
+| `assets`           | Activos patrimoniales      |
+| `requests`         | Solicitudes y préstamos    |
+| `users`            | Usuarios del sistema       |
+| `institutions`     | Instituciones externas     |
+| `bundles`          | Conjuntos de activos       |
 | `maintenance_logs` | Registros de mantenimiento |
-| `notifications` | Notificaciones |
-| `audit_logs` | Auditoría de acciones |
+| `notifications`    | Notificaciones             |
+| `audit_logs`       | Auditoría de acciones      |
 
 ### Migración de Índices
 
@@ -423,24 +407,24 @@ CREATE INDEX IF NOT EXISTS idx_requests_asset_id ON requests(asset_id);
 
 ### Rendimiento
 
-| Aspecto | Implementación |
-|---------|-----------------|
-| **Compresión** | `compression()` en Express |
-| **Paginación** | Assets con `page`/`limit` (max 100, 10000 en export) |
-| **Índices DB** | Migración `001_add_performance_indexes.sql` |
-| **Queries paralelas** | `Promise.all` en dataService y assetService |
-| **Pool de conexiones** | pg Pool con max 10, idleTimeout 30s |
-| **Cache PWA** | Service Worker cachea GET estáticos (no API) |
+| Aspecto                | Implementación                                       |
+|------------------------|------------------------------------------------------|
+| **Compresión**         | `compression()` en Express                           |
+| **Paginación**         | Assets con `page`/`limit` (max 100, 10000 en export) |
+| **Índices DB**         | Migración `001_add_performance_indexes.sql`          |
+| **Queries paralelas**  | `Promise.all` en dataService y assetService          |
+| **Pool de conexiones** | pg Pool con max 10, idleTimeout 30s                  |
+| **Cache PWA**          | Service Worker cachea GET estáticos (no API)         |
 
 ### Mantenibilidad
 
-| Aspecto | Descripción |
-|---------|-------------|
-| **TypeScript** | Tipado en frontend y backend |
-| **Separación de capas** | Routes → Services → DB |
-| **Contextos React** | Auth, Data, Theme centralizados |
-| **API modular** | Un archivo por dominio (assets, requests, etc.) |
-| **ESLint** | Reglas de calidad de código |
+| Aspecto                 | Descripción                                     |
+|-------------------------|-------------------------------------------------|
+| **TypeScript**          | Tipado en frontend y backend                    |
+| **Separación de capas** | Routes → Services → DB                          |
+| **Contextos React**     | Auth, Data, Theme centralizados                 |
+| **API modular**         | Un archivo por dominio (assets, requests, etc.) |
+| **ESLint**              | Reglas de calidad de código                     |
 
 ### Recomendaciones
 

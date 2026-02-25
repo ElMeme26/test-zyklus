@@ -1,3 +1,4 @@
+/** Punto de entrada del API REST: Express, CORS, rutas y health check. */
 import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';

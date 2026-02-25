@@ -19,6 +19,7 @@ export interface ApiDataResponse {
   bundles: Bundle[];
 }
 
+/** Obtiene todos los datos del sistema (activos, solicitudes, instituciones, etc.). */
 export function getData(): Promise<ApiDataResponse> {
   return apiFetch<ApiDataResponse>('/api/data');
 }
@@ -29,6 +30,7 @@ export interface DataStatsResponse {
   categoryCounts?: Record<string, number>;
 }
 
+/** Obtiene estadísticas (conteos de activos, solicitudes, categorías). */
 export function getStats(): Promise<DataStatsResponse> {
   return apiFetch<DataStatsResponse>('/api/data/stats');
 }

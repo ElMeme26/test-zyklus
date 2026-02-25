@@ -6,11 +6,12 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   size?: 'default' | 'sm' | 'lg' | 'icon';
 }
 
+/** Botón reutilizable con variantes (primary, secondary, outline, neon). */
 export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'default', size = 'default', ...props }, ref) => {
     const variants = {
       default: "bg-primary text-slate-950 font-bold hover:bg-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_25px_rgba(6,182,212,0.5)]",
-      neon: "btn-neon", // El estilo especial de la rama diseño
+      neon: "btn-neon",
       outline: "border border-slate-700 bg-transparent hover:bg-surface/80 text-slate-300",
       ghost: "hover:bg-surface/50 text-slate-400 hover:text-white",
       danger: "bg-danger/10 text-danger hover:bg-danger/20 border border-danger/50 shadow-[0_0_10px_rgba(244,63,94,0.2)]",
@@ -32,6 +33,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   }
 );
 
+/** Tarjeta contenedora con borde y fondo. */
 export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
   ({ className, children, ...props }, ref) => (
     <div 
@@ -44,6 +46,7 @@ export const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDi
   )
 );
 
+/** Campo de entrada de texto estilizado. */
 export const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
   ({ className, ...props }, ref) => {
     return (

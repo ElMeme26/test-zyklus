@@ -1,3 +1,4 @@
+/** Cliente API para activos: listado, CRUD, importación y validación de mantenimiento. */
 import { apiFetch } from './client';
 import type { Asset } from '../types';
 

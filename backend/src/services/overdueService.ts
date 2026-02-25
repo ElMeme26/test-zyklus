@@ -9,6 +9,7 @@ function differenceInHours(a: Date, b: Date): number {
   return Math.floor((a.getTime() - b.getTime()) / (60 * 60 * 1000));
 }
 
+/** Revisa préstamos activos y crea recordatorios/alertas según días restantes o vencidos. */
 export async function checkOverdue(): Promise<void> {
   const result = await query(
     `SELECT r.id, r.asset_id, r.user_id, r.expected_return_date, r.status, r.requester_name,
@@ -37,16 +38,16 @@ export async function checkOverdue(): Promise<void> {
     const daysLate = differenceInDays(now, ret);
     const hoursLeft = differenceInHours(ret, now);
 
-    // 48h antes: solo USUARIO
+    /** 48h antes: solo USUARIO */
     if (hoursLeft <= 48 && hoursLeft > 24 && req.user_id) {
       const e = await query(
         `SELECT id FROM notifications WHERE user_id = $1 AND request_id = $2 AND title = $3 LIMIT 1`,
-        [req.user_id, req.id, '📅 Recordatorio — 48h']
+        [req.user_id, req.id, 'Recordatorio — 48h']
       );
       if (e.rows.length === 0) {
         await createNotif(
           req.user_id,
-          '📅 Recordatorio — 48h',
+          'Recordatorio — 48h',
           'Tu préstamo vence en 2 días.',
           'WARNING',
           req.id
@@ -54,16 +55,16 @@ export async function checkOverdue(): Promise<void> {
       }
     }
 
-    // 24h antes: solo USUARIO
+    /** 24h antes: solo USUARIO */
     if (hoursLeft <= 24 && hoursLeft > 0 && req.user_id) {
       const e = await query(
         `SELECT id FROM notifications WHERE user_id = $1 AND request_id = $2 AND title = $3 LIMIT 1`,
-        [req.user_id, req.id, '⏰ Recordatorio — 24h']
+        [req.user_id, req.id, 'Recordatorio — 24h']
       );
       if (e.rows.length === 0) {
         await createNotif(
           req.user_id,
-          '⏰ Recordatorio — 24h',
+          'Recordatorio — 24h',
           'Tu préstamo vence mañana.',
           'WARNING',
           req.id
@@ -72,22 +73,21 @@ export async function checkOverdue(): Promise<void> {
     }
 
     if (daysLate >= 1) {
-      // Marcar como OVERDUE una sola vez
       await query(
         `UPDATE requests SET status = 'OVERDUE' WHERE id = $1 AND status = 'ACTIVE'`,
         [req.id]
       );
 
-      // 1 día después: solo USUARIO
+      /** 1 día después: solo USUARIO */
       if (daysLate === 1 && req.user_id) {
         const e1 = await query(
           `SELECT id FROM notifications WHERE user_id = $1 AND request_id = $2 AND title = $3 LIMIT 1`,
-          [req.user_id, req.id, '⚠️ Préstamo Vencido']
+          [req.user_id, req.id, 'Préstamo Vencido']
         );
         if (e1.rows.length === 0) {
           await createNotif(
             req.user_id,
-            '⚠️ Préstamo Vencido',
+            'Préstamo Vencido',
             `"${req.asset_name ?? 'Activo'}" venció. Devuélvelo hoy.`,
             'ALERT',
             req.id
@@ -95,16 +95,16 @@ export async function checkOverdue(): Promise<void> {
         }
       }
 
-      // 3 días después: USUARIO + LÍDER (manager)
+      /** 3 días después: USUARIO + LÍDER (manager) */
       if (daysLate >= 3 && req.user_id) {
         const e3 = await query(
           `SELECT id FROM notifications WHERE user_id = $1 AND request_id = $2 AND title = $3 LIMIT 1`,
-          [req.user_id, req.id, '🚨 Incumplimiento — 3 días']
+          [req.user_id, req.id, 'Incumplimiento — 3 días']
         );
         if (e3.rows.length === 0) {
           await createNotif(
             req.user_id,
-            '🚨 Incumplimiento — 3 días',
+            'Incumplimiento — 3 días',
             'Acción inmediata requerida.',
             'CRITICAL',
             req.id
@@ -112,7 +112,7 @@ export async function checkOverdue(): Promise<void> {
           if (req.manager_id) {
             await createNotif(
               req.manager_id,
-              '🚨 Incumplimiento en Equipo',
+              'Incumplimiento en Equipo',
               `${req.requester_name}: 3 días de retraso.`,
               'CRITICAL',
               req.id
@@ -121,16 +121,16 @@ export async function checkOverdue(): Promise<void> {
         }
       }
 
-      // 7 días después: USUARIO + LÍDER + ADMINISTRADOR
+      /** 7 días después: USUARIO + LÍDER + ADMINISTRADOR */
       if (daysLate >= 7 && req.user_id) {
         const e7 = await query(
           `SELECT id FROM notifications WHERE request_id = $1 AND title = $2 LIMIT 1`,
-          [req.id, '🚨 Incumplimiento — 7 días']
+          [req.id, 'Incumplimiento — 7 días']
         );
         if (e7.rows.length === 0) {
           await createNotif(
             req.user_id,
-            '🚨 Incumplimiento — 7 días',
+            'Incumplimiento — 7 días',
             'Préstamo vencido hace 7 días. Devuelve el equipo urgentemente.',
             'CRITICAL',
             req.id
@@ -138,7 +138,7 @@ export async function checkOverdue(): Promise<void> {
           if (req.manager_id) {
             await createNotif(
               req.manager_id,
-              '🚨 Incumplimiento 7d en Equipo',
+              'Incumplimiento 7d en Equipo',
               `${req.requester_name}: 7 días de retraso.`,
               'CRITICAL',
               req.id
@@ -146,7 +146,7 @@ export async function checkOverdue(): Promise<void> {
           }
           await notifyByRole(
             'ADMIN_PATRIMONIAL',
-            '🚨 Incumplimiento 7d',
+            'Incumplimiento 7d',
             `${req.requester_name}: "${req.asset_name ?? 'Activo'}" — 7 días vencido.`,
             'CRITICAL',
             req.id

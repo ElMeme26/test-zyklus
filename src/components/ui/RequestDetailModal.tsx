@@ -1,4 +1,4 @@
-// src/components/ui/RequestDetailModal.tsx
+/** Modal con detalle de una solicitud. */
 import React from 'react';
 import { X, Package, Clock, User, Building2, Tag, Calendar, Hash, CheckCircle, AlertCircle, RotateCcw, XCircle, Hourglass } from 'lucide-react';
 import { Card } from './core';
