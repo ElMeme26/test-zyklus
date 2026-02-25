@@ -160,11 +160,11 @@ Crear archivo `.env` dentro de `backend/`:
 `backend/.env`
 PORT=3000
 FRONTEND_ORIGIN=http://localhost:5173
-DATABASE_URL=postgresql://postgres.wfieewcjknhrwgbzdpbo:z7gIIlGx2j3S7Tad@aws-1-us-east-1.pooler.supabase.com:5432/postgres
-JWT_SECRET=egF0kBYbfn8EAO4qKfpNeg0q
+DATABASE_URL="API_EN DOCUMENTO_EXTRA"
+JWT_SECRET="API_EN DOCUMENTO_EXTRA"
 
 `/.env`
-VITE_GEMINI_API_KEY=AIzaSyA5Uk2pnz0jfOJCpa6gtkh6-kPClowWqIg
+VITE_GEMINI_API_KEY="API_EN DOCUMENTO_EXTRA"
 VITE_API_URL=http://localhost:3000
 
 Ver archivos `.env.` en la raíz y en `backend/` para copiar y configurar.
