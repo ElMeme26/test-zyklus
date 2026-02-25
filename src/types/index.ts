@@ -1,6 +1,4 @@
-// ============================================================
-// ZYKLUS 2.0 — TYPE DEFINITIONS
-// ============================================================
+/** Tipos e interfaces compartidos del frontend (activos, usuarios, solicitudes, etc.). */
 
 export type UserRole = 'AUDITOR' | 'ADMIN_PATRIMONIAL' | 'LIDER_EQUIPO' | 'USUARIO' | 'GUARDIA';
 
@@ -13,7 +11,7 @@ export type AssetState =
   | 'En tránsito'
   | 'Requiere Calibración'
   | 'Requiere Mantenimiento'
-  | 'En trámite';  // Solicitud en proceso — bloqueado para nuevas solicitudes
+  | 'En trámite';
 
 export type RequestStatus =
   | 'PENDING'
@@ -30,7 +28,6 @@ export type NotificationChannel = 'IN_APP' | 'CHAT' | 'EMAIL';
 export type NotificationType = 'WARNING' | 'ALERT' | 'INFO' | 'CRITICAL';
 export type AuditAction = 'CREATE' | 'APPROVE' | 'REJECT' | 'CHECKOUT' | 'CHECKIN' | 'UPDATE' | 'ALERT' | 'MAINTENANCE';
 
-// ─── USER ────────────────────────────────────────────────────
 export interface User {
   id: string;
   name: string;
@@ -43,7 +40,6 @@ export interface User {
   created_at?: string;
 }
 
-// ─── ASSET ───────────────────────────────────────────────────
 export interface Asset {
   id: string;
   tag: string;
@@ -70,7 +66,6 @@ export interface Asset {
   created_at: string;
 }
 
-// ─── INSTITUTION ─────────────────────────────────────────────
 export interface Institution {
   id: number;
   name: string;
@@ -81,7 +76,6 @@ export interface Institution {
   created_at?: string;
 }
 
-// ─── BUNDLE / KIT ────────────────────────────────────────────
 export interface Bundle {
   id: string;
   name: string;
@@ -91,22 +85,19 @@ export interface Bundle {
   assets?: Asset[];
 }
 
-// ─── REQUEST (PRÉSTAMO) ──────────────────────────────────────
 export interface Request {
   id: number;
   asset_id: string;
   user_id: string;
   institution_id?: number;
   requester_name: string;
-  // BD usa requester_disciplina; requester_dept es alias para compatibilidad de exportación
   requester_disciplina?: string;
-  /** @deprecated usar requester_disciplina — se mantiene para compatibilidad de export */
+  /** @deprecated Usar requester_disciplina. Se mantiene para compatibilidad de exportación. */
   requester_dept?: string;
   days_requested: number;
   motive?: string;
   status: RequestStatus;
 
-  // Propiedades para Combos (Bundles) — calculadas en cliente, no en BD
   bundle_group_id?: string;
   is_bundle?: boolean;
   bundle_items?: number;
@@ -121,7 +112,6 @@ export interface Request {
   returned_at?: string;
   checkin_at?: string;
 
-  // Nombres exactos de la BD
   rejection_feedback?: string;
   feedback_log?: string;
   return_condition?: string;
@@ -132,13 +122,11 @@ export interface Request {
   is_damaged?: boolean;
   damage_notes?: string;
 
-  // Joined relations (via Supabase select con alias)
   assets?: Asset;
   users?: User;
   institutions?: Institution;
 }
 
-// ─── MAINTENANCE LOG ─────────────────────────────────────────
 export interface MaintenanceLog {
   id: number;
   asset_id: string;
@@ -152,7 +140,6 @@ export interface MaintenanceLog {
   users?: User;
 }
 
-// ─── NOTIFICATION ────────────────────────────────────────────
 export interface Notification {
   id: string;
   user_id: string;
@@ -166,12 +153,10 @@ export interface Notification {
   created_at: string;
 }
 
-// ─── AUDIT LOG ───────────────────────────────────────────────
 export interface AuditLog {
   id: string;
   timestamp: string;
   action: AuditAction;
-  // actor_id es uuid nullable en BD
   actor_id: string | null;
   actor_name?: string;
   target_id: string;

@@ -1,5 +1,4 @@
-// src/lib/geminiUtils.ts
-// Utilidades compartidas para llamadas a Gemini AI en Zyklus Halo
+/** Utilidades para llamadas a la API de Gemini AI. */
 
 const GEMINI_MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
@@ -13,10 +12,7 @@ interface GeminiResponse {
   error?: { message: string; code?: number };
 }
 
-/**
- * Llama a Gemini 2.5 Flash y retorna el texto generado.
- * Lanza Error con mensaje descriptivo si algo falla.
- */
+/** Llama a Gemini y retorna el texto generado. Lanza Error si falla. */
 export async function callGemini(
   prompt: string,
   options: { temperature?: number; maxOutputTokens?: number } = {}
@@ -31,7 +27,7 @@ export async function callGemini(
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: options.temperature ?? 0.3,
-        maxOutputTokens: options.maxOutputTokens ?? 1500,
+        maxOutputTokens: options.maxOutputTokens ?? 2048,
       },
     }),
   });
@@ -52,9 +48,8 @@ export async function callGemini(
   return text;
 }
 
-/**
- * Genera un reporte predictivo de demanda de activos.
- * @param requestedAssets - array de nombres de activos en préstamos recientes
+/** Genera un reporte predictivo de demanda de activos.
+ * @param requestedAssets - Nombres de activos en préstamos recientes
  * @param audience - 'administrador' | 'auditor'
  */
 export async function generatePredictiveReport(
@@ -65,7 +60,6 @@ export async function generatePredictiveReport(
     return 'No hay suficiente historial de préstamos para generar un análisis predictivo.';
   }
 
-  // Contar frecuencia para dar contexto real a la IA
   const freq: Record<string, number> = {};
   for (const name of requestedAssets) {
     freq[name] = (freq[name] || 0) + 1;
@@ -76,17 +70,13 @@ export async function generatePredictiveReport(
     .map(([name, count]) => `${name} (${count} préstamos)`)
     .join(', ');
 
-  const prompt = `Eres Zykla AI, experto en gestión y control patrimonial de activos tecnológicos.
+  const prompt = `Eres Zykla AI, experto en gestión patrimonial de activos tecnológicos.
 
-Analiza el siguiente historial real de activos prestados con su frecuencia:
-${topItems}
+Historial de activos prestados (frecuencia): ${topItems}
 
-Genera un reporte predictivo profesional de máximo 3 párrafos cortos dirigido al ${audience}, que incluya:
-1. Los activos con mayor demanda y por qué son críticos.
-2. Qué tipo de activos se deben adquirir con mayor prioridad.
-3. Una recomendación concreta de gestión de inventario.
+Genera un reporte predictivo BREVE dirigido al ${audience}. Máximo 3 párrafos cortos (2-4 oraciones cada uno). Sé conciso; evita rodeos.
+Incluye: (1) Activos con mayor demanda y por qué son críticos. (2) Qué tipo de activos priorizar para adquisición. (3) Una recomendación concreta de inventario.
+Tono analítico y ejecutivo. Solo español. Cierra el último párrafo con punto final.`;
 
-Usa un tono analítico y ejecutivo. Responde solo en español.`;
-
-  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 1500 });
+  return callGemini(prompt, { temperature: 0.4, maxOutputTokens: 2048 });
 }

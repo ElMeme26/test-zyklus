@@ -1,17 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
-import type { Institution } from '../../types'; // Import type
+import React, { useState } from 'react';
+import type { Institution } from '../../types';
+import { useData } from '../../context/DataContext';
 import { Building, Plus, Trash2, Edit2, Phone, Mail, MapPin, ExternalLink, X } from 'lucide-react';
-import { InstitutionDetail } from './InstitutionDetail'; 
+import { InstitutionDetail } from './InstitutionDetail';
 
+/** Gestión de instituciones externas: listado, alta, edición y eliminación. */
 export const InstitutionsManager = () => {
-  const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { institutions, isLoading: loading, addInstitution, updateInstitution, deleteInstitution } = useData();
   const [showForm, setShowForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [selectedInst, setSelectedInst] = useState<Institution | null>(null);
-  
-  // ✨ CORRECCIÓN: Definir explícitamente el tipo del estado o asegurar que nunca sea undefined en los inputs
+
   const [formData, setFormData] = useState({
     id: 0,
     name: '',
@@ -21,39 +20,21 @@ export const InstitutionsManager = () => {
     contact_phone: ''
   });
 
-  const fetchInstitutions = async () => {
-    setLoading(true);
-    const { data, error } = await supabase.from('institutions').select('*').order('id', { ascending: false });
-    if (!error && data) setInstitutions(data as Institution[]);
-    setLoading(false);
-  };
-
-  useEffect(() => { 
-    fetchInstitutions(); 
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isEditing) {
-      // Actualizar
       const { id, ...updateData } = formData;
-      const { error } = await supabase.from('institutions').update(updateData).eq('id', id);
-      if (error) alert('Error al actualizar: ' + error.message);
+      await updateInstitution(id, updateData);
     } else {
-      // Crear Nuevo
       const { id, ...insertData } = formData;
-      const { error } = await supabase.from('institutions').insert([insertData]);
-      if (error) alert('Error al crear: ' + error.message);
+      await addInstitution(insertData);
     }
-    
     setShowForm(false);
     setIsEditing(false);
     setFormData({ id: 0, name: '', contact_name: '', contact_email: '', address: '', contact_phone: '' });
-    fetchInstitutions();
   };
 
   const handleEdit = (inst: Institution) => {
-    // ✨ CORRECCIÓN: Forzamos un string vacío ('') como fallback si el campo viene undefined de Supabase
     setFormData({
       id: inst.id,
       name: inst.name || '',
@@ -68,8 +49,7 @@ export const InstitutionsManager = () => {
 
   const handleDelete = async (id: number) => {
     if (!confirm('¿Eliminar institución permanentemente?')) return;
-    await supabase.from('institutions').delete().eq('id', id);
-    fetchInstitutions();
+    await deleteInstitution(id);
   };
 
   if (selectedInst) {

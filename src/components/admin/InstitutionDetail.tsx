@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { supabase } from '../../supabaseClient';
-import type { Institution, Request } from '../../types'; 
+import React from 'react';
+import { useData } from '../../context/DataContext';
+import type { Institution, Request } from '../../types';
 import { ArrowLeft, Clock, CheckCircle } from 'lucide-react';
 
 interface Props {
@@ -8,26 +8,12 @@ interface Props {
   onBack: () => void;
 }
 
+/** Detalle de una institución externa con datos de contacto. */
 export const InstitutionDetail = ({ institution, onBack }: Props) => {
-  // ... resto del componente igual ...
-  // Solo asegúrate de que el resto del código coincida con lo que tenías
-  const [loans, setLoans] = useState<Request[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const fetchLoans = async () => {
-      const { data } = await supabase
-        .from('requests')
-        .select(`*, assets(*), users(*)`)
-        .eq('institution_id', institution.id)
-        .order('created_at', { ascending: false });
-
-      if (data) setLoans(data as Request[]);
-      setLoading(false);
-    };
-
-    fetchLoans();
-  }, [institution.id]);
+  const { requests } = useData();
+  const loans = requests
+    .filter((r) => r.institution_id === institution.id)
+    .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
   return (
     <div className="space-y-6 animate-in fade-in">
@@ -57,8 +43,7 @@ export const InstitutionDetail = ({ institution, onBack }: Props) => {
         Historial de Préstamos
       </h3>
       
-      {loading ? <p className="text-slate-500">Cargando...</p> : (
-        <div className="space-y-3">
+      <div className="space-y-3">
           {loans.map(loan => (
             <div key={loan.id} className="bg-slate-900 p-4 rounded border border-slate-800 flex flex-col md:flex-row justify-between items-center gap-4 hover:border-slate-600 transition-colors">
                <div className="flex gap-4 items-center w-full md:w-auto">
@@ -90,7 +75,6 @@ export const InstitutionDetail = ({ institution, onBack }: Props) => {
             </div>
           )}
         </div>
-      )}
     </div>
   );
 };

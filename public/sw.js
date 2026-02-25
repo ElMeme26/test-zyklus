@@ -1,7 +1,7 @@
 /* public/sw.js — Zyklus Service Worker */
 /* Maneja notificaciones push nativas en Android/iOS (PWA) */
 
-const CACHE_NAME = 'zyklus-v3'; // Es importante cambiar el nombre para invalidar cache en nuevas versiones 
+const CACHE_NAME = 'zyklus-v5'; // Cambiar el nombre para invalidar cache en nuevas versiones
 
 self.addEventListener('install', () => self.skipWaiting());
 self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));

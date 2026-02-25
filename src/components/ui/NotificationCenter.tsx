@@ -1,4 +1,4 @@
-// src/components/ui/NotificationCenter.tsx
+/** Centro de notificaciones: panel móvil (drawer) y escritorio (dropdown). */
 import React, { useState, useRef, useEffect } from 'react';
 import ReactDOM from 'react-dom';
 import { Bell, BellOff, X, CheckCheck, Info, AlertTriangle, AlertCircle, Zap } from 'lucide-react';
@@ -16,9 +16,20 @@ const typeConfig: Record<string, { icon: React.ReactNode; color: string; bg: str
   CRITICAL: { icon: <Zap size={14} />,           color: 'text-red-400',    bg: 'bg-red-500/10 border-red-500/30' },
 };
 
+/** Títulos de notificaciones que el auditor sí puede ver (vencimientos). */
 const AUDITOR_ALLOWED_TITLES = [
-  '🚨 Préstamo Vencido',
-  '🚨 Incumplimiento — 3 días',
+  'Préstamo Vencido',
+  'Incumplimiento —3 dias',
+];
+
+/** Títulos que el administrador patrimonial no debe ver (solicitudes, retiros, devoluciones sin daño). */
+const ADMIN_HIDDEN_TITLES = [
+  'Nueva Solicitud',
+  'Nueva Solicitud — Carrito',
+  'Nueva Solicitud — Kit',
+  'Activo Retirado',
+  'Equipo Retirado',
+  'Devolución Registrada',
 ];
 
 function NotifItem({ notif, onRead }: { notif: Notification; onRead: (id: string) => void }) {
@@ -53,9 +64,7 @@ function NotifItem({ notif, onRead }: { notif: Notification; onRead: (id: string
   );
 }
 
-// ── MOBILE DRAWER (rendered via Portal to document.body) ──────────────────────
-// Esto asegura que el drawer siempre se fije al viewport, sin importar
-// qué transforms o will-change tenga el header de la app.
+/** Drawer móvil renderizado en document.body para que siempre se fije al viewport. */
 function MobileDrawer({
   open,
   onClose,
@@ -84,10 +93,8 @@ function MobileDrawer({
   const [visible, setVisible] = useState(false);
   const startYRef = useRef<number>(0);
 
-  // Animate in/out
   useEffect(() => {
     if (open) {
-      // Small delay to let the DOM render before triggering CSS transition
       requestAnimationFrame(() => setVisible(true));
     } else {
       setVisible(false);
@@ -95,7 +102,6 @@ function MobileDrawer({
     }
   }, [open]);
 
-  // Lock body scroll
   useEffect(() => {
     if (open) {
       document.body.style.overflow = 'hidden';
@@ -221,7 +227,7 @@ function MobileDrawer({
                 {role === 'AUDITOR' ? 'Sin vencimientos activos' : 'Sin notificaciones'}
               </p>
               <p className="text-slate-600 text-xs mt-1">
-                {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados 👁' : 'Estás al día 👍'}
+                {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados' : 'Estás al día'}
               </p>
             </div>
           ) : (
@@ -239,7 +245,6 @@ function MobileDrawer({
   );
 }
 
-// ── MAIN COMPONENT ────────────────────────────────────────────────────────────
 export function NotificationCenter() {
   const { notifications, markNotificationRead, markAllRead } = useData();
   const { user } = useAuth();
@@ -250,14 +255,12 @@ export function NotificationCenter() {
 
   useEffect(() => {
     if ('Notification' in window) setPushEnabled(Notification.permission === 'granted');
-    // Detect mobile
     const check = () => setIsMobile(window.innerWidth < 640);
     check();
     window.addEventListener('resize', check);
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  // Close desktop dropdown on outside click
   useEffect(() => {
     if (!open || isMobile) return;
     const handler = (e: MouseEvent) => {
@@ -278,7 +281,13 @@ export function NotificationCenter() {
     if (role === 'AUDITOR') {
       return notifications.filter(n =>
         n.user_id === userId &&
-        AUDITOR_ALLOWED_TITLES.some(t => n.title.includes(t) || n.title === t)
+        AUDITOR_ALLOWED_TITLES.some(t => n.title.includes(t))
+      );
+    }
+    if (role === 'ADMIN_PATRIMONIAL') {
+      return notifications.filter(n =>
+        n.user_id === userId &&
+        !ADMIN_HIDDEN_TITLES.some(t => n.title === t || n.title.startsWith(t))
       );
     }
     return notifications.filter(n => n.user_id === userId);
@@ -404,7 +413,7 @@ export function NotificationCenter() {
                   {role === 'AUDITOR' ? 'Sin vencimientos activos' : 'Sin notificaciones'}
                 </p>
                 <p className="text-slate-600 text-xs mt-1">
-                  {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados 👁' : 'Estás al día 👍'}
+                  {role === 'AUDITOR' ? 'Solo alertas de préstamos atrasados' : 'Estás al día'}
                 </p>
               </div>
             ) : (

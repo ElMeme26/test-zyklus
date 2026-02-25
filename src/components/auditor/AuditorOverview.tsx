@@ -1,12 +1,7 @@
-// src/components/auditor/AuditorOverview.tsx
-import React, { useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Card, Button } from '../ui/core';
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend
-} from 'recharts';
 import {
   TrendingUp, AlertCircle, CheckCircle2, LogOut,
   Search, ShieldCheck, Wrench, Package, BrainCircuit, Loader2,
@@ -14,266 +9,45 @@ import {
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { NotificationCenter } from '../ui/NotificationCenter';
-import { format, subDays, isAfter, differenceInDays } from 'date-fns';
+import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { ThemeToggle } from '../ui/ThemeToggle';
 import { ExportButtons } from './ExportButtons';
+import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { toast } from 'sonner';
 import { RefreshButton } from '../ui/RefreshButton';
 import { generatePredictiveReport as generateReport } from '../../lib/geminiUtils';
+import {
+  AuditorKPICard,
+  DashboardCharts,
+  AuditorOverdueList,
+  actionBadge,
+} from './overview';
 
-const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899'];
-
-function KPICard({ label, value, color, icon, sublabel }: {
-  label: string; value: string | number; color: string; icon: React.ReactNode; sublabel?: string;
-}) {
-  return (
-    <Card className={`border-l-4 ${color}`}>
-      <div className="flex justify-between items-start">
-        <div>
-          <div className="text-slate-500 text-[10px] font-bold uppercase tracking-wider mb-2">{label}</div>
-          <div className="text-3xl font-black text-white">{value}</div>
-          {sublabel && <div className="text-xs text-slate-500 mt-1">{sublabel}</div>}
-        </div>
-        <div className="opacity-20 text-4xl">{icon}</div>
-      </div>
-    </Card>
-  );
-}
-
-export function DashboardCharts() {
-  const { assets, requests } = useData();
-
-  const top8Assets = useMemo(() => {
-    return Object.entries(
-      requests.reduce((acc, req) => {
-        const name = req.assets?.name ?? 'Desconocido';
-        const shortName = name.split(' ').slice(0, 2).join(' '); 
-        acc[shortName] = (acc[shortName] ?? 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    )
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-  }, [requests]);
-
-  const disciplinas = useMemo(() => {
-    return Array.from(new Set(requests.map(r => r.requester_disciplina).filter((d): d is string => Boolean(d))));
-  }, [requests]);
-
-  const [selectedDisciplina, setSelectedDisciplina] = useState(disciplinas[0] ?? '');
-
-  const disciplinaData = useMemo(() => {
-    return Object.entries(
-      requests
-        .filter(r => r.requester_disciplina === selectedDisciplina)
-        .reduce((acc, req) => {
-           const name = req.assets?.name ?? 'Desconocido';
-           const shortName = name.split(' ').slice(0, 2).join(' ');
-           acc[shortName] = (acc[shortName] ?? 0) + 1;
-           return acc;
-        }, {} as Record<string, number>)
-    )
-    .map(([name, count]) => ({ name, count }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 5); 
-  }, [requests, selectedDisciplina]);
-
-  const categoryData = useMemo(() =>
-    Object.entries(
-      assets.reduce((acc: Record<string, number>, a) => {
-        const cat = a.category ?? 'Sin Categoría';
-        acc[cat] = (acc[cat] ?? 0) + 1;
-        return acc;
-      }, {})
-    ).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6),
-    [assets]
-  );
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="text-white font-bold mb-4 text-sm">Top 8 Activos Más Solicitados</h3>
-          <div className="h-72">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart layout="vertical" data={top8Assets} margin={{ left: 20 }}>
-                <XAxis type="number" hide />
-                <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
-                <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff'}} cursor={{fill: '#1e293b', opacity: 0.4}}/>
-                <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} barSize={20}>
-                  {top8Assets.map((_, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card>
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-white font-bold text-sm">Top por Disciplina</h3>
-            <select 
-              className="bg-slate-950 border border-slate-700 text-xs text-white rounded p-1.5 focus:outline-none focus:border-primary max-w-[120px]"
-              value={selectedDisciplina}
-              onChange={e => setSelectedDisciplina(e.target.value)}
-            >
-              {disciplinas.length > 0 ? (
-                disciplinas.map(d => <option key={d} value={d}>{d}</option>)
-              ) : (
-                <option value="">Sin datos</option>
-              )}
-            </select>
-          </div>
-          <div className="h-72">
-            {disciplinaData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart layout="vertical" data={disciplinaData} margin={{ left: 20 }}>
-                  <XAxis type="number" hide />
-                  <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11}} axisLine={false} tickLine={false}/>
-                  <Tooltip contentStyle={{backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff'}} cursor={{fill: '#1e293b', opacity: 0.4}}/>
-                  <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
-                Sin solicitudes para esta disciplina
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <h3 className="text-white font-bold mb-4 text-sm">Distribución por Categoría</h3>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
-                  {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
-                </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
-                <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} formatter={v => <span className="text-slate-300">{v}</span>} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-const actionBadge: Record<string, { label: string; style: string }> = {
-  CREATE:      { label: 'Alta',          style: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' },
-  APPROVE:     { label: 'Aprobado',      style: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20' },
-  REJECT:      { label: 'Rechazado',     style: 'text-rose-400 bg-rose-500/10 border-rose-500/20' },
-  CHECKOUT:    { label: 'Prestado',      style: 'text-blue-400 bg-blue-500/10 border-blue-500/20' },
-  CHECKIN:     { label: 'Devuelto',      style: 'text-purple-400 bg-purple-500/10 border-purple-500/20' },
-  MAINTENANCE: { label: 'Mantenimiento', style: 'text-amber-400 bg-amber-500/10 border-amber-500/20' },
-  UPDATE:      { label: 'Actualización', style: 'text-slate-400 bg-slate-500/10 border-slate-500/20' },
-  ALERT:       { label: 'Alerta',        style: 'text-orange-400 bg-orange-500/10 border-orange-500/20' },
-};
-
-// ─── OVERDUE RANKING LIST ───────────────────────────────────
-function OverdueList({ requests }: { requests: import('../../types').Request[] }) {
-  const now = new Date();
-  const overdueList = requests
-    .filter(r => r.status === 'OVERDUE' && r.expected_return_date)
-    .map(r => ({
-      ...r,
-      daysLate: differenceInDays(now, new Date(r.expected_return_date!)),
-    }))
-    .sort((a, b) => b.daysLate - a.daysLate);
-
-  if (overdueList.length === 0) {
-    return (
-      <div className="text-center py-8 border border-dashed border-slate-800 rounded-xl text-slate-500">
-        <CheckCircle2 size={28} className="mx-auto mb-2 text-emerald-500/40" />
-        <p className="text-sm">Sin préstamos vencidos 🎉</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto w-full">
-      <table className="w-full text-left text-xs text-slate-400 min-w-[580px]">
-        <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
-          <tr>
-            <th className="p-3 w-10">#</th>
-            <th className="p-3">Activo</th>
-            <th className="p-3">Solicitante</th>
-            <th className="p-3">Disciplina</th>
-            <th className="p-3 text-center">Días Vencido</th>
-            <th className="p-3">Debió Retornar</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-slate-800/50">
-          {overdueList.map((r, idx) => {
-            const urgency =
-              r.daysLate >= 7 ? 'text-red-400 bg-red-500/10 border-red-500/20' :
-              r.daysLate >= 3 ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' :
-                                'text-amber-400 bg-amber-500/10 border-amber-500/20';
-
-            return (
-              <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
-                <td className="p-3 font-black text-slate-600">
-                  {idx === 0 && <Flame size={14} className="text-red-400 inline" />}
-                  {idx > 0 && <span className="text-slate-600 text-[10px]">#{idx + 1}</span>}
-                </td>
-                <td className="p-3 font-medium text-white">
-                  {r.assets?.name ?? `Activo #${r.asset_id}`}
-                  <span className="text-slate-500 text-[10px] font-mono ml-2">{r.assets?.tag}</span>
-                </td>
-                <td className="p-3">{r.requester_name}</td>
-                <td className="p-3 text-slate-500">{r.requester_disciplina ?? '—'}</td>
-                <td className="p-3 text-center">
-                  <span className={`text-[11px] font-black px-2.5 py-1 rounded-full border ${urgency}`}>
-                    {r.daysLate}d
-                  </span>
-                </td>
-                <td className="p-3 font-mono text-slate-500">
-                  {r.expected_return_date
-                    ? format(new Date(r.expected_return_date), 'dd/MM/yy', { locale: es })
-                    : '—'}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
+/** Panel del auditor: KPIs, gráficas, préstamos vencidos y exportación. */
 export function AuditorOverview() {
-  const { assets, requests, auditLogs, maintenanceLogs } = useData();
+  const { assets, requests, auditLogs, maintenanceLogs, stats, isLoading } = useData();
   const { logout } = useAuth();
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
-  
   const [aiReport, setAiReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
   const kpis = useMemo(() => {
-    const total = assets.length;
-    const disponible = assets.filter(a => a.status === 'Disponible').length;
-    const mantenimiento = assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
+    const total = stats?.assetCounts?.total ?? assets.length;
+    const disponible = stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length;
+    const mantenimiento = stats?.assetCounts?.mantenimiento ?? assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length;
     const disponibilidad = total > 0 ? Math.round((disponible / total) * 100) : 0;
-    const overdueLoans = requests.filter(r => r.status === 'OVERDUE').length;
-
+    const overdueLoans = stats?.requestCounts?.overdue ?? requests.filter(r => r.status === 'OVERDUE').length;
     return { total, disponible, mantenimiento, disponibilidad, overdueLoans };
-  }, [assets, requests]);
+  }, [stats, assets, requests]);
 
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
-      l.action !== 'CREATE' && 
+      l.action !== 'CREATE' &&
       (filterAction === 'ALL' || l.action === filterAction) &&
       (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
-    ), [auditLogs, filterAction, searchLog]
-  );
+    ), [auditLogs, filterAction, searchLog]);
 
   const generatePredictiveReport = async () => {
     setIsGenerating(true);
@@ -292,6 +66,13 @@ export function AuditorOverview() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background font-sans">
+        <DataLoadingScreen message="Cargando panel de auditoría..." />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background font-sans pb-20">
@@ -320,15 +101,13 @@ export function AuditorOverview() {
 
       <main className="p-6 space-y-8 max-w-7xl mx-auto">
 
-        {/* KPIs */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <KPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
-          <KPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
-          <KPICard label="Vencidos" value={kpis.overdueLoans} color="border-l-rose-500" icon={<AlertCircle />} sublabel="Requieren atención" />
-          <KPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
+          <AuditorKPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
+          <AuditorKPICard label="Disponibilidad" value={`${kpis.disponibilidad}%`} color="border-l-emerald-500" icon={<CheckCircle2 />} sublabel={`${kpis.disponible} disponibles`} />
+          <AuditorKPICard label="Vencidos" value={kpis.overdueLoans} color="border-l-rose-500" icon={<AlertCircle />} sublabel="Requieren atención" />
+          <AuditorKPICard label="Mantenimiento" value={kpis.mantenimiento} color="border-l-amber-500" icon={<Wrench />} sublabel="Fuera de servicio" />
         </div>
 
-        {/* 🧠 IA PREDICTIVA */}
         <Card className="border-purple-500/30 bg-gradient-to-br from-slate-900 to-purple-900/10 shadow-[0_0_25px_rgba(147,51,234,0.1)]">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
             <h3 className="text-white font-bold flex items-center gap-2">
@@ -340,7 +119,7 @@ export function AuditorOverview() {
           </div>
           {aiReport ? (
             <div className="bg-slate-950 p-4 rounded-xl border border-purple-500/20">
-               <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-purple-500 pl-4">{aiReport}</p>
+              <p className="text-sm text-slate-300 leading-relaxed border-l-2 border-purple-500 pl-4">{aiReport}</p>
             </div>
           ) : (
             <p className="text-sm text-slate-500 italic">Haz clic en el botón para que Zykla analice el historial de la base de datos y sugiera adquisiciones y tendencias.</p>
@@ -349,7 +128,6 @@ export function AuditorOverview() {
 
         <DashboardCharts />
 
-        {/* 🚨 PRÉSTAMOS VENCIDOS — RANKING POR TIEMPO */}
         <div>
           <h3 className="text-white font-bold flex items-center gap-2 mb-4">
             <Flame className="text-rose-400" size={18} />
@@ -361,10 +139,9 @@ export function AuditorOverview() {
             )}
             <span className="text-slate-500 text-xs font-normal ml-1">— Ordenados por mayor tiempo sin devolver</span>
           </h3>
-          <OverdueList requests={requests} />
+          <AuditorOverdueList requests={requests} />
         </div>
 
-        {/* 📦 ARTÍCULOS ACTUALMENTE PRESTADOS */}
         <div>
           <h3 className="text-white font-bold flex items-center gap-2 mb-4">
             <Package className="text-emerald-400" size={18} /> Artículos Actualmente Prestados
@@ -392,7 +169,6 @@ export function AuditorOverview() {
           </div>
         </div>
 
-        {/* 🛡️ TRAZABILIDAD TOTAL */}
         <div>
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mb-4 mt-8">
             <h3 className="text-white font-bold flex items-center gap-2">

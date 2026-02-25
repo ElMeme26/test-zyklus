@@ -1,7 +1,8 @@
-// src/components/auditor/ExportButtons.tsx
+/** Panel de exportación del auditor: genera CSV/PDF/Excel de solicitudes, inventario y auditoría. */
 import React, { useState } from 'react';
 import { Button } from '../ui/core';
 import { Download, FileText, FileSpreadsheet, Loader2, ChevronDown, Users, Wrench } from 'lucide-react';
+import { getAssetsPaginated } from '../../api/assets';
 import { 
   exportRequestsToCSV, 
   exportRequestsToPDF, 
@@ -34,38 +35,58 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
     | 'by_user_excel'
     | 'maintenance_excel';
 
+  /** Carga todos los activos paginando el backend cuando no se pasaron por props. */
+  const fetchAllAssets = async (): Promise<Asset[]> => {
+    if (assets.length > 0) return assets;
+    const all: Asset[] = [];
+    let page = 1;
+    let hasMore = true;
+    while (hasMore) {
+      const res = await getAssetsPaginated(page, 2000, { export: true });
+      all.push(...res.assets);
+      hasMore = res.assets.length === 2000 && all.length < res.total;
+      page++;
+    }
+    return all;
+  };
+
+  /** Orquesta cada tipo de exportación y muestra feedback visual. */
   const handleExport = async (type: ExportType) => {
     setIsExporting(true);
     try {
       switch (type) {
         case 'requests_csv':
           exportRequestsToCSV(requests);
-          toast.success('✅ CSV generado correctamente');
+          toast.success('CSV generado correctamente');
           break;
         case 'requests_pdf':
           exportRequestsToPDF(requests);
-          toast.success('✅ PDF generado correctamente');
+          toast.success('PDF generado correctamente');
           break;
         case 'requests_excel':
           exportRequestsToExcel(requests);
-          toast.success('✅ Excel generado correctamente');
+          toast.success('Excel generado correctamente');
           break;
-        case 'inventory_pdf':
-          exportInventoryToPDF(assets);
-          toast.success('✅ Inventario PDF generado');
+        case 'inventory_pdf': {
+          const assetsToExport = await fetchAllAssets();
+          exportInventoryToPDF(assetsToExport);
+          toast.success('Inventario PDF generado');
           break;
+        }
         case 'audit_excel':
           exportAuditLogsToExcel(auditLogs);
-          toast.success('✅ Audit Trail exportado');
+          toast.success('Audit Trail exportado');
           break;
         case 'by_user_excel':
           exportRequestsByUser(requests);
-          toast.success('✅ Reporte por usuario generado');
+          toast.success('Reporte por usuario generado');
           break;
-        case 'maintenance_excel':
-          exportMaintenanceReport(maintenanceLogs, assets);
-          toast.success('✅ Reporte de mantenimiento generado');
+        case 'maintenance_excel': {
+          const assetsToExport = await fetchAllAssets();
+          exportMaintenanceReport(maintenanceLogs, assetsToExport);
+          toast.success('Reporte de mantenimiento generado');
           break;
+        }
       }
     } catch (error) {
       console.error('Export error:', error);
@@ -191,7 +212,7 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
                   <FileText size={16} className="text-cyan-400" />
                   <div>
                     <p className="font-medium text-white">Inventario PDF</p>
-                    <p className="text-[10px] text-slate-500">{assets.length} activos</p>
+                    <p className="text-[10px] text-slate-500">{assets.length > 0 ? `${assets.length} activos` : 'Cargará al exportar'}</p>
                   </div>
                 </button>
 
