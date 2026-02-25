@@ -65,6 +65,8 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
     generateAll();
   }, [assets]);
 
+  const readyToPrint = assets.length > 0 && Object.keys(qrImages).length === assets.length;
+
   const handlePrint = () => {
     const win = window.open('', '_blank', 'width=900,height=700');
     if (!win) return;
@@ -113,9 +115,14 @@ export function AssetQRPrint({ assets, onClose }: AssetQRPrintProps) {
           <div className="flex-1 overflow-auto p-4 bg-slate-100 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4">
              {assets.map(asset => <QRCard key={asset.id} asset={asset} />)}
           </div>
-          <div className="p-4 border-t border-slate-800 flex justify-end gap-2">
+          <div className="p-4 border-t border-slate-800 flex justify-end items-center gap-2">
+            {!readyToPrint && assets.length > 0 && (
+              <span className="text-xs text-slate-500 mr-2">Generando QRs...</span>
+            )}
             <Button onClick={onClose} variant="secondary">Cerrar</Button>
-            <Button onClick={handlePrint}>Imprimir PNGs</Button>
+            <Button onClick={handlePrint} disabled={!readyToPrint}>
+              {readyToPrint ? 'Imprimir / Guardar como PDF' : 'Generando QRs...'}
+            </Button>
           </div>
        </Card>
     </div>
