@@ -136,12 +136,14 @@ export function AdminDashboard() {
         <AssetQRPrint assets={qrPrintAssets} onClose={() => setShowQRPrint(false)} />
       )}
 
-      <header className="sticky top-0 z-30 flex justify-between items-center px-4 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-white flex items-center gap-2">
+      <header className="sticky top-0 z-30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-background/80 backdrop-blur">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
             <Database className="text-primary" size={20} /> Panel de Administración
           </h1>
-          <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
+          <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Gestión total del inventario y solicitudes</p>
+        </div>
+        <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
             {[
               { id: 'inventory', icon: <LayoutGrid size={13} />, label: 'Inventario' },
               { id: 'analytics', icon: <PieChart size={13} />, label: 'Analíticas' },
@@ -158,8 +160,7 @@ export function AdminDashboard() {
               </button>
             ))}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-end items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={() => setUseCamera(true)} className="border-primary/30 text-primary hover:bg-primary/10 text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
