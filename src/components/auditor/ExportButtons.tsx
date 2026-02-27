@@ -118,9 +118,9 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
       {isOpen && (
         <>
           <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
-          <div className="absolute right-0 top-full mt-2 w-72 z-50 animate-in fade-in slide-in-from-top-2">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-hidden">
-              <div className="px-3 py-2 border-b border-slate-800">
+          <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-[280px] sm:max-w-none sm:w-72 z-50 animate-in fade-in slide-in-from-top-2">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl overflow-y-auto max-h-[75vh] sm:max-h-none overflow-x-hidden">
+              <div className="px-3 py-2 border-b border-slate-800 shrink-0">
                 <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
                   Reportes Disponibles
                 </p>
