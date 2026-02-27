@@ -2,38 +2,194 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── DARK MODE (default) ─────────────────────────────────── */
 @layer base {
+  :root {
+    --bg: #020617;
+    --surface: #0f172a;
+    --text: #f8fafc;
+    --text-secondary: #64748b;
+    --border: rgba(255,255,255,0.06);
+  }
+
+  /* Light mode override - Contraste Mejorado */
+  html.light {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --text: #0f172a;
+    --text-secondary: #475569;
+    --border: rgba(0,0,0,0.1);
+  }
+
   body {
-    @apply bg-slate-950 text-slate-50 antialiased selection:bg-cyan-500/30;
+    background-color: var(--bg);
+    color: var(--text);
+    @apply antialiased selection:bg-primary/30;
+    transition: background-color 0.3s ease, color 0.3s ease;
   }
 }
 
+/* ─── Tailwind classes ───────────────────────────── */
 @layer components {
-  /* Efecto Cristal para las tarjetas */
+
   .glass {
-    @apply bg-slate-900/60 backdrop-blur-xl border border-white/10 shadow-2xl;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    @apply backdrop-blur-xl shadow-2xl;
+    transition: background 0.3s ease, border-color 0.3s ease;
   }
 
-  /* Botón Neón */
+  html.light .glass {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.05);
+  }
+
   .btn-neon {
-    @apply relative overflow-hidden bg-cyan-500 text-slate-950 font-bold uppercase tracking-wider
+    @apply relative overflow-hidden bg-primary text-slate-950 font-bold uppercase tracking-wider
            transition-all duration-300 ease-out
            hover:bg-cyan-400 hover:scale-[1.02] active:scale-[0.98]
            shadow-[0_0_20px_rgba(6,182,212,0.4)]
            hover:shadow-[0_0_40px_rgba(6,182,212,0.6)];
   }
 
-  /* Texto Brillante */
+  html.light .btn-neon {
+    @apply shadow-[0_4px_15px_rgba(6,182,212,0.3)] hover:shadow-[0_8px_25px_rgba(6,182,212,0.5)];
+  }
+
   .text-glow {
-    @apply text-cyan-400 drop-shadow-[0_0_10px_rgba(34,211,238,0.5)];
+    @apply text-primary drop-shadow-[0_0_10px_rgba(34,211,238,0.5)];
+  }
+
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+  /* ── CORRECCIÓN EXCLUSIVA: LETRAS BLANCAS PARA ESTADOS CRÍTICOS ── */
+  
+  /* ESTADO: En mantenimiento / Requiere Mantenimiento (Calibración) */
+  html.light span.text-amber-400, 
+  html.light span.text-orange-400 {
+    color: #ffffff !important; /* Letras blancas exclusivas para la etiqueta */
   }
   
-  /* Ocultar barra de scroll pero permitir deslizar */
-  .scrollbar-hide::-webkit-scrollbar {
-      display: none;
+  html.light span.bg-amber-500\/10,
+  html.light span.bg-orange-500\/10 {
+    background-color: #d97706 !important; /* Fondo Amber 600 sólido para contraste */
+    border: 1px solid #b45309 !important;
   }
-  .scrollbar-hide {
-      -ms-overflow-style: none;
-      scrollbar-width: none;
+
+  /* ESTADO: Fuera de servicio / Dada de baja */
+  /* Al usar span.rounded aseguramos que los botones de QR/Editar (que son <button>) no se vean afectados */
+  html.light span.text-slate-400.rounded,
+  html.light span.text-slate-500.rounded {
+    color: #ffffff !important; 
+  }
+
+  html.light span.bg-slate-700\/50,
+  html.light span.bg-slate-700 {
+    background-color: #475569 !important; /* Fondo Slate 600 sólido para contraste */
+    border: 1px solid #1e293b !important;
+  }
+
+  /* ESTADO: Disponible (Se mantiene oscuro para visibilidad en fondo claro) */
+  html.light .text-emerald-400 {
+    color: #064e3b !important; /* Verde bosque muy oscuro */
+  }
+  
+  html.light .bg-emerald-500\/10 {
+    background-color: rgba(16, 185, 129, 0.2) !important;
+    border: 1px solid rgba(6, 78, 59, 0.3) !important;
+  }
+
+  /* ── Light mode patches (Contraste de Interfaz) ── */
+
+  html.light .bg-slate-900\/40 {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1) !important;
+  }
+
+  html.light .bg-slate-900\/50,
+  html.light .bg-slate-900\/80,
+  html.light .bg-slate-900\/95 {
+    background: rgba(255, 255, 255, 0.95) !important;
+    border-color: rgba(0,0,0,0.1) !important;
+    color: #0f172a !important; 
+  }
+
+  html.light .bg-slate-900 {
+    background: #ffffff !important;
+    border-color: rgba(0,0,0,0.15) !important;
+  }
+
+  /* Botones oscuros (Cámara/Escaner) en modo claro */
+  html.light .bg-slate-800 {
+    background: #e2e8f0 !important;
+    color: #0f172a !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+  html.light .hover\:bg-slate-700:hover {
+    background: #cbd5e1 !important;
+  }
+
+  html.light .login-bg { background: #ffffff !important; }
+  html.light .login-card {
+    background: #f8fafc !important;
+    border-color: #cbd5e1 !important;
+  }
+  html.light .login-text { color: #0f172a !important; }
+
+  html.light .bg-slate-950 { background: #f1f5f9 !important; }
+  html.light .border-slate-800 { border-color: rgba(0,0,0,0.1) !important; }
+  html.light .border-slate-700 { border-color: rgba(0,0,0,0.15) !important; }
+
+  html.light .text-slate-400 { color: #475569 !important; }
+  html.light .text-slate-500 { color: #64748b !important; }
+  html.light .text-slate-300 { color: #334155 !important; }
+
+  /* .keep-white: en modo claro el texto no pasa a oscuro */
+  html.light .text-white:not(.keep-white) {
+    color: #0f172a !important;
+  }
+
+  html.light .bg-background,
+  html.light .bg-background\/80 { background: #f8fafc !important; }
+
+  html.light header {
+    background: rgba(248, 250, 252, 0.9) !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+
+  html.light input,
+  html.light textarea,
+  html.light select {
+    background: #ffffff !important;
+    border-color: #cbd5e1 !important;
+    color: #0f172a !important;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  }
+
+  html.light input::placeholder,
+  html.light textarea::placeholder { color: #94a3b8 !important; }
+
+  html.light .hover\:bg-slate-800\/30:hover,
+  html.light tr.hover\:bg-slate-800\/30:hover {
+    background-color: #f1f5f9 !important;
+  }
+
+  html.light .divide-slate-800\/50 > * + * {
+    border-color: rgba(0,0,0,0.08) !important;
+  }
+
+   html.light .text-slate-200 {
+    color: #0f172a !important;
+  }
+
+  html.light .text-slate-500.italic {
+    color: #334155 !important;
+  }
+
+  /* Tabs Activos/Combos: contraste en modo claro */
+  html.light .flex.bg-slate-900.rounded-xl.p-1\.5.border.border-slate-800 button.bg-cyan-500 {
+    background-color: #0891b2 !important;
+    color: #ffffff !important;
   }
 }

@@ -1,19 +1,40 @@
 import { useAuth } from '../context/AuthContext';
-import { UserHome } from './user/UserHome';
-import { ManagerInbox } from './manager/ManagerInbox';
 import { AdminDashboard } from './admin/AdminDashboard';
-import { AuditorOverview } from './auditor/AuditorOverview'; // <--- Importamos lo nuevo
+import { ManagerInbox } from './manager/ManagerInbox';
+import { GuardScanner } from './guard/GuardScanner';
+import { AuditorOverview } from './auditor/AuditorOverview';
+import { UserHome } from './user/UserHome';
+import { LoginScreen } from './LoginScreen';
+import { Loader2 } from 'lucide-react';
 
-export function RoleRouter() {
-  const { user } = useAuth();
-  if (!user) return null;
+/** Enruta al dashboard según el rol del usuario tras el login. */
+export default function RoleRouter() {
+  const { user, isLoading } = useAuth();
 
-  // Mapeo exacto de tus carpetas a tus roles de negocio
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-primary">
+        <Loader2 className="animate-spin" size={48}/>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginScreen />;
+  }
+
   switch (user.role) {
-    case 'USUARIO': return <UserHome />;
-    case 'LIDER_EQUIPO': return <ManagerInbox />; // ManagerInbox es para el Líder
-    case 'ADMIN_PATRIMONIAL': return <AdminDashboard />; // AdminDashboard es para el Admin
-    case 'AUDITOR': return <AuditorOverview />;
-    default: return <div className="p-10 text-white">Rol no autorizado</div>;
+    case 'ADMIN_PATRIMONIAL':
+      return <AdminDashboard />;
+    case 'LIDER_EQUIPO':
+      return <ManagerInbox />;
+    case 'GUARDIA':
+      return <GuardScanner />;
+    case 'AUDITOR':
+      return <AuditorOverview />;
+    case 'USUARIO':
+      return <UserHome />;
+    default:
+      return <div className="text-white p-10 text-center">Rol no reconocido. Contacte a soporte.</div>;
   }
 }

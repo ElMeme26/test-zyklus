@@ -1,13 +1,17 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { supabase } from '../supabaseClient';
-import type { User } from '../types'; 
+import * as api from '../api/auth';
+import type { User } from '../types';
 import { toast } from 'sonner';
 
+/** Contexto de autenticación: usuario actual, login, logout y estado de carga. */
 interface AuthContextType {
   user: User | null;
-  login: (email: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isLoading: boolean;
+  signIn: (email: string, password: string) => Promise<void>;
+  signOut: () => void;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -18,31 +22,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   useEffect(() => {
     const storedUser = localStorage.getItem('zf_user');
-    if (storedUser) setUser(JSON.parse(storedUser));
+    if (storedUser) {
+      setUser(JSON.parse(storedUser));
+    }
   }, []);
 
-  const login = async (email: string) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email)
-        .single();
-
-      if (error || !data) {
-        toast.error("Usuario no encontrado. Prueba con: alex.user@zf.com");
-        return;
-      }
-
-      const userData = data as User;
+      const { user: userData, token } = await api.login(email, password);
       setUser(userData);
       localStorage.setItem('zf_user', JSON.stringify(userData));
+      localStorage.setItem('zf_token', token);
       toast.success(`Bienvenido, ${userData.name}`);
-      
     } catch (err) {
-      console.error(err);
-      toast.error("Error de conexión");
+      throw err;
     } finally {
       setIsLoading(false);
     }
@@ -51,11 +45,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const logout = () => {
     setUser(null);
     localStorage.removeItem('zf_user');
+    localStorage.removeItem('zf_token');
     window.location.href = '/';
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      isLoading,
+      signIn: login,
+      signOut: logout,
+      loading: isLoading
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -63,6 +66,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth error");
+  if (!context) throw new Error("Use useAuth within AuthProvider");
   return context;
 };
