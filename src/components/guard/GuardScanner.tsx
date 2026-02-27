@@ -177,6 +177,7 @@ export function GuardScanner() {
     if (result.success) {
       setDoneMessage(isDamaged ? 'Equipo recibido — enviado a revisión de mantenimiento' : 'Devolución registrada correctamente');
       setDoneDamaged(isDamaged);
+      setDoneMode('CHECKIN');
       setStep('done');
     } else {
       toast.error(result.message);
@@ -411,7 +412,7 @@ export function GuardScanner() {
         {step === 'damage_check' && (
           <div className="space-y-4">
             <Card>
-              <h2 className="text-white font-bold text-lg mb-2">¿Condición del equipo?</h2>
+              <h2 className="text-white font-bold text-lg mb-2">Verifica su condición</h2>
               <p className="text-slate-400 text-sm mb-5">Inspecciona el equipo físicamente antes de confirmar.</p>
 
               <div className="grid grid-cols-2 gap-3">

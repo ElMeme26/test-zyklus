@@ -106,6 +106,8 @@ export async function processGuardScan(
   const reqRow = reqResult.rows[0] as { id: number; asset_id: string; user_id: string; bundle_group_id?: string; assets?: { name?: string; tag?: string } } | undefined;
   if (!reqRow) return { success: false, message: 'No hay préstamo activo para este activo.' };
 
+  const isConfirm = Boolean(signature);
+
   if (reqRow.bundle_group_id) {
     const allResult = await query(
       `SELECT r.*, row_to_json(a) AS assets FROM requests r
@@ -114,25 +116,32 @@ export async function processGuardScan(
       [reqRow.bundle_group_id]
     );
     const allReqs = (allResult.rows ?? []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
-    if (allReqs.length === 1) {
-      return await doCheckin(allReqs, isDamaged ?? false, damageNotes ?? '');
+    if (!isConfirm) {
+      if (allReqs.length === 1) {
+        return { success: true, message: 'Verificado', data: allReqs[0] };
+      }
+      const comboState: ComboCheckinState = {
+        bundleGroupId: reqRow.bundle_group_id,
+        totalAssets: allReqs.length,
+        scannedAssetIds: [assetId],
+        pendingAssets: allReqs.filter((r) => r.asset_id !== assetId).map((r) => ({
+          id: r.asset_id,
+          name: r.assets?.name ?? 'Activo',
+          tag: r.assets?.tag ?? '—',
+        })),
+        allRequests: allReqs,
+      };
+      return {
+        success: true,
+        message: `Combo detectado (${allReqs.length} activos). Escanea los ${allReqs.length - 1} restantes.`,
+        comboState,
+      };
     }
-    const comboState: ComboCheckinState = {
-      bundleGroupId: reqRow.bundle_group_id,
-      totalAssets: allReqs.length,
-      scannedAssetIds: [assetId],
-      pendingAssets: allReqs.filter((r) => r.asset_id !== assetId).map((r) => ({
-        id: r.asset_id,
-        name: r.assets?.name ?? 'Activo',
-        tag: r.assets?.tag ?? '—',
-      })),
-      allRequests: allReqs,
-    };
-    return {
-      success: true,
-      message: `Combo detectado (${allReqs.length} activos). Escanea los ${allReqs.length - 1} restantes.`,
-      comboState,
-    };
+    return await doCheckin(allReqs, isDamaged ?? false, damageNotes ?? '');
+  }
+
+  if (!isConfirm) {
+    return { success: true, message: 'Verificado', data: reqRow };
   }
 
   return await doCheckin([reqRow], isDamaged ?? false, damageNotes ?? '');
