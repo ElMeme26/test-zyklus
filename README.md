@@ -18,6 +18,11 @@ Sistema de **Control Patrimonial** para gestión de activos, préstamos, institu
 10. [Base de Datos](#10-base-de-datos)
 11. [Rendimiento y Mantenibilidad](#11-rendimiento-y-mantenibilidad)
 12. [Estructura del Código](#12-estructura-del-código)
+13. [Documentación Adicional](#13-documentación-adicional)
+
+---
+
+> **📚 Ver también:** Documentación de optimizaciones y despliegue en la carpeta [`docs/`](./docs/)
 
 ---
 
@@ -485,8 +490,32 @@ test-zyklus/
 ├── package.json
 ├── vite.config.ts
 ├── tailwind.config.js
-└── DOCUMENTACION.md              # Este archivo
+├── README.md                     # Este archivo
+└── docs/                         # Documentación adicional
+    ├── TANDA3_OPTIMIZACIONES.md
+    ├── OPTIMIZACION_RESUMEN_EJECUTIVO.md
+    └── VALIDACION_Y_DEPLOYMENT.md
 ```
+
+---
+
+## 13. Documentación Adicional
+
+La carpeta `docs/` contiene documentación sobre las optimizaciones realizadas en tres tandas:
+
+| Documento | Descripción |
+|-----------|-------------|
+| [`TANDA3_OPTIMIZACIONES.md`](./docs/TANDA3_OPTIMIZACIONES.md) | Detalles técnicos de Tanda 3: caching, debouncing, virtual scrolling |
+| [`OPTIMIZACION_RESUMEN_EJECUTIVO.md`](./docs/OPTIMIZACION_RESUMEN_EJECUTIVO.md) | Resumen ejecutivo de las 3 tandas de optimización (30x faster) |
+| [`VALIDACION_Y_DEPLOYMENT.md`](./docs/VALIDACION_Y_DEPLOYMENT.md) | Guía de validación, testing y despliegue a producción |
+
+### Resumen de Optimizaciones
+
+- **Tanda 1:** Query optimization (SELECT específicos, LIMIT constraints, índices DB)
+- **Tanda 2:** Paginación de endpoints históricos (audit logs, maintenance logs)
+- **Tanda 3:** Debouncing, caching, virtual scrolling ready
+
+**Resultado:** 30x+ mejora de performance en dashboards.
 
 ---
 

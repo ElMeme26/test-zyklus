@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import type { Asset } from '../../types';
 import { Card, Button } from '../ui/core';
 import {
@@ -46,6 +47,8 @@ export function AdminDashboard() {
 
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
+  const debouncedSearchLog = useDebounce(searchLog);
+  const debouncedFilterAction = useDebounce(filterAction);
   const [aiReport, setAiReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -61,9 +64,9 @@ export function AdminDashboard() {
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
       l.action !== 'CREATE' &&
-      (filterAction === 'ALL' || l.action === filterAction) &&
-      (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
-    ), [auditLogs, filterAction, searchLog]
+      (debouncedFilterAction === 'ALL' || l.action === debouncedFilterAction) &&
+      (debouncedSearchLog === '' || l.details?.toLowerCase().includes(debouncedSearchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(debouncedSearchLog.toLowerCase()))
+    ), [auditLogs, debouncedFilterAction, debouncedSearchLog]
   );
 
   const generatePredictiveReport = async () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as api from '../../api/data';
 import * as apiAssets from '../../api/assets';
 import * as apiBundles from '../../api/bundles';
@@ -32,12 +32,24 @@ export function useDataProvider() {
   const [stats, setStats] = useState<{ assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number }; categoryCounts?: Record<string, number> } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // For lazy-loaded historical data
+  const [auditLogsPage, setAuditLogsPage] = useState(1);
+  const [auditLogsTotal, setAuditLogsTotal] = useState(0);
+  const [maintenanceLogsPage, setMaintenanceLogsPage] = useState(1);
+  const [maintenanceLogsTotal, setMaintenanceLogsTotal] = useState(0);
+
+  // Caché para resultados paginados (evita re-fetch del mismo filtro)
+  const auditLogsCache = useRef(new Map<string, AuditLog[]>());
+  const maintenanceLogsCache = useRef(new Map<string, MaintenanceLog[]>());
+
   const unreadCount = notifications.filter(n => !n.is_read).length;
 
   const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
+    const hasExistingData = assets.length > 0;
+    const shouldShowLoading = !silent && !hasExistingData;
     try {
-      if (!silent) setIsLoading(true);
+      if (shouldShowLoading) setIsLoading(true);
       const [data, statsData] = await Promise.all([api.getData(), api.getStats()]);
       setAssets(data.assets);
       setRequests(data.requests);
@@ -51,9 +63,9 @@ export function useDataProvider() {
     } catch (err) {
       console.error('fetchData:', err);
     } finally {
-      if (!silent) setIsLoading(false);
+      if (shouldShowLoading) setIsLoading(false);
     }
-  }, []);
+  }, [assets.length]);
 
   useEffect(() => {
     if (user) {
@@ -62,6 +74,50 @@ export function useDataProvider() {
       setIsLoading(false);
     }
   }, [user, fetchData]);
+
+  const loadMoreAuditLogs = useCallback(async (filters?: { action?: string; search?: string }) => {
+    try {
+      const nextPage = auditLogsPage + 1;
+      const cacheKey = `p${nextPage}_${filters?.action || 'ALL'}_${filters?.search || ''}`;
+      const cached = auditLogsCache.current.get(cacheKey);
+
+      if (cached) {
+        setAuditLogs(prev => [...prev, ...cached]);
+        setAuditLogsPage(nextPage);
+      } else {
+        const result = await api.getAuditLogsPaginated(nextPage, 50, filters);
+        auditLogsCache.current.set(cacheKey, result.auditLogs);
+        setAuditLogs(prev => [...prev, ...result.auditLogs]);
+        setAuditLogsPage(nextPage);
+        setAuditLogsTotal(result.total);
+      }
+    } catch (err) {
+      console.error('loadMoreAuditLogs:', err);
+      toast.error('Error al cargar más registros de auditoría');
+    }
+  }, [auditLogsPage]);
+
+  const loadMoreMaintenanceLogs = useCallback(async (filters?: { status?: string; search?: string }) => {
+    try {
+      const nextPage = maintenanceLogsPage + 1;
+      const cacheKey = `p${nextPage}_${filters?.status || 'ALL'}_${filters?.search || ''}`;
+      const cached = maintenanceLogsCache.current.get(cacheKey);
+
+      if (cached) {
+        setMaintenanceLogs(prev => [...prev, ...cached]);
+        setMaintenanceLogsPage(nextPage);
+      } else {
+        const result = await api.getMaintenanceLogsPaginated(nextPage, 50, filters);
+        maintenanceLogsCache.current.set(cacheKey, result.maintenanceLogs);
+        setMaintenanceLogs(prev => [...prev, ...result.maintenanceLogs]);
+        setMaintenanceLogsPage(nextPage);
+        setMaintenanceLogsTotal(result.total);
+      }
+    } catch (err) {
+      console.error('loadMoreMaintenanceLogs:', err);
+      toast.error('Error al cargar más registros de mantenimiento');
+    }
+  }, [maintenanceLogsPage]);
 
   const getNextTag = useCallback(async () => {
     const res = await apiAssets.getNextTag();
@@ -474,5 +530,7 @@ export function useDataProvider() {
     resolveMaintenance,
     getAssetHistory,
     fetchData,
+    loadMoreAuditLogs,
+    loadMoreMaintenanceLogs,
   };
 }
