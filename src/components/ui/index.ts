@@ -6,3 +6,5 @@ export { RequestDetailModal } from './RequestDetailModal';
 export { CategoryFilter } from './CategoryFilter';
 export { NotificationCenter } from './NotificationCenter';
 export { RefreshButton } from './RefreshButton';
+export { PaginatedHistoryTable } from './PaginatedHistoryTable';
+export { VirtualizedAuditTable } from './VirtualizedAuditTable';

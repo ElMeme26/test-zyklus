@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import { Card, Button } from '../ui/core';
 import {
   TrendingUp, AlertCircle, CheckCircle2, LogOut,
@@ -30,6 +31,8 @@ export function AuditorOverview() {
   const { logout } = useAuth();
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
+  const debouncedSearchLog = useDebounce(searchLog);
+  const debouncedFilterAction = useDebounce(filterAction);
   const [aiReport, setAiReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -45,9 +48,9 @@ export function AuditorOverview() {
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
       l.action !== 'CREATE' &&
-      (filterAction === 'ALL' || l.action === filterAction) &&
-      (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
-    ), [auditLogs, filterAction, searchLog]);
+      (debouncedFilterAction === 'ALL' || l.action === debouncedFilterAction) &&
+      (debouncedSearchLog === '' || l.details?.toLowerCase().includes(debouncedSearchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(debouncedSearchLog.toLowerCase()))
+    ), [auditLogs, debouncedFilterAction, debouncedSearchLog]);
 
   const generatePredictiveReport = async () => {
     setIsGenerating(true);
@@ -78,14 +81,14 @@ export function AuditorOverview() {
     <div className="min-h-screen bg-background font-sans pb-20">
       <ChatAssistant />
 
-      <header className="sticky top-0 z-30 flex justify-between items-center px-6 py-4 border-b border-slate-800 bg-background/80 backdrop-blur">
-        <div>
-          <h1 className="text-xl font-bold text-white flex items-center gap-2">
+      <header className="sticky top-0 z-30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-background/80 backdrop-blur">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
             <TrendingUp className="text-primary" /> Panel de Auditoría
           </h1>
           <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Trazabilidad total del patrimonio</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-end items-center gap-2 w-full sm:w-auto">
           <ExportButtons
             requests={requests}
             assets={assets}
@@ -99,7 +102,7 @@ export function AuditorOverview() {
         </div>
       </header>
 
-      <main className="p-6 space-y-8 max-w-7xl mx-auto">
+      <main className="px-4 sm:px-6 py-6 space-y-8 max-w-7xl mx-auto">
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <AuditorKPICard label="Total Activos" value={kpis.total} color="border-l-primary" icon={<Package />} sublabel={`${kpis.disponibilidad}% disponibles`} />
@@ -113,7 +116,11 @@ export function AuditorOverview() {
             <h3 className="text-white font-bold flex items-center gap-2">
               <BrainCircuit className="text-purple-400" /> Reporte de Tendencias Predictivas (Zykla AI)
             </h3>
-            <Button onClick={generatePredictiveReport} disabled={isGenerating} className="bg-purple-600 hover:bg-purple-500 text-white border-0 shadow-lg whitespace-nowrap">
+            <Button
+              onClick={generatePredictiveReport}
+              disabled={isGenerating}
+              className="bg-purple-600 hover:bg-purple-500 text-white border-0 shadow-lg w-full sm:w-auto justify-center whitespace-normal sm:whitespace-nowrap text-sm"
+            >
               {isGenerating ? <><Loader2 size={16} className="animate-spin mr-2"/> Generando Analítica...</> : 'Generar Reporte Zykla'}
             </Button>
           </div>

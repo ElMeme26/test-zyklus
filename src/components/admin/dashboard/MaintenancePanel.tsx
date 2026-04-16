@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, Wrench, Printer, CheckCircle } from 'lucide-react';
+import { Search, Wrench, Printer, CheckCircle, X, CheckSquare, Square } from 'lucide-react';
 import { useData } from '../../../context/DataContext';
 import { getAssetsPaginated } from '../../../api/assets';
 import { Card, Button, Input } from '../../ui/core';
@@ -7,10 +7,13 @@ import { DataLoadingScreen } from '../../ui/DataLoadingScreen';
 import { MaintenanceLogModal } from './MaintenanceLogModal';
 import type { Asset } from '../../../types';
 import type { Request } from '../../../types';
+import { toast } from 'sonner';
 
 interface MaintenancePanelProps {
   onPrintAll: (assets: Asset[]) => void;
 }
+
+const PRINT_QR_LIMIT_PER_CATEGORY = 500;
 
 /** Panel de mantenimiento: activos que requieren atención e historial de incidencias. */
 export function MaintenancePanel({ onPrintAll }: MaintenancePanelProps) {
@@ -19,6 +22,12 @@ export function MaintenancePanel({ onPrintAll }: MaintenancePanelProps) {
   const [selectedLog, setSelectedLog] = useState<typeof maintenanceLogs[0] | null>(null);
   const [maintenanceAssets, setMaintenanceAssets] = useState<Asset[]>([]);
   const [maintLoading, setMaintLoading] = useState(false);
+
+  const [showPrintByCategoryModal, setShowPrintByCategoryModal] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
+  const [loadingCategories, setLoadingCategories] = useState(false);
+  const [selectedCategories, setSelectedCategories] = useState<Set<string>>(new Set());
+  const [printingByCategory, setPrintingByCategory] = useState(false);
 
   const loadMaintenanceAssets = useCallback(() => {
     setMaintLoading(true);
@@ -29,6 +38,62 @@ export function MaintenancePanel({ onPrintAll }: MaintenancePanelProps) {
   }, []);
 
   useEffect(() => { loadMaintenanceAssets(); }, [loadMaintenanceAssets, maintenanceLogs.length]);
+
+  useEffect(() => {
+    if (!showPrintByCategoryModal) return;
+    setLoadingCategories(true);
+    setSelectedCategories(new Set());
+    getAssetsPaginated(1, 1)
+      .then(res => setCategories(res.categories ?? []))
+      .catch(() => setCategories([]))
+      .finally(() => setLoadingCategories(false));
+  }, [showPrintByCategoryModal]);
+
+  const toggleCategory = (cat: string) => {
+    setSelectedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(cat)) next.delete(cat);
+      else next.add(cat);
+      return next;
+    });
+  };
+
+  const selectAllCategories = () => {
+    if (selectedCategories.size === categories.length) setSelectedCategories(new Set());
+    else setSelectedCategories(new Set(categories));
+  };
+
+  const handlePrintByCategory = async () => {
+    if (selectedCategories.size === 0) {
+      toast.warning('Selecciona al menos una categoría');
+      return;
+    }
+    setPrintingByCategory(true);
+    try {
+      const results = await Promise.all(
+        Array.from(selectedCategories).map(cat =>
+          getAssetsPaginated(1, PRINT_QR_LIMIT_PER_CATEGORY, { category: cat.trim(), export: true })
+        )
+      );
+      const byId = new Map<string, Asset>();
+      for (const res of results) {
+        const list = Array.isArray(res.assets) ? res.assets : [];
+        for (const a of list) {
+          if (a?.id) byId.set(a.id, a);
+        }
+      }
+      const merged = Array.from(byId.values());
+      setShowPrintByCategoryModal(false);
+      if (merged.length === 0) {
+        toast.warning('No se encontraron activos en las categorías seleccionadas. Revisa que los activos tengan categoría asignada.');
+      }
+      onPrintAll(merged);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Error al cargar activos');
+    } finally {
+      setPrintingByCategory(false);
+    }
+  };
 
   const filteredMaint = maintenanceAssets.filter(a =>
     (a.name?.toLowerCase() || '').includes(searchMaint.toLowerCase()) ||
@@ -50,6 +115,53 @@ export function MaintenancePanel({ onPrintAll }: MaintenancePanelProps) {
         />
       )}
 
+      {showPrintByCategoryModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => !printingByCategory && setShowPrintByCategoryModal(false)}>
+          <Card className="w-full max-w-md border-slate-700" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-white font-bold text-lg">Imprimir QRs por categoría</h3>
+              <button onClick={() => !printingByCategory && setShowPrintByCategoryModal(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
+            </div>
+            <p className="text-slate-400 text-sm mb-4">Elige las categorías cuyos activos quieres incluir (máx. 500 por categoría).</p>
+            {loadingCategories ? (
+              <DataLoadingScreen message="Cargando categorías..." />
+            ) : categories.length === 0 ? (
+              <p className="text-slate-500 text-sm py-4">No hay categorías en el inventario.</p>
+            ) : (
+              <>
+                <div className="max-h-64 overflow-y-auto space-y-2 mb-4">
+                  <button
+                    type="button"
+                    onClick={selectAllCategories}
+                    className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800 transition-colors text-sm font-medium"
+                  >
+                    {selectedCategories.size === categories.length ? <CheckSquare size={18} className="text-primary" /> : <Square size={18} className="text-slate-500" />}
+                    Seleccionar todas
+                  </button>
+                  {categories.map(cat => (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => toggleCategory(cat)}
+                      className="flex items-center gap-2 w-full text-left px-3 py-2 rounded-lg border border-slate-700 bg-slate-900/50 text-slate-300 hover:bg-slate-800 transition-colors text-sm"
+                    >
+                      {selectedCategories.has(cat) ? <CheckSquare size={18} className="text-primary" /> : <Square size={18} className="text-slate-500" />}
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex gap-2 pt-2">
+                  <Button type="button" variant="outline" onClick={() => setShowPrintByCategoryModal(false)} disabled={printingByCategory}>Cancelar</Button>
+                  <Button type="button" onClick={handlePrintByCategory} disabled={printingByCategory || selectedCategories.size === 0}>
+                    {printingByCategory ? 'Cargando...' : 'Imprimir QRs'}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Card>
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-xl font-bold text-white flex items-center gap-2">
           <Wrench className="text-amber-400" /> Panel de Mantenimiento
@@ -66,7 +178,7 @@ export function MaintenancePanel({ onPrintAll }: MaintenancePanelProps) {
           </div>
           <Button
             variant="outline"
-            onClick={() => onPrintAll(maintenanceAssets)}
+            onClick={() => setShowPrintByCategoryModal(true)}
             className="border-primary/30 text-primary hover:bg-primary/10 h-10 whitespace-nowrap"
           >
             <Printer size={16} className="mr-2" /> Imprimir Todos los QR

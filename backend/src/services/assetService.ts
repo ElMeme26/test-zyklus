@@ -57,7 +57,8 @@ export async function getAssetsPaginated(
       params
     ),
     query(
-      `SELECT * FROM assets ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
+      `SELECT id, tag, name, status, category, image, usage_count, maintenance_alert, bundle_id, created_at
+       FROM assets ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`,
       [...params, limit, offset]
     ),
     query<{ category: string }>(`SELECT DISTINCT category FROM assets WHERE category IS NOT NULL AND category != '' ORDER BY category`),

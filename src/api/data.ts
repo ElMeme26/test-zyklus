@@ -34,3 +34,45 @@ export interface DataStatsResponse {
 export function getStats(): Promise<DataStatsResponse> {
   return apiFetch<DataStatsResponse>('/api/data/stats');
 }
+
+export interface AuditLogsPaginatedResponse {
+  auditLogs: AuditLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Obtiene audit_logs paginados con filtrado. */
+export function getAuditLogsPaginated(
+  page = 1,
+  limit = 50,
+  filters?: { action?: string; search?: string }
+): Promise<AuditLogsPaginatedResponse> {
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  if (filters?.action) query.set('action', filters.action);
+  if (filters?.search) query.set('search', filters.search);
+  return apiFetch<AuditLogsPaginatedResponse>(`/api/data/audit-logs?${query}`);
+}
+
+export interface MaintenanceLogsPaginatedResponse {
+  maintenanceLogs: MaintenanceLog[];
+  total: number;
+  page: number;
+  limit: number;
+}
+
+/** Obtiene maintenance_logs paginados con filtrado. */
+export function getMaintenanceLogsPaginated(
+  page = 1,
+  limit = 50,
+  filters?: { status?: string; search?: string }
+): Promise<MaintenanceLogsPaginatedResponse> {
+  const query = new URLSearchParams();
+  query.set('page', String(page));
+  query.set('limit', String(limit));
+  if (filters?.status) query.set('status', filters.status);
+  if (filters?.search) query.set('search', filters.search);
+  return apiFetch<MaintenanceLogsPaginatedResponse>(`/api/data/maintenance-logs?${query}`);
+}

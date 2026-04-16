@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { useData } from '../../context/DataContext';
+import { useDebounce } from '../../hooks/useDebounce';
 import type { Asset } from '../../types';
 import { Card, Button } from '../ui/core';
 import {
@@ -46,6 +47,8 @@ export function AdminDashboard() {
 
   const [searchLog, setSearchLog] = useState('');
   const [filterAction, setFilterAction] = useState('ALL');
+  const debouncedSearchLog = useDebounce(searchLog);
+  const debouncedFilterAction = useDebounce(filterAction);
   const [aiReport, setAiReport] = useState<string>('');
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -61,9 +64,9 @@ export function AdminDashboard() {
   const filteredLogs = useMemo(() =>
     auditLogs.filter(l =>
       l.action !== 'CREATE' &&
-      (filterAction === 'ALL' || l.action === filterAction) &&
-      (searchLog === '' || l.details?.toLowerCase().includes(searchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(searchLog.toLowerCase()))
-    ), [auditLogs, filterAction, searchLog]
+      (debouncedFilterAction === 'ALL' || l.action === debouncedFilterAction) &&
+      (debouncedSearchLog === '' || l.details?.toLowerCase().includes(debouncedSearchLog.toLowerCase()) || l.actor_name?.toLowerCase().includes(debouncedSearchLog.toLowerCase()))
+    ), [auditLogs, debouncedFilterAction, debouncedSearchLog]
   );
 
   const generatePredictiveReport = async () => {
@@ -136,12 +139,14 @@ export function AdminDashboard() {
         <AssetQRPrint assets={qrPrintAssets} onClose={() => setShowQRPrint(false)} />
       )}
 
-      <header className="sticky top-0 z-30 flex justify-between items-center px-4 py-3 border-b border-slate-800 bg-slate-900/80 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <h1 className="text-lg font-bold text-white flex items-center gap-2">
-            <Database className="text-primary" size={20} /> Panel Maestro
+      <header className="sticky top-0 z-30 flex flex-col gap-3 sm:flex-row sm:justify-between sm:items-center px-4 sm:px-6 py-3 sm:py-4 border-b border-slate-800 bg-background/80 backdrop-blur">
+        <div className="min-w-0">
+          <h1 className="text-lg sm:text-xl font-bold text-white flex items-center gap-2">
+            <Database className="text-primary" size={20} /> Panel de Administración
           </h1>
-          <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
+          <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Gestión total del inventario y solicitudes</p>
+        </div>
+        <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
             {[
               { id: 'inventory', icon: <LayoutGrid size={13} />, label: 'Inventario' },
               { id: 'analytics', icon: <PieChart size={13} />, label: 'Analíticas' },
@@ -158,8 +163,7 @@ export function AdminDashboard() {
               </button>
             ))}
           </div>
-        </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap justify-end items-center gap-2 w-full sm:w-auto">
           <Button variant="outline" size="sm" onClick={() => setUseCamera(true)} className="border-primary/30 text-primary hover:bg-primary/10 text-xs shadow-[0_0_15px_rgba(6,182,212,0.15)]">
             <ScanLine size={14} className="mr-1" /> Escanear
           </Button>
@@ -173,7 +177,14 @@ export function AdminDashboard() {
       <main className="p-4 md:p-6">
         {currentView === 'inventory' && (
           <InventoryView
-            onPrintSelected={(_ids: Set<string>, assetsToPrint: Asset[]) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
+            onPrintSelected={(_ids: Set<string>, assetsToPrint: Asset[]) => {
+              if (assetsToPrint.length === 0) {
+                toast.warning('No hay activos para imprimir');
+                return;
+              }
+              setQrPrintAssets(assetsToPrint);
+              setShowQRPrint(true);
+            }}
             onPrintSingle={(a: Asset) => { setQrPrintAssets([a]); setShowQRPrint(true); }}
           />
         )}
@@ -322,7 +333,14 @@ export function AdminDashboard() {
         {currentView === 'external' && <InstitutionsManager />}
         {currentView === 'maintenance' && (
           <MaintenancePanel
-            onPrintAll={(assetsToPrint) => { setQrPrintAssets(assetsToPrint); setShowQRPrint(true); }}
+            onPrintAll={(assetsToPrint) => {
+              if (assetsToPrint.length === 0) {
+                toast.warning('No hay activos para imprimir');
+                return;
+              }
+              setQrPrintAssets(assetsToPrint);
+              setShowQRPrint(true);
+            }}
           />
         )}
         {currentView === 'users' && user?.role === 'ADMIN_PATRIMONIAL' && <UsersView />}

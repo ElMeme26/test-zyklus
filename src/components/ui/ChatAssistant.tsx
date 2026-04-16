@@ -8,10 +8,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend, LineChart, Line,
 } from 'recharts';
-
-const GEMINI_API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
-const GEMINI_MODEL = 'gemini-2.5-flash';
-const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+import { apiFetch } from '../../api/client';
 
 interface GraphData {
   type: 'bar' | 'pie' | 'line';
@@ -156,37 +153,13 @@ function ChartWidget({ graph }: { graph: GraphData }) {
   );
 }
 
-/** Llama a la API de Gemini con el prompt dado. */
+/** Llama al backend para ejecutar Gemini de forma segura. */
 async function callGemini(prompt: string): Promise<string> {
-  if (!GEMINI_API_KEY) throw new Error('Sin API Key');
-
-  const res = await fetch(`${GEMINI_ENDPOINT}?key=${GEMINI_API_KEY}`, {
+  const response = await apiFetch<{ text: string }>('/api/ai/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 2048,
-      },
-    }),
+    body: JSON.stringify({ prompt, temperature: 0.2, maxOutputTokens: 2048 }),
   });
-
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Gemini ${res.status}: ${err}`);
-  }
-
-  const data = await res.json() as {
-    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
-    error?: { message: string };
-  };
-
-  if (data.error) throw new Error(data.error.message);
-
-  const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!text) throw new Error('Respuesta vacía de Gemini');
-  return text;
+  return response.text;
 }
 
 export function ChatAssistant() {
@@ -307,11 +280,6 @@ INSTRUCCIONES ESTRICTAS:
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
-    if (!GEMINI_API_KEY) {
-      setMessages(prev => [...prev, { role: 'bot', text: 'API Key de Gemini no configurada en las variables de entorno (VITE_GEMINI_API_KEY).' }]);
-      return;
-    }
-
     const userMsg = input.trim();
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
     setInput('');
@@ -357,7 +325,7 @@ INSTRUCCIONES ESTRICTAS:
       console.error('Zykla AI error:', msg);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `Error al conectar con Zykla AI: ${msg}. Verifica que VITE_GEMINI_API_KEY esté configurada correctamente.`,
+        text: `Error al conectar con Zykla AI: ${msg}. Verifica que el backend de AI esté disponible.`,
       }]);
     } finally {
       setIsLoading(false);
