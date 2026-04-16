@@ -18,6 +18,7 @@ export type RequestStatus =
   | 'ACTION_REQUIRED'
   | 'APPROVED'
   | 'ACTIVE'
+  | 'ACTIVE_INTERNAL'
   | 'OVERDUE'
   | 'RETURNED'
   | 'MAINTENANCE'

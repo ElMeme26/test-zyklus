@@ -9,7 +9,8 @@ export async function createRequest(
   days: number,
   motive?: string,
   institutionId?: number,
-  autoApprove?: boolean
+  autoApprove?: boolean,
+  isInternal?: boolean
 ): Promise<{ id: number }> {
   return apiFetch<{ id: number }>('/api/requests', {
     method: 'POST',
@@ -23,6 +24,7 @@ export async function createRequest(
       motive: motive ?? '',
       institutionId: institutionId ?? null,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     }),
   });
 }

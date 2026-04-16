@@ -6,7 +6,7 @@ import { Card, Button, Input } from '../ui/core';
 import { NotificationCenter } from '../ui/NotificationCenter';
 import {
   Search, LogOut, Package, ChevronRight, X,
-  CheckCircle, LayoutGrid, List, ShoppingCart, Minus, Building2
+  CheckCircle, LayoutGrid, List, ShoppingCart, Minus, Building2, ShieldCheck
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { ThemeToggle } from '../ui/ThemeToggle';
@@ -50,6 +50,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   const [motive, setMotive] = useState('');
   const [isExternal, setIsExternal] = useState(false);
   const [selectedInstitution, setSelectedInstitution] = useState<number | undefined>();
+  const [isInternal, setIsInternal] = useState(false);
 
   const [qrRequest, setQRRequest] = useState<Request | null>(null);
   const [feedbackRequest, setFeedbackRequest] = useState<Request | null>(null);
@@ -103,7 +104,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
       setCheckoutFromCart(false);
       setCartOpen(false);
     } else if (selectedAsset) {
-      await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
+      await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView, isInternal);
     } else if (selectedBundle) {
       await createBatchRequest(selectedBundle, user, days, motive, isManagerView);
     }
@@ -113,6 +114,7 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
     setDays(0);
     setIsExternal(false);
     setSelectedInstitution(undefined);
+    setIsInternal(false);
     if (!isManagerView) setActiveTab('loans');
     if (isManagerView && onBack) onBack();
   };
@@ -514,6 +516,19 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                   </select>
                 </div>
               )}
+
+              <label className="flex items-center gap-3 cursor-pointer group">
+                <input
+                  type="checkbox"
+                  checked={isInternal}
+                  onChange={e => setIsInternal(e.target.checked)}
+                  className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
+                />
+                <div className="flex items-center gap-2">
+                  <ShieldCheck size={16} className="text-slate-500 group-hover:text-primary transition-colors" />
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-white transition-colors">Préstamo Interno (Uso exclusivo en sucursal)</span>
+                </div>
+              </label>
             </div>
 
             <div className="grid grid-cols-2 gap-3 pt-1">

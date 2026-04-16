@@ -46,20 +46,30 @@ export async function processGuardScan(
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
-         WHERE r.bundle_group_id = $1 AND r.status = 'APPROVED'`,
+         WHERE r.bundle_group_id = $1 AND r.status IN ('APPROVED', 'ACTIVE_INTERNAL')`,
         [bundleId]
       );
       reqsToProcess = (result.rows ?? []) as Array<Record<string, unknown>>;
       if (reqsToProcess.length === 0) return { success: false, message: 'Combo sin solicitudes aprobadas.' };
+      // Verificar si es interno
+      const firstReq = reqsToProcess[0] as { is_internal?: boolean };
+      if (firstReq.is_internal) {
+        return { success: false, message: 'Salida no autorizada: Activo de uso interno exclusivo.' };
+      }
     } else {
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
-         WHERE r.id = $1 AND r.status = 'APPROVED' LIMIT 1`,
+         WHERE r.id = $1 AND r.status IN ('APPROVED', 'ACTIVE_INTERNAL') LIMIT 1`,
         [reqId]
       );
       const row = result.rows[0];
       if (!row) return { success: false, message: 'Solicitud no aprobada.' };
+      // Verificar si es interno
+      const req = row as { is_internal?: boolean };
+      if (req.is_internal) {
+        return { success: false, message: 'Salida no autorizada: Activo de uso interno exclusivo.' };
+      }
       reqsToProcess = [row] as Array<Record<string, unknown>>;
     }
     if (signature) {
@@ -99,7 +109,7 @@ export async function processGuardScan(
   const reqResult = await query(
     `SELECT r.*, row_to_json(a) AS assets FROM requests r
      LEFT JOIN assets a ON r.asset_id = a.id
-     WHERE r.asset_id = $1 AND r.status IN ('ACTIVE', 'OVERDUE')
+     WHERE r.asset_id = $1 AND r.status IN ('ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE')
      ORDER BY r.checkout_at DESC LIMIT 1`,
     [assetId]
   );
@@ -112,7 +122,7 @@ export async function processGuardScan(
     const allResult = await query(
       `SELECT r.*, row_to_json(a) AS assets FROM requests r
        LEFT JOIN assets a ON r.asset_id = a.id
-       WHERE r.bundle_group_id = $1 AND r.status IN ('ACTIVE', 'OVERDUE')`,
+       WHERE r.bundle_group_id = $1 AND r.status IN ('ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE')`,
       [reqRow.bundle_group_id]
     );
     const allReqs = (allResult.rows ?? []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
@@ -170,8 +180,31 @@ async function doCheckin(
       `UPDATE requests SET status = $1, checkin_at = $2, is_damaged = $3, damage_notes = $4, return_condition = $5 WHERE id = $6`,
       [newReqStatus, now, isDamaged, damageNotes || null, isDamaged ? 'DAÑADO' : 'BUENO', r.id]
     );
-    await query(`UPDATE assets SET status = $1 WHERE id = $2`, [newAssetStatus, r.asset_id]);
-    await logAudit('CHECKIN', 'guard', 'Guardia', String(r.id), 'REQUEST', `Devolución: ${r.assets?.name ?? ''}`);
+
+    // Obtener datos actuales del asset para verificar mantenimiento preventivo
+    const assetResult = await query(
+      `SELECT usage_count, maintenance_usage_threshold, name FROM assets WHERE id = $1`,
+      [r.asset_id]
+    );
+    const asset = assetResult.rows[0] as { usage_count?: number; maintenance_usage_threshold?: number; name?: string };
+    const currentUsage = (asset.usage_count ?? 0);
+    const newUsage = currentUsage + 1;
+    const threshold = asset.maintenance_usage_threshold ?? 100;
+    const needsMaintenance = newUsage >= threshold;
+
+    // Actualizar asset con nuevo status y usage_count
+    const finalAssetStatus = isDamaged || needsMaintenance ? 'En mantenimiento' : 'Disponible';
+    await query(
+      `UPDATE assets SET status = $1, usage_count = $2, maintenance_alert = $3 WHERE id = $4`,
+      [finalAssetStatus, newUsage, needsMaintenance, r.asset_id]
+    );
+
+    await logAudit('CHECKIN', 'guard', 'Guardia', String(r.id), 'REQUEST', `Devolución: ${asset.name ?? ''}`);
+
+    // Si requiere mantenimiento preventivo, registrar en audit_logs
+    if (needsMaintenance && !isDamaged) {
+      await logAudit('MAINTENANCE', 'system', 'Sistema', r.asset_id, 'ASSET', `Mantenimiento preventivo automático alcanzado (${newUsage}/${threshold})`);
+    }
   }
 
   if (isDamaged) {

@@ -16,7 +16,7 @@ export function TeamView() {
   const teamActive = Array.from(
     requests.filter(r =>
       r.users?.manager_id === user?.id &&
-      ['ACTIVE', 'OVERDUE', 'APPROVED'].includes(r.status)
+      ['ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE', 'APPROVED'].includes(r.status)
     ).reduce((acc, r) => {
       if (r.bundle_group_id) {
         if (!acc.has(r.bundle_group_id)) acc.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
@@ -78,7 +78,7 @@ export function TeamView() {
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-[10px] font-bold px-2 py-1 rounded border ${isOverdue ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'}`}>
-                    {isOverdue ? 'VENCIDO' : 'ACTIVO'}
+                    {isOverdue ? 'VENCIDO' : req.status === 'ACTIVE_INTERNAL' ? 'SUCURSAL' : 'ACTIVO'}
                   </span>
                   {r.expected_return_date && (
                     <p className="text-[10px] text-slate-500 mt-1">

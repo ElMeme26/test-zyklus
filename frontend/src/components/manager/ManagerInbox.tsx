@@ -30,7 +30,7 @@ export function ManagerInbox() {
   const pendingRequests = teamRequestsGrouped.filter(r => r.status === 'PENDING');
 
   const myRequestsGrouped = getUserRequests(user?.id || '');
-  const myActiveLoans = myRequestsGrouped.filter(r => ['APPROVED', 'ACTIVE'].includes(r.status));
+  const myActiveLoans = myRequestsGrouped.filter(r => ['APPROVED', 'ACTIVE', 'ACTIVE_INTERNAL'].includes(r.status));
 
   const getRealRequest = (req: Request): Request => {
     if (req.bundle_group_id) {
@@ -144,12 +144,19 @@ export function ManagerInbox() {
                         <h3 className="font-bold text-white flex items-center gap-2">
                           {r.requester_name}
                         </h3>
-                        <p className="text-primary text-sm font-medium flex items-center gap-1">
-                          {r.is_bundle ? <Package size={14} /> : <Box size={14} />}
-                          {r.is_bundle
-                            ? `Combo: ${r.motive?.split(']')[0].replace('[COMBO: ', '')} (${r.bundle_items} equipos)`
-                            : r.assets?.name}
-                        </p>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-primary text-sm font-medium flex items-center gap-1">
+                            {r.is_bundle ? <Package size={14} /> : <Box size={14} />}
+                            {r.is_bundle
+                              ? `Combo: ${r.motive?.split(']')[0].replace('[COMBO: ', '')} (${r.bundle_items} equipos)`
+                              : r.assets?.name}
+                          </p>
+                          {r.is_internal && (
+                            <span className="text-[10px] font-bold uppercase tracking-[0.18em] bg-slate-800 border border-cyan-500/20 text-cyan-300 px-2 py-1 rounded-full">
+                              Préstamo interno
+                            </span>
+                          )}
+                        </div>
                         {r.institutions?.name && (
                           <div className="flex items-center gap-1.5 mt-1.5 bg-cyan-500/10 border border-cyan-500/20 rounded-lg px-2 py-1 w-fit">
                             <Building2 size={11} className="text-cyan-400 flex-shrink-0" />

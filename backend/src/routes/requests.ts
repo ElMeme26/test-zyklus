@@ -6,7 +6,7 @@ const router = Router();
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = req.body ?? {};
+    const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = req.body ?? {};
     if (!assetId || !userId || userName == null) {
       res.status(400).json({ error: 'assetId, userId, userName required' });
       return;
@@ -21,6 +21,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       motive,
       institutionId,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     });
     res.status(201).json(id);
   } catch (err) {

@@ -334,7 +334,7 @@ export function useDataProvider() {
     return Array.from(grouped.values());
   };
 
-  const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
+  const createRequest = async (asset: Asset, user: User, days: number, motive = '', institutionId?: number, autoApprove = false, isInternal = false) => {
     if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) { toast.error('Requiere mantenimiento.'); return; }
     if (asset.status !== 'Disponible') {
       const msgs: Record<string, string> = { 'Prestada': 'Ya prestado.', 'En trámite': 'Ya tiene solicitud en trámite.', 'En mantenimiento': 'En mantenimiento.', 'Dada de baja': 'Dado de baja.' };
@@ -342,7 +342,7 @@ export function useDataProvider() {
       return;
     }
     try {
-      await apiRequests.createRequest(asset.id, user, days, motive, institutionId, autoApprove);
+      await apiRequests.createRequest(asset.id, user, days, motive, institutionId, autoApprove, isInternal);
       toast.success(autoApprove ? 'Auto-Aprobado. Preséntate al guardia' : 'Solicitud enviada');
       fetchData();
     } catch (err) {

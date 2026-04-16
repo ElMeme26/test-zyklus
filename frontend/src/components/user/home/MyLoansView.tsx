@@ -25,7 +25,7 @@ export function MyLoansView({ onShowQR, onFeedback }: MyLoansViewProps) {
   const [cancelReqId, setCancelReqId] = useState<number | null>(null);
 
   const userReqs = getUserRequests(user?.id || '');
-  const active = userReqs.filter(r => ['PENDING', 'ACTION_REQUIRED', 'APPROVED', 'ACTIVE', 'OVERDUE'].includes(r.status));
+  const active = userReqs.filter(r => ['PENDING', 'ACTION_REQUIRED', 'APPROVED', 'ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE'].includes(r.status));
   const history = userReqs.filter(r => ['RETURNED', 'MAINTENANCE', 'REJECTED', 'CANCELLED'].includes(r.status));
 
   const getRealRequest = (req: Request): Request => {

@@ -12,10 +12,12 @@ export async function callGemini(prompt: string): Promise<string> {
 /** Genera un reporte predictivo de demanda de activos.
  * @param requestedAssets - Nombres de activos en préstamos recientes
  * @param audience - 'administrador' | 'auditor'
+ * @param userId - ID del usuario logueado para contexto personalizado
  */
 export async function generatePredictiveReport(
   requestedAssets: string[],
-  audience: 'administrador' | 'auditor' = 'administrador'
+  audience: 'administrador' | 'auditor' = 'administrador',
+  userId?: string
 ): Promise<string> {
   if (!Array.isArray(requestedAssets)) {
     throw new Error('requestedAssets debe ser un arreglo de cadenas.');
@@ -27,7 +29,7 @@ export async function generatePredictiveReport(
 
   const response = await apiFetch<{ text: string }>('/api/ai/predictive-report', {
     method: 'POST',
-    body: JSON.stringify({ requestedAssets, audience }),
+    body: JSON.stringify({ requestedAssets, audience, userId }),
   });
 
   return response.text;

@@ -17,6 +17,7 @@ const statusConfig: Record<string, { label: string; color: string; icon: React.R
   APPROVED:        { label: 'Aprobado — Listo para retirar', color: 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30', icon: <CheckCircle size={14} /> },
   ACTIVE:          { label: 'En Préstamo',              color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',     icon: <CheckCircle size={14} /> },
   OVERDUE:         { label: 'VENCIDO',                  color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',     icon: <AlertCircle size={14} /> },
+  ACTIVE_INTERNAL: { label: 'Prestado en Sucursal',    color: 'text-cyan-400 bg-cyan-500/10 border-cyan-500/30',     icon: <CheckCircle size={14} /> },
   RETURNED:        { label: 'Devuelto',                 color: 'text-slate-400 bg-slate-700/50 border-slate-600/30', icon: <CheckCircle size={14} /> },
   MAINTENANCE:     { label: 'En Mantenimiento',         color: 'text-purple-400 bg-purple-500/10 border-purple-500/30', icon: <RotateCcw size={14} /> },
   REJECTED:        { label: 'Rechazado',                color: 'text-rose-400 bg-rose-500/10 border-rose-500/30',     icon: <XCircle size={14} /> },
@@ -129,6 +130,9 @@ export function RequestDetailModal({ request: req, onClose }: RequestDetailModal
               value={req.days_requested === 0 ? 'Mismo día (hasta las 9 PM)' : `${req.days_requested} días`}
               icon={<Clock size={14} />}
             />
+
+            {/* Tipo de Préstamo */}
+            {req.is_internal && <Field label="Tipo de Préstamo" value="Préstamo Interno (Sucursal)" icon={<Building2 size={14} />} />}
 
             {/* Motivo */}
             {req.motive && (

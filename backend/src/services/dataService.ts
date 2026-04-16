@@ -46,7 +46,7 @@ export async function getAllData(): Promise<DataPayload> {
            r.feedback_log,
            r.created_at,
            CASE WHEN a.id IS NULL THEN NULL ELSE row_to_json((SELECT sub FROM (SELECT a.id, a.tag, a.name, a.status, a.category, a.image, a.usage_count, a.maintenance_alert) AS sub)) END AS assets,
-           CASE WHEN u.id IS NULL THEN NULL ELSE row_to_json((SELECT sub FROM (SELECT u.id, u.name, u.email, u.role, u.disciplina, u.created_at) AS sub)) END AS users,
+           CASE WHEN u.id IS NULL THEN NULL ELSE row_to_json((SELECT sub FROM (SELECT u.id, u.name, u.email, u.role, u.disciplina, u.manager_id, u.created_at) AS sub)) END AS users,
            CASE WHEN i.id IS NULL THEN NULL ELSE row_to_json((SELECT sub FROM (SELECT i.id, i.name, i.contact_name, i.contact_email, i.contact_phone, i.address, i.created_at) AS sub)) END AS institutions
          FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
@@ -55,7 +55,7 @@ export async function getAllData(): Promise<DataPayload> {
          ORDER BY r.created_at DESC
          LIMIT 50`
       ),
-      client.query('SELECT id, name, contact_name, contact_email, contact_phone, address, created_at FROM institutions ORDER BY id DESC'),
+      client.query('SELECT id, name, contact_name, contact_email, contact_phone, address, created_at FROM institutions ORDER BY id DESC LIMIT 50'),
       client.query('SELECT id, user_id, request_id, asset_id, type, channel, title, message, is_read, created_at FROM notifications ORDER BY created_at DESC LIMIT 100'),
       client.query(
         `SELECT
@@ -76,10 +76,10 @@ export async function getAllData(): Promise<DataPayload> {
          LIMIT 100`
       ),
       client.query('SELECT id, timestamp, action, actor_id, actor_name, target_id, target_type, details FROM audit_logs ORDER BY timestamp DESC LIMIT 50'),
-      client.query('SELECT id, name, description, image_url, created_at FROM bundles ORDER BY created_at DESC'),
+      client.query('SELECT id, name, description, image_url, created_at FROM bundles ORDER BY created_at DESC LIMIT 50'),
       client.query('SELECT id, bundle_id, tag, name, status, category FROM assets WHERE bundle_id IS NOT NULL ORDER BY created_at DESC'),
-      client.query('SELECT id, tag, name, status, category, image, usage_count, maintenance_alert, bundle_id, created_at FROM assets ORDER BY created_at DESC'),
-      client.query('SELECT id, name, email, role, disciplina, manager_id, created_at FROM users ORDER BY created_at DESC'),
+      client.query('SELECT id, tag, name, status, category, image, usage_count, maintenance_alert, bundle_id, created_at FROM assets ORDER BY created_at DESC LIMIT 50'),
+      client.query('SELECT id, name, email, role, disciplina, manager_id, created_at FROM users ORDER BY created_at DESC LIMIT 50'),
     ]);
 
   const requests = (requestsRes.rows ?? []).map((row: Record<string, unknown>) => {

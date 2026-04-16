@@ -48,7 +48,8 @@ export async function callGemini(
 
 export async function generatePredictiveReport(
   requestedAssets: string[],
-  audience: 'administrador' | 'auditor' = 'administrador'
+  audience: 'administrador' | 'auditor' = 'administrador',
+  userId?: string
 ): Promise<string> {
   const freq: Record<string, number> = {};
   for (const name of requestedAssets) {
@@ -65,10 +66,19 @@ export async function generatePredictiveReport(
     ? 'No hay historial de préstamos disponibles para generar un análisis predictivo.'
     : `Eres Zykla AI, experto en gestión patrimonial de activos tecnológicos.
 
+Usuario actual: ${userId ? `ID ${userId}` : 'Sin especificar'}
+
 Historial de activos prestados (frecuencia): ${topItems}
 
+Si el usuario pregunta por préstamos actuales, cuenta ÚNICAMENTE los registros en la tabla requests con estado 'ACTIVE', 'ACTIVE_INTERNAL', 'APPROVED' o 'OVERDUE' asociados a su user_id.
+
 Genera un reporte predictivo BREVE dirigido al ${audience}. Máximo 3 párrafos cortos (2-4 oraciones cada uno). Sé conciso; evita rodeos.
-Incluye: (1) Activos con mayor demanda y por qué son críticos. (2) Qué tipo de activos priorizar para adquisición. (3) Una recomendación concreta de inventario.
+
+Estructura OBLIGATORIA en 3 apartados:
+1. Resumen de Trazabilidad: Analiza patrones de uso y frecuencia de préstamos.
+2. Predicción de Demanda: Identifica tendencias y proyecciones futuras.
+3. Sugerencias de Adquisición: Recomendaciones concretas para optimizar inventario.
+
 Tono analítico y ejecutivo. Solo español. Cierra el último párrafo con punto final.`;
 
   if (requestedAssets.length === 0) {
