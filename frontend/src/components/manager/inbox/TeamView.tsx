@@ -70,11 +70,18 @@ export function TeamView() {
                   <p className="text-slate-400 text-xs truncate">
                     {r.is_bundle ? `Combo (${r.bundle_items} equipos)` : r.assets?.name}
                   </p>
-                  {r.institutions?.name && (
-                    <p className="text-cyan-400 text-[10px] flex items-center gap-1 mt-0.5">
-                      <Building2 size={9} /> {r.institutions.name}
-                    </p>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    {r.is_internal && (
+                      <span className="text-[10px] font-bold uppercase tracking-[0.18em] bg-slate-800 border border-cyan-500/20 text-cyan-300 px-2 py-1 rounded-full">
+                        Préstamo interno
+                      </span>
+                    )}
+                    {r.institutions?.name && (
+                      <p className="text-cyan-400 text-[10px] flex items-center gap-1">
+                        <Building2 size={9} /> {r.institutions.name}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <span className={`text-[10px] font-bold px-2 py-1 rounded border ${isOverdue ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : 'text-cyan-400 bg-cyan-500/10 border-cyan-500/20'}`}>

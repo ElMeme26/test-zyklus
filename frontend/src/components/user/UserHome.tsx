@@ -99,14 +99,14 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
   const handleSubmit = async () => {
     if (!user) return;
     if (checkoutFromCart && cart.length > 0) {
-      await createMultipleRequests(cart, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView);
+      await createMultipleRequests(cart, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView, isInternal);
       setCart([]);
       setCheckoutFromCart(false);
       setCartOpen(false);
     } else if (selectedAsset) {
       await createRequest(selectedAsset, user, days, motive, isExternal ? selectedInstitution : undefined, isManagerView, isInternal);
     } else if (selectedBundle) {
-      await createBatchRequest(selectedBundle, user, days, motive, isManagerView);
+      await createBatchRequest(selectedBundle, user, days, motive, isManagerView, isExternal ? selectedInstitution : undefined, isInternal);
     }
     setSelectedAsset(null);
     setSelectedBundle(null);
@@ -496,7 +496,13 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 <input
                   type="checkbox"
                   checked={isExternal}
-                  onChange={e => setIsExternal(e.target.checked)}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    setIsExternal(checked);
+                    if (checked) {
+                      setIsInternal(false);
+                    }
+                  }}
                   className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
                 />
                 <div className="flex items-center gap-2">
@@ -521,7 +527,14 @@ export function UserHome({ isManagerView = false, onBack }: { isManagerView?: bo
                 <input
                   type="checkbox"
                   checked={isInternal}
-                  onChange={e => setIsInternal(e.target.checked)}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    setIsInternal(checked);
+                    if (checked) {
+                      setIsExternal(false);
+                      setSelectedInstitution(undefined);
+                    }
+                  }}
                   className="w-5 h-5 rounded border-2 border-slate-700 bg-slate-900 checked:bg-primary checked:border-primary cursor-pointer transition-all"
                 />
                 <div className="flex items-center gap-2">

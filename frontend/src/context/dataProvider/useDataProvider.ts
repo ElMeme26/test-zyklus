@@ -34,9 +34,7 @@ export function useDataProvider() {
 
   // For lazy-loaded historical data
   const [auditLogsPage, setAuditLogsPage] = useState(1);
-  const [auditLogsTotal, setAuditLogsTotal] = useState(0);
   const [maintenanceLogsPage, setMaintenanceLogsPage] = useState(1);
-  const [maintenanceLogsTotal, setMaintenanceLogsTotal] = useState(0);
 
   // Caché para resultados paginados (evita re-fetch del mismo filtro)
   const auditLogsCache = useRef(new Map<string, AuditLog[]>());
@@ -89,7 +87,6 @@ export function useDataProvider() {
         auditLogsCache.current.set(cacheKey, result.auditLogs);
         setAuditLogs(prev => [...prev, ...result.auditLogs]);
         setAuditLogsPage(nextPage);
-        setAuditLogsTotal(result.total);
       }
     } catch (err) {
       console.error('loadMoreAuditLogs:', err);
@@ -111,7 +108,6 @@ export function useDataProvider() {
         maintenanceLogsCache.current.set(cacheKey, result.maintenanceLogs);
         setMaintenanceLogs(prev => [...prev, ...result.maintenanceLogs]);
         setMaintenanceLogsPage(nextPage);
-        setMaintenanceLogsTotal(result.total);
       }
     } catch (err) {
       console.error('loadMoreMaintenanceLogs:', err);
@@ -207,7 +203,7 @@ export function useDataProvider() {
     }
   };
 
-  const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false) => {
+  const createBatchRequest = async (bundle: Bundle, user: User, days: number, motive: string, autoApprove = false, institutionId?: number, isInternal = false) => {
     if (!bundle.assets?.length) { toast.error('Combo sin activos'); return; }
     const unavail = bundle.assets.filter(a => a.status !== 'Disponible');
     if (unavail.length) { toast.error(`No disponibles: ${unavail.map(a => `${a.name}(${a.status})`).join(', ')}`); return; }
@@ -219,7 +215,9 @@ export function useDataProvider() {
         user,
         days,
         motive,
-        autoApprove
+        autoApprove,
+        institutionId,
+        isInternal
       );
       toast.success(`Combo "${bundle.name}" solicitado`);
       fetchData();
@@ -350,7 +348,7 @@ export function useDataProvider() {
     }
   };
 
-  const createMultipleRequests = async (assetList: Asset[], user: User, days: number, motive = '', institutionId?: number, autoApprove = false) => {
+  const createMultipleRequests = async (assetList: Asset[], user: User, days: number, motive = '', institutionId?: number, autoApprove = false, isInternal = false) => {
     if (!assetList.length) { toast.error('No hay activos en el carrito'); return; }
     const unavail = assetList.filter(a => a.status !== 'Disponible' || a.maintenance_alert);
     if (unavail.length) {
@@ -359,7 +357,7 @@ export function useDataProvider() {
       return;
     }
     try {
-      await apiRequests.createBatchRequest(assetList.map(a => a.id), user, days, motive, institutionId, autoApprove);
+      await apiRequests.createBatchRequest(assetList.map(a => a.id), user, days, motive, institutionId, autoApprove, isInternal);
       toast.success(autoApprove ? `${assetList.length} activos auto-aprobados` : 'Solicitud enviada');
       fetchData();
     } catch (err) {

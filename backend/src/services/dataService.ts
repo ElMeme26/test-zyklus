@@ -36,6 +36,7 @@ export async function getAllData(): Promise<DataPayload> {
            r.days_requested,
            r.motive,
            r.status,
+           r.is_internal,
            r.approved_at,
            r.expected_return_date,
            r.returned_at,

@@ -118,6 +118,7 @@ export interface Request {
   return_condition?: string;
 
   security_check_step?: number;
+  is_internal?: boolean;
   security_notes?: string;
   digital_signature?: string;
   is_damaged?: boolean;

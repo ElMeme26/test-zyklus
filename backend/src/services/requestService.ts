@@ -65,14 +65,16 @@ export async function createBatchRequest(body: {
   motive?: string;
   institutionId?: number;
   autoApprove?: boolean;
+  isInternal?: boolean;
 }): Promise<void> {
-  const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = body;
+  const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = body;
   if (assetIds.length === 0) throw new Error('No hay activos');
   const returnDate = toReturnDate(days);
   const cartGroupId = `CART-${Date.now()}`;
   const groupedMotive = (motive?.trim() ? `[CARRITO] ${motive}` : '[CARRITO] Solicitud desde carrito');
-  const status = autoApprove ? 'APPROVED' : 'PENDING';
+  const status = autoApprove ? (isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED') : 'PENDING';
   const approvedAt = autoApprove ? new Date().toISOString() : null;
+  const checkoutAt = autoApprove && isInternal ? approvedAt : null;
   for (const assetId of assetIds) {
     const ar = await query(`SELECT status, maintenance_alert, name FROM assets WHERE id = $1`, [assetId]);
     const a = ar.rows[0] as { status: string; maintenance_alert?: boolean; name: string } | undefined;
@@ -80,9 +82,9 @@ export async function createBatchRequest(body: {
   }
   for (const assetId of assetIds) {
     await query(
-      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, expected_return_date, bundle_group_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, groupedMotive, status, approvedAt, returnDate, cartGroupId]
+      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, checkout_at, expected_return_date, bundle_group_id, is_internal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, groupedMotive, status, approvedAt, checkoutAt, returnDate, cartGroupId, isInternal ?? false]
     );
   }
   for (const aid of assetIds) {
@@ -107,14 +109,17 @@ export async function createBundleRequest(body: {
   managerId?: string;
   days: number;
   motive: string;
+  institutionId?: number;
   autoApprove?: boolean;
+  isInternal?: boolean;
 }): Promise<void> {
-  const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, autoApprove } = body;
+  const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = body;
   if (assetIds.length === 0) throw new Error('Kit sin activos');
   const returnDate = toReturnDate(days);
   const bundleGroupId = `BNDL-${Date.now()}`;
-  const status = autoApprove ? 'APPROVED' : 'PENDING';
+  const status = autoApprove ? (isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED') : 'PENDING';
   const approvedAt = autoApprove ? new Date().toISOString() : null;
+  const checkoutAt = autoApprove && isInternal ? approvedAt : null;
   const motiveText = `[COMBO: ${bundleName}] ${motive}`;
   for (const assetId of assetIds) {
     const ar = await query(`SELECT status FROM assets WHERE id = $1`, [assetId]);
@@ -123,9 +128,9 @@ export async function createBundleRequest(body: {
   }
   for (const assetId of assetIds) {
     await query(
-      `INSERT INTO requests (asset_id, user_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, expected_return_date, bundle_group_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [assetId, userId, userName, userDisciplina, days, motiveText, status, approvedAt, returnDate, bundleGroupId]
+      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, checkout_at, expected_return_date, bundle_group_id, is_internal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, motiveText, status, approvedAt, checkoutAt, returnDate, bundleGroupId, isInternal ?? false]
     );
   }
   for (const assetId of assetIds) {

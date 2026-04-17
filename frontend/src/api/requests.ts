@@ -36,7 +36,8 @@ export async function createBatchRequest(
   days: number,
   motive?: string,
   institutionId?: number,
-  autoApprove?: boolean
+  autoApprove?: boolean,
+  isInternal?: boolean
 ): Promise<void> {
   await apiFetch('/api/requests/batch', {
     method: 'POST',
@@ -50,6 +51,7 @@ export async function createBatchRequest(
       motive: motive ?? '',
       institutionId: institutionId ?? null,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     }),
   });
 }
@@ -62,7 +64,9 @@ export async function createBundleRequest(
   user: User,
   days: number,
   motive: string,
-  autoApprove?: boolean
+  autoApprove?: boolean,
+  institutionId?: number,
+  isInternal?: boolean
 ): Promise<void> {
   await apiFetch('/api/requests/bundle', {
     method: 'POST',
@@ -77,6 +81,8 @@ export async function createBundleRequest(
       days,
       motive,
       autoApprove: Boolean(autoApprove),
+      institutionId: institutionId ?? null,
+      isInternal: Boolean(isInternal),
     }),
   });
 }
