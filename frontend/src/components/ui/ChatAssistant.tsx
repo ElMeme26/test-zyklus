@@ -1,6 +1,6 @@
 /** Asistente de chat con IA (Gemini) para consultas y gráficas del sistema patrimonial. */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, X, Loader2, Sparkles, Trash2, Download } from 'lucide-react';
+import { Bot, Send, X, Loader2, Sparkles, Trash2, Download, Bell } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Input, Card } from './core';
@@ -9,6 +9,7 @@ import {
   PieChart, Pie, Legend, LineChart, Line,
 } from 'recharts';
 import { apiFetch } from '../../api/client';
+import { semanticSearch, generateAutoAlerts, chatWithLanguage } from '../../api/ai';
 
 interface GraphData {
   type: 'bar' | 'pie' | 'line';
@@ -24,49 +25,77 @@ interface Message {
 
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6'];
 
-/** Extrae [GRAPH_DATA: {...}] del texto de Gemini y devuelve el texto limpio y la gráfica. */
-function extractGraph(text: string): { clean: string; graph?: GraphData } {
-  const cleaned = text
-    .replace(/```json\s*/g, '')
-    .replace(/```\s*/g, '');
+/** 
+ * Extrae bloques JSON con gráficas del texto
+ * Busca: ```json {...}``` o [GRAPH:{...}]
+ */
+function extractChart(text: string): { clean: string; graph?: GraphData } {
+  let match;
+  let jsonStr;
+  let fullBlock = '';
 
-  const marker = '[GRAPH_DATA:';
-  const markerIdx = cleaned.indexOf(marker);
-  if (markerIdx === -1) return { clean: cleaned.trim() };
-  const jsonStart = cleaned.indexOf('{', markerIdx + marker.length);
-  if (jsonStart === -1) return { clean: cleaned.trim() };
-  let depth = 0;
-  let jsonEnd = -1;
-  for (let i = jsonStart; i < cleaned.length; i++) {
-    if (cleaned[i] === '{') depth++;
-    else if (cleaned[i] === '}') {
-      depth--;
-      if (depth === 0) { jsonEnd = i; break; }
+  // Intenta buscar ```json ... ``` (backticks)
+  const jsonBlockRegex = /```json\s*([\s\S]*?)```/i;
+  match = jsonBlockRegex.exec(text);
+
+  if (match) {
+    const content = match[1].trim();
+    const jsonMatch = /\{[\s\S]*\}/.exec(content);
+    if (jsonMatch) {
+      jsonStr = jsonMatch[0];
+      fullBlock = match[0];
     }
   }
-  if (jsonEnd === -1) return { clean: cleaned.trim() };
 
-  const jsonStr = cleaned.slice(jsonStart, jsonEnd + 1);
-  const closingBracket = cleaned.indexOf(']', jsonEnd);
-  const blockEnd = closingBracket !== -1 ? closingBracket + 1 : jsonEnd + 1;
-  const fullBlock = cleaned.slice(markerIdx, blockEnd);
-  const cleanText = cleaned.replace(fullBlock, '').trim();
+  // Fallback: buscar [GRAPH: {...}]
+  if (!jsonStr) {
+    const graphMarker = '[GRAPH:';
+    const markerIdx = text.indexOf(graphMarker);
+    if (markerIdx !== -1) {
+      const jsonStart = text.indexOf('{', markerIdx);
+      if (jsonStart !== -1) {
+        let depth = 0;
+        let jsonEnd = -1;
+        for (let i = jsonStart; i < text.length; i++) {
+          if (text[i] === '{') depth++;
+          else if (text[i] === '}') {
+            depth--;
+            if (depth === 0) { jsonEnd = i; break; }
+          }
+        }
+        if (jsonEnd !== -1) {
+          jsonStr = text.slice(jsonStart, jsonEnd + 1);
+          const closingBracket = text.indexOf(']', jsonEnd);
+          const blockEnd = closingBracket !== -1 ? closingBracket + 1 : jsonEnd + 1;
+          fullBlock = text.slice(markerIdx, blockEnd);
+        }
+      }
+    }
+  }
+
+  if (!jsonStr) return { clean: text.trim() };
+
   try {
-    const raw = JSON.parse(jsonStr) as {
-      type?: string;
-      title?: string;
-      data?: Array<{ name: string; value: number }>;
+    const raw = JSON.parse(jsonStr);
+    const chartType = raw.chartType || raw.type || 'bar';
+    const isValidChart = ['bar', 'pie', 'line'].includes(chartType) && 
+                        Array.isArray(raw.data) && 
+                        raw.data.length > 0;
+
+    if (!isValidChart) return { clean: text.trim() };
+
+    const cleanText = fullBlock ? text.replace(fullBlock, '').trim() : text.trim();
+    return {
+      clean: cleanText,
+      graph: {
+        type: chartType,
+        title: raw.title || '',
+        data: raw.data,
+      },
     };
-    const graph: GraphData = {
-      type: (raw.type as GraphData['type']) || 'bar',
-      title: raw.title || '',
-      data: Array.isArray(raw.data) ? raw.data : [],
-    };
-    if (graph.data.length === 0) return { clean: cleanText };
-    return { clean: cleanText, graph };
   } catch (e) {
-    console.warn('[Zykla] GRAPH_DATA parse error:', e, '\nJSON extraído:', jsonStr);
-    return { clean: cleanText };
+    console.warn('[Zykla] JSON parse error:', e);
+    return { clean: text.trim() };
   }
 }
 
@@ -153,11 +182,15 @@ function ChartWidget({ graph }: { graph: GraphData }) {
   );
 }
 
-/** Llama al backend para ejecutar Gemini de forma segura. */
-async function callGemini(prompt: string): Promise<string> {
-  const response = await apiFetch<{ text: string }>('/api/ai/generate', {
+/** 
+ * Llama al endpoint de chat contextual del backend.
+ * El contexto (rol + activos/solicitudes/stats) se inyecta desde el servidor.
+ * MEJORA 4: Envía preferencia de idioma al servidor
+ */
+async function callChatAI(message: string, language: 'es' | 'en' | 'pt' = 'es'): Promise<string> {
+  const response = await apiFetch<{ text: string }>('/api/ai/chat', {
     method: 'POST',
-    body: JSON.stringify({ prompt, temperature: 0.2, maxOutputTokens: 2048 }),
+    body: JSON.stringify({ message, language }),
   });
   return response.text;
 }
@@ -166,6 +199,7 @@ export function ChatAssistant() {
   const { assets, requests, stats } = useData();
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  // const [language, setLanguage] = useState<'es' | 'en' | 'pt'>('es');
 
   const isUserRole = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
   const initialMessage: Message = {
@@ -183,100 +217,6 @@ export function ChatAssistant() {
 
   const clearChat = () => setMessages([initialMessage]);
 
-  const buildContext = useCallback(() => {
-    const isAdmin = user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR';
-    if (!isAdmin && user?.id) {
-      const misReqs = requests.filter(r => r.user_id === user.id);
-      return {
-        mis_prestamos: misReqs.length,
-        mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
-        activos_disponibles_total: assets.filter(a => a.status === 'Disponible').length,
-        categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
-      };
-    }
-
-    const cats = assets.reduce((acc: Record<string, number>, a) => {
-      const c = a.category || 'Sin categoría';
-      acc[c] = (acc[c] || 0) + 1;
-      return acc;
-    }, {});
-
-    const states = assets.reduce((acc: Record<string, number>, a) => {
-      acc[a.status] = (acc[a.status] || 0) + 1;
-      return acc;
-    }, {});
-
-    const topAssets = Object.entries(
-      requests.reduce((acc: Record<string, number>, r) => {
-        const name = r.assets?.name || 'Desconocido';
-        acc[name] = (acc[name] || 0) + 1;
-        return acc;
-      }, {})
-    ).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([name, count]) => ({ name, count }));
-
-    const byDisciplina = requests.reduce((acc: Record<string, number>, r) => {
-      const d = r.requester_disciplina || 'Sin asignar';
-      acc[d] = (acc[d] || 0) + 1;
-      return acc;
-    }, {});
-
-    const overdueList = requests
-      .filter(r => r.status === 'OVERDUE')
-      .slice(0, 5)
-      .map(r => ({ activo: r.assets?.name, usuario: r.requester_name }));
-
-    return {
-      totales: {
-        inventario: assets.length,
-        disponibles: assets.filter(a => a.status === 'Disponible').length,
-        prestados: assets.filter(a => a.status === 'Prestada').length,
-        mantenimiento: assets.filter(a => ['En mantenimiento', 'Requiere Mantenimiento'].includes(a.status)).length,
-        prestamos_activos: requests.filter(r => r.status === 'ACTIVE').length,
-        prestamos_vencidos: requests.filter(r => r.status === 'OVERDUE').length,
-        total_solicitudes: requests.length,
-      },
-      categorias: Object.entries(cats).map(([name, value]) => ({ name, value })),
-      estados: Object.entries(states).map(([name, value]) => ({ name, value })),
-      top_activos_solicitados: topAssets,
-      solicitudes_por_disciplina: Object.entries(byDisciplina).map(([name, value]) => ({ name, value })),
-      prestamos_vencidos_detalle: overdueList,
-    };
-  }, [assets, requests, user]);
-
-  const buildSystemPrompt = useCallback((context: object, forUserOnly: boolean) => {
-    if (forUserOnly) {
-      return `Eres Zykla AI, asistente integrado en Zyklus Halo para USUARIOS.
-
-DATOS DEL USUARIO (solo esta información):
-${JSON.stringify(context, null, 2)}
-
-INSTRUCCIONES ESTRICTAS:
-1. Solo puedes hablar de: (a) la información de préstamos del propio usuario (sus solicitudes, fechas de retorno), y (b) recomendaciones de activos según lo que el usuario vaya a hacer (por categoría, tipo de uso, etc.).
-2. NUNCA des información analítica del sistema, estadísticas globales, gráficas de todo el inventario ni datos de otros usuarios.
-3. Responde en español, de forma breve y útil.
-4. Para recomendaciones, usa las categorías y el número de activos disponibles; sugiere opciones concretas.`;
-    }
-    return `Eres Zykla AI, asistente experto integrado en Zyklus Halo, un sistema de control patrimonial.
-
-DATOS ACTUALES DEL SISTEMA:
-${JSON.stringify(context, null, 2)}
-
-INSTRUCCIONES ESTRICTAS:
-1. Responde siempre en español, de forma concisa y directa.
-2. Cuando el usuario pida estadísticas, gráficas, comparaciones o visualizaciones, DEBES incluir OBLIGATORIAMENTE al final de tu respuesta un bloque con este formato EXACTO (sin markdown alrededor):
-
-[GRAPH_DATA: {"type": "bar", "title": "Título de la gráfica", "data": [{"name": "Etiqueta", "value": 10}]}]
-
-3. Los tipos de gráfica válidos son: "bar", "pie", "line".
-4. Usa "pie" para distribuciones porcentuales (categorías, estados).
-5. Usa "bar" para comparaciones y rankings.
-6. Usa "line" para tendencias en el tiempo.
-7. NUNCA pongas markdown (triple backtick) alrededor del [GRAPH_DATA].
-8. Si no hay suficientes datos para una gráfica, explícalo y responde solo con texto.
-9. Para preguntas que no requieren gráfica, responde solo con texto claro.
-10. Siempre basa tus respuestas en los datos reales proporcionados arriba.`;
-  }, []);
-
   const handleSend = async () => {
     if (!input.trim() || isLoading) return;
 
@@ -286,46 +226,80 @@ INSTRUCCIONES ESTRICTAS:
     setIsLoading(true);
 
     try {
-      let contextData: Record<string, unknown> = {};
-      if (user?.role === 'ADMIN_PATRIMONIAL' || user?.role === 'AUDITOR') {
-        const cats = stats?.categoryCounts ?? assets.reduce((acc: Record<string, number>, a) => {
-          const c = a.category || 'Otros';
-          acc[c] = (acc[c] || 0) + 1; return acc;
-        }, {});
-        const states = stats?.assetCounts ?? assets.reduce((acc: Record<string, number>, a) => {
-          acc[a.status] = (acc[a.status] || 0) + 1; return acc;
-        }, {});
-        contextData = {
-          totales: {
-            inventario: stats?.assetCounts?.total ?? assets.length,
-            prestamos_activos: stats?.requestCounts?.active ?? requests.filter(r => r.status === 'ACTIVE').length,
-            prestamos_vencidos: stats?.requestCounts?.overdue ?? requests.filter(r => r.status === 'OVERDUE').length,
-          },
-          categorias: Object.entries(cats).map(([name, val]) => ({ name, value: val })),
-          estados: Object.entries(states).map(([name, val]) => ({ name, value: val })),
-        };
-      } else {
-        const misReqs = requests.filter(r => r.user_id === user?.id);
-        contextData = {
-          mis_prestamos: misReqs.length,
-          mis_solicitudes_activas: misReqs.filter(r => r.status === 'ACTIVE').map(r => ({ activo: r.assets?.name, fecha_retorno: r.expected_return_date })),
-          activos_disponibles_total: stats?.assetCounts?.disponible ?? assets.filter(a => a.status === 'Disponible').length,
-          categorias_disponibles: [...new Set(assets.filter(a => a.status === 'Disponible').map(a => a.category).filter(Boolean))],
-        };
-      }
-      const forUserOnly = user?.role !== 'ADMIN_PATRIMONIAL' && user?.role !== 'AUDITOR';
-      const systemPrompt = buildSystemPrompt(contextData, forUserOnly);
-      const fullPrompt = `${systemPrompt}\n\nUsuario: ${userMsg}`;
-      const rawText = await callGemini(fullPrompt);
-      const { clean, graph } = extractGraph(rawText);
+      // Detectar si pide recomendaciones de activos y hacer búsqueda semántica automática
+      const searchKeywords = ['necesito', 'recomend', 'sugier', 'activo', 'equipo', 'herramienta', 'dispositivo', 
+                             'quiero', 'busco', 'need', 'recommend', 'suggest', 'want', 'look for',
+                             'preciso', 'recomenda', 'sugira', 'ativo', 'ferramenta'];
+      const shouldSearch = searchKeywords.some(kw => userMsg.toLowerCase().includes(kw)) && isUserRole;
 
-      setMessages(prev => [...prev, { role: 'bot', text: clean || rawText, graph }]);
+      // MEJORA 4: Llamar con preferencia de idioma
+      let aiResponse = await callChatAI(userMsg, 'es');
+
+      // Si es usuario y pidió activos, insertar resultados de búsqueda semántica
+      if (shouldSearch) {
+        const searchResult = await performSemanticSearch(userMsg);
+        if (searchResult) {
+          aiResponse = `${aiResponse}\n\n${searchResult}`;
+        }
+      }
+
+      const { clean, graph } = extractChart(aiResponse);
+      setMessages(prev => [...prev, { role: 'bot', text: clean || aiResponse, graph }]);
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Error desconocido';
       console.error('Zykla AI error:', msg);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `Error al conectar con Zykla AI: ${msg}. Verifica que el backend de AI esté disponible.`,
+        text: `Error al conectar con Zykla AI: ${msg}. Verifica que el backend esté disponible.`,
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // MEJORA 2 INTEGRADA: Búsqueda Semántica automática en chat
+  const performSemanticSearch = async (problem: string): Promise<string | null> => {
+    try {
+      const recommendations = await semanticSearch(problem, 'es');
+      if (recommendations.length === 0) return null;
+
+      const botText = recommendations.map((r, i) =>
+        `${i + 1}. **${r.name}** (${r.tag}) - Confianza: ${Math.round(r.confidence * 100)}%\n   _${r.reason}_`
+      ).join('\n\n');
+
+      return `🔍 Activos recomendados para tu necesidad:\n\n${botText}`;
+    } catch (error) {
+      console.error('Semantic search error:', error);
+      return null;
+    }
+  };
+
+  // MEJORA 3: Alertas Automáticas (solo para admins)
+  const handleGenerateAlerts = async () => {
+    setIsLoading(true);
+    try {
+      const result = await generateAutoAlerts('es');
+      if (result.alerts.length === 0) {
+        setMessages(prev => [...prev, {
+          role: 'bot',
+          text: 'No hay alertas en este momento. Sistema en buen estado.',
+        }]);
+        return;
+      }
+
+      const alertText = result.alerts.map((a, i) =>
+        `${i + 1}. [${a.severity}] **${a.title}**\n   _${a.description}_`
+      ).join('\n\n');
+
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        text: `⚠️ Alertas generadas:\n\n${alertText}\n\n_Stats: Total activos: ${result.stats.totalAssets}, Mantenimiento: ${result.stats.maintenanceNeeded}, Vencidos: ${result.stats.overdueRequests}_`,
+      }]);
+    } catch (error) {
+      console.error('Auto-alerts error:', error);
+      setMessages(prev => [...prev, {
+        role: 'bot',
+        text: 'Error al generar alertas. Intenta de nuevo.',
       }]);
     } finally {
       setIsLoading(false);
@@ -348,17 +322,19 @@ INSTRUCCIONES ESTRICTAS:
         <div className="fixed bottom-24 right-6 z-50 w-full max-w-[340px] md:w-96 animate-in fade-in slide-in-from-bottom-4">
           <Card className="flex flex-col h-[520px] border-purple-500/40 shadow-2xl bg-slate-900/95 backdrop-blur-xl border overflow-hidden p-0">
             {/* Header */}
-            <div className="flex justify-between items-center p-3 border-b border-slate-700/50 bg-slate-800/50">
-              <div className="flex items-center gap-2 text-purple-400 font-bold text-sm">
-                <Bot size={18} /> Zykla AI
-                {user && <span className="text-[10px] text-slate-400 font-normal">({user.role})</span>}
-                <span className="text-[9px] bg-purple-500/20 border border-purple-500/30 text-purple-300 px-1.5 py-0.5 rounded-full">2.5 Flash</span>
+            <div className="flex justify-between items-center p-3 border-b border-slate-700/50 bg-gradient-to-r from-purple-900/50 to-slate-800/50 backdrop-blur-sm">
+              <div className="flex items-center gap-2 text-purple-300 font-bold text-sm">
+                <div className="w-6 h-6 rounded-lg bg-purple-500/20 border border-purple-400/30 flex items-center justify-center">
+                  <Bot size={14} className="text-purple-400" />
+                </div>
+                Zykla AI
+                {user && <span className="text-[10px] text-slate-400 font-normal ml-1">({user.role})</span>}
               </div>
-              <div className="flex items-center gap-3">
-                <button onClick={clearChat} className="text-slate-500 hover:text-rose-400 transition-colors" title="Borrar chat">
+              <div className="flex items-center gap-2">
+                <button onClick={clearChat} className="text-slate-500 hover:text-rose-400 transition-colors p-1 rounded hover:bg-slate-700/50" title="Borrar chat">
                   <Trash2 size={16} />
                 </button>
-                <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white transition-colors">
+                <button onClick={() => setIsOpen(false)} className="text-slate-500 hover:text-white transition-colors p-1 rounded hover:bg-slate-700/50">
                   <X size={18} />
                 </button>
               </div>
@@ -391,19 +367,43 @@ INSTRUCCIONES ESTRICTAS:
 
             {/* Quick suggestions */}
             {messages.length === 1 && (
-              <div className="px-3 pb-2 flex gap-1.5 overflow-x-auto scrollbar-hide">
-                {(isUserRole
-                  ? ['¿Cuántos préstamos tengo?', 'Recomiéndame activos para grabar video', '¿Qué categorías hay disponibles?', 'Mis fechas de devolución']
-                  : ['Gráfica de estados', 'Top activos solicitados', 'Distribución por categoría', '¿Cuántos vencidos?']
-                ).map(s => (
+              <div className="px-3 pb-2 space-y-2">
+                {/* MEJORA 3: Botón de Alertas solo para admins */}
+                {!isUserRole && (
                   <button
-                    key={s}
-                    onClick={() => { setInput(s); }}
-                    className="flex-shrink-0 text-[10px] px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 hover:text-purple-300 hover:border-purple-500/40 rounded-full transition-all"
+                    onClick={handleGenerateAlerts}
+                    disabled={isLoading}
+                    className="w-full flex items-center gap-2 text-[10px] px-3 py-2 bg-rose-500/20 border border-rose-500/40 text-rose-300 hover:bg-rose-500/30 rounded-lg transition-all disabled:opacity-50"
+                    title="Generar alertas del sistema"
                   >
-                    {s}
+                    <Bell size={12} /> Generar alertas del sistema
                   </button>
-                ))}
+                )}
+                {/* Quick action suggestions */}
+                <div className="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                  {(isUserRole
+                    ? [
+                        '💡 Sugiéreme equipos para pruebas de red',
+                        '🔍 ¿Qué activos tengo disponibles?',
+                        '📦 ¿Cuántos préstamos tengo?',
+                        '📅 Mis fechas de devolución próximas',
+                      ]
+                    : [
+                        '📊 Graficar equipos por estado',
+                        '📈 Demanda de equipos este mes',
+                        '🎯 Activos más solicitados',
+                        '⚠️ Alertas de mantenimiento',
+                      ]
+                  ).map(s => (
+                    <button
+                      key={s}
+                      onClick={() => { setInput(s); }}
+                      className="flex-shrink-0 text-[10px] px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-slate-400 hover:text-purple-300 hover:border-purple-500/40 rounded-full transition-all"
+                    >
+                      {s}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 

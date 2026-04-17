@@ -34,21 +34,20 @@ export function LoginScreen() {
       <Card className="w-full max-w-sm bg-slate-900/90 login-card border-slate-800 relative z-10 backdrop-blur-2xl shadow-2xl">
         <div className="text-center mb-8">
           
-          {/* Contenedor del Logo - Recuadro fijo de 24x24 */}
-          <div className="relative group mx-auto mb-6 w-24 h-24">
+          {/* Contenedor del Logo - Recuadro más grande para mejor visibilidad */}
+          <div className="relative group mx-auto mb-6 w-32 h-32 sm:w-36 sm:h-36">
             {/* Resplandor de fondo */}
-            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-2xl blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
+            <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-blue-600 rounded-[1.75rem] blur opacity-30 group-hover:opacity-50 transition duration-1000"></div>
             
             {/* Contenedor principal: 
-                - Se quitó 'overflow-hidden' para permitir que el logo REBASE el borde.
-                - Se añadió 'z-10' para que el logo flote sobre el borde del cuadro.
+                - Se amplió para que el logo ocupe más espacio.
+                - Se añadió padding suave para que el logo respire.
             */}
-            <div className="relative w-full h-full bg-slate-950 rounded-2xl flex items-center justify-center border border-white/10 shadow-2xl p-0 backdrop-blur-xl z-10">
-              <img 
-                src="/logo.png" 
-                alt="ZF Logo" 
-                /* scale-150 hace que el logo se salga del recuadro negro */
-                className="w-full h-full object-contain scale-150 filter drop-shadow-[0_0_15px_rgba(6,182,212,0.8)] transition-transform duration-500 group-hover:scale-[1.6]"
+            <div className="relative w-full h-full rounded-[1.75rem] flex items-center justify-center border border-white/10 shadow-2xl p-4 bg-slate-950/10 backdrop-blur-xl z-10">
+              <img
+                src="/logo.png"
+                alt="ZF Logo"
+                className="w-full h-full object-contain scale-[1.18] drop-shadow-[0_0_28px_rgba(15,118,255,0.28)]"
               />
             </div>
           </div>
@@ -91,6 +90,29 @@ export function LoginScreen() {
               {errorMessage}
             </p>
           )}
+
+          {/* Botones de Login Automático para Pruebas */}
+          <div className="mt-6 space-y-3">
+            <p className="text-xs text-slate-500 text-center uppercase tracking-widest">Botones para pruebas</p>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { email: 'user@zf.com', label: '👤 Usuario' },
+                { email: 'admin@zf.com', label: '👑 Admin' },
+                { email: 'manager@zf.com', label: '👔 Manager' },
+                { email: 'guard@zf.com', label: '🛡️ Guardia' },
+                { email: 'auditor@zf.com', label: '🔍 Auditor', span: 'col-span-2' }
+              ].map(({ email, label, span }) => (
+                <button
+                  key={email}
+                  onClick={() => login(email, 'zyklus')}
+                  className={`w-full py-2 px-2 rounded-lg bg-slate-800/50 border border-slate-700 text-slate-300 text-xs font-medium hover:bg-slate-700/50 hover:border-slate-600 transition-all text-center disabled:opacity-50 ${span || ''}`}
+                  disabled={isLoading}
+                >
+                  {isLoading ? <Loader2 className="w-3 h-3 animate-spin mx-auto" /> : label}
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </Card>
     </div>

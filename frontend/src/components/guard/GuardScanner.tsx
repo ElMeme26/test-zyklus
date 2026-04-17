@@ -198,14 +198,14 @@ export function GuardScanner() {
       )}
 
       <header className="sticky top-0 z-30 bg-background/90 backdrop-blur border-b border-slate-800">
-        <div className="flex items-center justify-between px-4 py-3">
+        <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
-              <ScanLine size={18} className="text-primary" />
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center">
+              <ScanLine size={18} className="text-primary sm:w-5 sm:h-5" />
             </div>
             <div>
-              <h1 className="text-white font-bold text-sm leading-tight">Guardia de Seguridad</h1>
-              <p className="text-slate-500 text-[10px]">{user?.name}</p>
+              <h1 className="text-white font-bold text-sm sm:text-base leading-tight">Guardia de Seguridad</h1>
+              <p className="text-slate-500 text-[10px] sm:text-xs">{user?.name}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -218,12 +218,12 @@ export function GuardScanner() {
           </div>
         </div>
 
-        <div className="flex px-4 pb-3 gap-2">
+        <div className="flex px-4 pb-3 gap-2 sm:px-6 sm:pb-4">
           {(['CHECKOUT', 'CHECKIN'] as ScanMode[]).map(m => (
             <button
               key={m}
               onClick={() => { setMode(m); reset(); }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-primary text-black shadow-lg shadow-primary/30' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
+              className={`flex-1 py-2.5 sm:py-3 rounded-xl text-xs sm:text-sm font-black uppercase tracking-widest transition-all ${mode === m ? 'bg-primary text-black shadow-lg shadow-primary/30' : 'bg-slate-900 text-slate-500 border border-slate-800'}`}
             >
               {m === 'CHECKOUT' ? 'Salida' : 'Entrada'}
             </button>
@@ -231,18 +231,18 @@ export function GuardScanner() {
         </div>
       </header>
 
-      <main className="px-4 py-6 max-w-lg mx-auto space-y-4">
+      <main className="px-4 py-6 max-w-lg mx-auto space-y-4 sm:px-6 sm:py-8">
 
         {step === 'idle' && (
           <div className="space-y-4">
-            <div className="text-center py-10">
-              <div className="w-20 h-20 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
-                {mode === 'CHECKOUT' ? <QrCode size={36} className="text-primary" /> : <Scan size={36} className="text-primary" />}
+            <div className="text-center py-10 sm:py-12">
+              <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-3xl bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto mb-4 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
+                {mode === 'CHECKOUT' ? <QrCode size={36} className="text-primary sm:w-10 sm:h-10" /> : <Scan size={36} className="text-primary sm:w-10 sm:h-10" />}
               </div>
-              <h2 className="text-white font-black text-xl mb-1">
+              <h2 className="text-white font-black text-xl sm:text-2xl mb-1">
                 {mode === 'CHECKOUT' ? 'Registrar Salida' : 'Registrar Entrada'}
               </h2>
-              <p className="text-slate-500 text-sm">
+              <p className="text-slate-500 text-sm sm:text-base">
                 {mode === 'CHECKOUT'
                   ? 'Escanea el QR del solicitante (generado desde la app)'
                   : 'Escanea el QR físico del activo (etiqueta en el equipo)'}
@@ -250,9 +250,9 @@ export function GuardScanner() {
             </div>
             <button
               onClick={() => { setStep('scanning'); setScanning(true); }}
-              className="w-full py-5 rounded-2xl bg-primary text-black font-black text-base flex items-center justify-center gap-3 shadow-lg shadow-primary/30 active:scale-[0.97] transition-all"
+              className="w-full py-5 sm:py-6 rounded-2xl bg-primary text-black font-black text-base sm:text-lg flex items-center justify-center gap-3 shadow-lg shadow-primary/30 active:scale-[0.97] transition-all"
             >
-              <ScanLine size={22} /> Abrir Escáner de Cámara
+              <ScanLine size={22} className="sm:w-6 sm:h-6" /> Abrir Escáner de Cámara
             </button>
           </div>
         )}
