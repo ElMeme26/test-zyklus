@@ -32,7 +32,7 @@ export async function semanticSearch(
   problem: string,
   language: 'es' | 'en' | 'pt' = 'es'
 ): Promise<SemanticRecommendation[]> {
-  const response = await apiFetch<any>('/ai/semantic-search', {
+  const response = await apiFetch<any>('/api/ai/semantic-search', {
     method: 'POST',
     body: JSON.stringify({ problem, language }),
   });
@@ -45,16 +45,22 @@ export async function semanticSearch(
  * Genera alertas automáticas basadas en estadísticas del sistema
  */
 export async function generateAutoAlerts(
-  language: 'es' | 'en' | 'pt' = 'es'
+  language: 'es' | 'en' | 'pt' = 'es',
+  role?: string,
+  context?: any
 ): Promise<{
   alerts: AutomaticAlert[];
   stats: SystemStats;
   language: string;
   timestamp: string;
 }> {
-  const response = await apiFetch<any>('/ai/alerts', {
+  // Asegurar que el contexto no tenga referencias circulares
+  const safeContext = context ? JSON.parse(JSON.stringify(context)) : undefined;
+
+  const response = await apiFetch<any>('/api/ai/alerts', {
     method: 'POST',
-    body: JSON.stringify({ language }),
+    body: JSON.stringify({ language, role, context: safeContext }),
+    timeout: 60000, // Aumentar timeout a 60s
   });
 
   return response || { alerts: [], stats: {} as SystemStats, language, timestamp: new Date().toISOString() };

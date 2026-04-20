@@ -13,7 +13,15 @@ interface DataContextType {
   maintenanceLogs: MaintenanceLog[];
   bundles: Bundle[];
   auditLogs: AuditLog[];
-  stats: { assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number }; categoryCounts?: Record<string, number> } | null;
+  stats: { 
+    assetCounts: Record<string, number>; 
+    requestCounts: { overdue: number; active: number }; 
+    categoryCounts?: Record<string, number>;
+    topAssets?: Array<{ name: string; count: number }>;
+    topUsers?: Array<{ name: string; count: number }>;
+    disciplines?: string[];
+    topAssetsByDiscipline?: Record<string, Array<{ name: string; count: number }>>;
+  } | null;
   isLoading: boolean;
   unreadCount: number;
 

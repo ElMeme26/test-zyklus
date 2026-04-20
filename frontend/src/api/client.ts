@@ -8,7 +8,7 @@ function getToken(): string | null {
 /** Petición HTTP autenticada con JWT. Lanza error si la respuesta no es ok. */
 export async function apiFetch<T = unknown>(
   path: string,
-  options: RequestInit = {}
+  options: RequestInit & { timeout?: number } = {}
 ): Promise<T> {
   const token = getToken();
   const headers: HeadersInit = {
@@ -18,11 +18,28 @@ export async function apiFetch<T = unknown>(
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   }
-  const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const message = (data as { error?: string })?.error ?? res.statusText;
-    throw new Error(message);
+
+  const { timeout, ...fetchOptions } = options;
+  let signal = fetchOptions.signal;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (timeout && !signal) {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeout);
   }
-  return data as T;
+
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, { ...fetchOptions, headers, signal });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = (data as { error?: string })?.error ?? res.statusText;
+      throw new Error(message);
+    }
+    return data as T;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }

@@ -16,6 +16,7 @@ import { ThemeToggle } from '../ui/ThemeToggle';
 import { AssetQRPrint } from './AssetQRPrint';
 import { DataLoadingScreen } from '../ui/DataLoadingScreen';
 import { DashboardCharts } from '../auditor';
+import { AssetStatusCard } from '../auditor/overview/AssetStatusCard';
 import { Scanner } from '@yudiel/react-qr-scanner';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -146,7 +147,7 @@ export function AdminDashboard() {
           </h1>
           <p className="text-slate-500 text-xs mt-0.5 hidden sm:block">Gestión total del inventario y solicitudes</p>
         </div>
-        <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1">
+        <div className="hidden md:flex bg-slate-800 p-1 rounded-lg border border-slate-700 gap-1 nav-tabs">
             {[
               { id: 'inventory', icon: <LayoutGrid size={13} />, label: 'Inventario' },
               { id: 'analytics', icon: <PieChart size={13} />, label: 'Analíticas' },
@@ -217,6 +218,9 @@ export function AdminDashboard() {
 
             <DashboardCharts />
 
+            <AssetStatusCard />
+
+            {/* Préstamos Vencidos - mejorado */}
             <div>
               <h3 className="text-white font-bold flex items-center gap-2 mb-4">
                 <Flame className="text-rose-400" size={18} />
@@ -231,27 +235,46 @@ export function AdminDashboard() {
               <AdminOverdueList requests={requests} />
             </div>
 
+            {/* Artículos Actualmente Prestados - corregido */}
             <div>
               <h3 className="text-white font-bold flex items-center gap-2 mb-4">
                 <Package className="text-emerald-400" size={18} /> Artículos Actualmente Prestados
-                <span className="text-slate-500 text-xs font-normal ml-1">— Solo activos (sin vencidos)</span>
+                <span className="ml-1.5 text-[11px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-bold">
+                  {requests.filter(r => ['ACTIVE', 'ACTIVE_INTERNAL'].includes(r.status)).length}
+                </span>
+                <span className="text-slate-500 text-xs font-normal ml-1">— Activos + Internos (sin vencidos)</span>
               </h3>
               <div className="bg-slate-900/50 border border-slate-800 rounded-xl overflow-x-auto">
                 <table className="w-full text-left text-xs text-slate-400 min-w-[600px]">
                   <thead className="bg-slate-900 text-[10px] uppercase font-bold text-slate-500">
-                    <tr><th className="p-3">Activo</th><th className="p-3">Usuario</th><th className="p-3">Retorno Esp.</th><th className="p-3">Estado</th></tr>
+                    <tr>
+                      <th className="p-3">Activo</th>
+                      <th className="p-3">Solicitante</th>
+                      <th className="p-3">Disciplina</th>
+                      <th className="p-3">Retorno Esp.</th>
+                      <th className="p-3">Estado</th>
+                    </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800/50">
-                    {requests.filter(r => r.status === 'ACTIVE').map(r => (
+                    {requests.filter(r => ['ACTIVE', 'ACTIVE_INTERNAL'].includes(r.status)).map(r => (
                       <tr key={r.id} className="hover:bg-slate-800/30 transition-colors">
-                        <td className="p-3 font-medium text-white">{r.assets?.name ?? `Activo #${r.asset_id}`}</td>
+                        <td className="p-3 font-medium text-white">
+                          {r.assets?.name ?? `Activo #${r.asset_id}`}
+                          {r.assets?.tag && <span className="text-slate-500 text-[10px] font-mono ml-1.5">{r.assets.tag}</span>}
+                        </td>
                         <td className="p-3">{r.requester_name}</td>
+                        <td className="p-3 text-slate-500 text-[10px]">{r.requester_disciplina ?? '—'}</td>
                         <td className="p-3 font-mono">{r.expected_return_date ? format(new Date(r.expected_return_date), 'dd/MM/yy') : '—'}</td>
-                        <td className="p-3"><span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span></td>
+                        <td className="p-3">
+                          {r.status === 'ACTIVE_INTERNAL'
+                            ? <span className="bg-purple-500/10 text-purple-400 border border-purple-500/20 px-2 py-0.5 rounded text-[10px] font-bold">INTERNO</span>
+                            : <span className="bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded text-[10px] font-bold">ACTIVO</span>
+                          }
+                        </td>
                       </tr>
                     ))}
-                    {requests.filter(r => r.status === 'ACTIVE').length === 0 && (
-                      <tr><td colSpan={4} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>
+                    {requests.filter(r => ['ACTIVE', 'ACTIVE_INTERNAL'].includes(r.status)).length === 0 && (
+                      <tr><td colSpan={5} className="p-8 text-center text-slate-600">No hay activos prestados actualmente.</td></tr>
                     )}
                   </tbody>
                 </table>

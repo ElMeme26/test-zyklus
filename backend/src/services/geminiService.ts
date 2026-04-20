@@ -30,7 +30,7 @@ export interface ChatMessage {
 
 export interface AIAlert {
   id?: number;
-  user_id: string;
+  user_id?: string;
   type: 'MAINTENANCE' | 'OVERDUE' | 'RECOMMENDATION' | 'ANOMALY';
   title: string;
   description: string;
@@ -232,8 +232,7 @@ Requisitos:
   try {
     const response = await callGemini(prompt, { temperature: 0.2, maxOutputTokens: 512 });
     // Limpiar respuesta si contiene markdown
-    const jsonMatch = /\{[\s\S]*\}/.exec(response);
-    const cleanResponse = jsonMatch ? jsonMatch[0] : response;
+    const cleanResponse = response.replace(/```json/gi, '').replace(/```/g, '').trim();
     const parsed = JSON.parse(cleanResponse);
     return (parsed.recommendations || []).slice(0, 3);
   } catch (e) {
@@ -257,83 +256,106 @@ export async function generateAutomaticAlerts(
   },
   language: 'es' | 'en' | 'pt' = 'es'
 ): Promise<AIAlert[]> {
-  const langPrompts = {
-    es: {
-      prompt: `Eres un Monitor Inteligente de Inventario. Analiza estos stats del sistema y genera alertas de severidad para problemas detectados.
+  // Construir resumen compacto para no saturar el prompt
+  const topAssetsStr = (stats.topAssets || [])
+    .slice(0, 3)
+    .map(a => `${a.name}(${a.uses})`)
+    .join(', ') || 'N/A';
 
-Stats actuales:
-${JSON.stringify(stats, null, 2)}
+  const promptEs = `Eres un Monitor de Inventario. Responde SOLO con JSON válido, sin markdown.
 
-ALERTAS que DEBES generar si aplica (máximo 5):
-- MAINTENANCE: Si más del 10% de activos requieren mantenimiento
-- OVERDUE: Si hay más de 2 préstamos vencidos
-- RECOMMENDATION: Si hay patrones de uso suboptimal
-- ANOMALY: Si hay cambios anormales en patrones
+DATOS DEL SISTEMA:
+- Total activos: ${stats.totalAssets}
+- Requieren mantenimiento: ${stats.maintenanceNeeded}
+- Préstamos vencidos: ${stats.overdueRequests}
+- Activos más usados: ${topAssetsStr}
 
-RESPONDE en JSON (sin markdown):
-{
-  "alerts": [
-    {"type": "MAINTENANCE", "title": "Título breve", "description": "Detalles", "severity": "HIGH"}
-  ]
-}`,
-      severityMap: { 'CRÍTICO': 'HIGH', 'IMPORTANTE': 'MEDIUM', 'AVISO': 'LOW' }
-    },
-    en: {
-      prompt: `You are an Intelligent Inventory Monitor. Analyze these system stats and generate severity alerts for detected issues.
+Genera alertas (máximo 3) según las reglas:
+- type "MAINTENANCE" si maintenanceNeeded > 0
+- type "OVERDUE" si overdueRequests > 0
+- type "RECOMMENDATION" si hay patrones de uso relevantes
+- Si todo está bien: type "ANOMALY", severity "LOW", title "Sistema OK"
 
-Current Stats:
-${JSON.stringify(stats, null, 2)}
+Responde ÚNICAMENTE con este JSON (sin texto extra, sin backticks):
+{"alerts":[{"type":"MAINTENANCE","title":"Título","description":"Descripción corta","severity":"HIGH"}]}`;
 
-ALERTS to generate if applicable (max 5):
-- MAINTENANCE: If more than 10% of assets need maintenance
-- OVERDUE: If there are more than 2 overdue loans
-- RECOMMENDATION: If suboptimal usage patterns detected
-- ANOMALY: If abnormal pattern changes detected
+  const promptEn = `You are an Inventory Monitor. Respond ONLY with valid JSON, no markdown.
 
-RESPOND in JSON (no markdown):
-{
-  "alerts": [
-    {"type": "MAINTENANCE", "title": "Brief title", "description": "Details", "severity": "HIGH"}
-  ]
-}`,
-      severityMap: { 'CRITICAL': 'HIGH', 'IMPORTANT': 'MEDIUM', 'WARNING': 'LOW' }
-    },
-    pt: {
-      prompt: `Você é um Monitor Inteligente de Inventário. Analise essas estatísticas do sistema e gere alertas de severidade para problemas detectados.
+SYSTEM DATA:
+- Total assets: ${stats.totalAssets}
+- Need maintenance: ${stats.maintenanceNeeded}
+- Overdue loans: ${stats.overdueRequests}
+- Top used assets: ${topAssetsStr}
 
-Estatísticas atuais:
-${JSON.stringify(stats, null, 2)}
+Generate alerts (max 3):
+- type "MAINTENANCE" if maintenanceNeeded > 0
+- type "OVERDUE" if overdueRequests > 0
+- type "RECOMMENDATION" if relevant usage patterns
+- If all OK: type "ANOMALY", severity "LOW", title "System OK"
 
-ALERTAS a gerar se aplicável (máximo 5):
-- MAINTENANCE: Se mais de 10% dos ativos precisam de manutenção
-- OVERDUE: Se houver mais de 2 empréstimos atrasados
-- RECOMMENDATION: Se houver padrões de uso subótimo
-- ANOMALY: Se houver mudanças anormais em padrões
+Respond ONLY with this JSON (no extra text, no backticks):
+{"alerts":[{"type":"MAINTENANCE","title":"Title","description":"Short description","severity":"HIGH"}]}`;
 
-RESPONDA em JSON (sem markdown):
-{
-  "alerts": [
-    {"type": "MAINTENANCE", "title": "Título breve", "description": "Detalhes", "severity": "HIGH"}
-  ]
-}`,
-      severityMap: { 'CRÍTICO': 'HIGH', 'IMPORTANTE': 'MEDIUM', 'AVISO': 'LOW' }
-    }
-  };
+  const promptPt = `Você é um Monitor de Inventário. Responda SOMENTE com JSON válido, sem markdown.
 
-  const langConfig = langPrompts[language] || langPrompts['es'];
+DADOS DO SISTEMA:
+- Total de ativos: ${stats.totalAssets}
+- Precisam de manutenção: ${stats.maintenanceNeeded}
+- Empréstimos atrasados: ${stats.overdueRequests}
+- Ativos mais usados: ${topAssetsStr}
+
+Gere alertas (máximo 3):
+- type "MAINTENANCE" se maintenanceNeeded > 0
+- type "OVERDUE" se overdueRequests > 0
+- type "RECOMMENDATION" se há padrões de uso relevantes
+- Se tudo OK: type "ANOMALY", severity "LOW", title "Sistema OK"
+
+Responda SOMENTE com este JSON (sem texto extra, sem backticks):
+{"alerts":[{"type":"MAINTENANCE","title":"Título","description":"Descrição curta","severity":"HIGH"}]}`;
+
+  const prompt = language === 'en' ? promptEn : language === 'pt' ? promptPt : promptEs;
 
   try {
-    const response = await callGemini(langConfig.prompt, { temperature: 0.2, maxOutputTokens: 1024 });
-    const parsed = JSON.parse(response);
-    return (parsed.alerts || []).map((a: any) => ({
-      type: a.type,
-      title: a.title,
-      description: a.description,
-      severity: (a.severity as 'HIGH' | 'MEDIUM' | 'LOW') || 'MEDIUM',
+    const response = await callGemini(prompt, { temperature: 0.1, maxOutputTokens: 2048 });
+    
+    // Limpiar respuesta: eliminar markdown y extraer JSON
+    let cleanResponse = response
+      .replace(/```json/gi, '')
+      .replace(/```/g, '')
+      .trim();
+
+    // Si hay texto antes del JSON, extraer solo el objeto JSON
+    const jsonStart = cleanResponse.indexOf('{');
+    const jsonEnd = cleanResponse.lastIndexOf('}');
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+      cleanResponse = cleanResponse.slice(jsonStart, jsonEnd + 1);
+    }
+
+    const parsed = JSON.parse(cleanResponse);
+    const alerts = (parsed.alerts || []).map((a: any) => ({
+      type: a.type || 'ANOMALY',
+      title: a.title || 'Sin título',
+      description: a.description || '',
+      severity: (['HIGH', 'MEDIUM', 'LOW'].includes(a.severity) ? a.severity : 'MEDIUM') as 'HIGH' | 'MEDIUM' | 'LOW',
     })) as AIAlert[];
-  } catch (e) {
-    console.warn('[AutoAlerts] Error:', e);
-    return [];
+
+    return alerts.length > 0 ? alerts : [{
+      type: 'ANOMALY',
+      title: 'Sistema OK',
+      description: 'No se detectaron alertas críticas. El sistema opera con normalidad.',
+      severity: 'LOW',
+    }];
+  } catch (e: any) {
+    console.error('[AutoAlerts] Error al parsear respuesta de Gemini:', e.message || e);
+    const fallbackSeverity: 'MEDIUM' | 'LOW' = (stats.overdueRequests > 0 || stats.maintenanceNeeded > 0) ? 'MEDIUM' : 'LOW';
+    return [
+      {
+        type: 'ANOMALY' as const,
+        title: 'Sin Alertas Disponibles',
+        description: `Sistema con ${stats.totalAssets} activos, ${stats.maintenanceNeeded} en mantenimiento, ${stats.overdueRequests} préstamos vencidos.`,
+        severity: fallbackSeverity,
+      }
+    ];
   }
 }
 

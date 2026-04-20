@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useData } from '../../../context/DataContext';
 import { Card } from '../../ui/core';
 import {
@@ -9,43 +9,21 @@ import { COLORS } from './constants';
 
 /** Gráficas del dashboard del auditor (categorías, estados, tendencias). */
 export function DashboardCharts() {
-  const { assets, requests, stats } = useData();
+  const { assets, stats } = useData();
 
-  const top8Assets = useMemo(() => {
-    return Object.entries(
-      requests.reduce((acc, req) => {
-        const name = req.assets?.name ?? 'Desconocido';
-        const shortName = name.split(' ').slice(0, 2).join(' ');
-        acc[shortName] = (acc[shortName] ?? 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    )
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 8);
-  }, [requests]);
+  const top8Assets = stats?.topAssets ?? [];
+  const top5Users = stats?.topUsers ?? [];
+  const disciplinas = stats?.disciplines ?? [];
+  
+  const [selectedDisciplina, setSelectedDisciplina] = useState<string>(disciplinas[0] ?? '');
 
-  const disciplinas = useMemo(() => {
-    return Array.from(new Set(requests.map(r => r.requester_disciplina).filter((d): d is string => Boolean(d))));
-  }, [requests]);
+  useEffect(() => {
+    if (!selectedDisciplina && disciplinas.length > 0) {
+      setSelectedDisciplina(disciplinas[0]);
+    }
+  }, [disciplinas, selectedDisciplina]);
 
-  const [selectedDisciplina, setSelectedDisciplina] = useState(disciplinas[0] ?? '');
-
-  const disciplinaData = useMemo(() => {
-    return Object.entries(
-      requests
-        .filter(r => r.requester_disciplina === selectedDisciplina)
-        .reduce((acc, req) => {
-          const name = req.assets?.name ?? 'Desconocido';
-          const shortName = name.split(' ').slice(0, 2).join(' ');
-          acc[shortName] = (acc[shortName] ?? 0) + 1;
-          return acc;
-        }, {} as Record<string, number>)
-    )
-      .map(([name, count]) => ({ name, count }))
-      .sort((a, b) => b.count - a.count)
-      .slice(0, 5);
-  }, [requests, selectedDisciplina]);
+  const disciplinaData = stats?.topAssetsByDiscipline?.[selectedDisciplina] ?? [];
 
   const categoryData = useMemo(() => {
     return Object.entries(
@@ -67,7 +45,7 @@ export function DashboardCharts() {
               <BarChart layout="vertical" data={top8Assets} margin={{ left: 20 }}>
                 <XAxis type="number" hide />
                 <YAxis dataKey="name" type="category" width={110} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text)' }} itemStyle={{ color: 'var(--text)' }} cursor={{ fill: 'var(--border)', opacity: 0.4 }} />
                 <Bar dataKey="count" fill="#06b6d4" radius={[0, 4, 4, 0]} barSize={20}>
                   {top8Assets.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -99,7 +77,7 @@ export function DashboardCharts() {
                 <BarChart layout="vertical" data={disciplinaData} margin={{ left: 20 }}>
                   <XAxis type="number" hide />
                   <YAxis dataKey="name" type="category" width={110} tick={{ fill: '#94a3b8', fontSize: 11 }} axisLine={false} tickLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff' }} cursor={{ fill: '#1e293b', opacity: 0.4 }} />
+                  <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text)' }} itemStyle={{ color: 'var(--text)' }} cursor={{ fill: 'var(--border)', opacity: 0.4 }} />
                   <Bar dataKey="count" fill="#f59e0b" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
@@ -121,10 +99,47 @@ export function DashboardCharts() {
                 <Pie data={categoryData} cx="50%" cy="50%" innerRadius={55} outerRadius={75} paddingAngle={4} dataKey="value">
                   {categoryData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} strokeWidth={0} />)}
                 </Pie>
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '8px', color: '#fff', fontSize: '12px' }} />
+                <Tooltip contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text)', fontSize: '12px' }} itemStyle={{ color: 'var(--text)' }} />
                 <Legend iconType="circle" wrapperStyle={{ fontSize: '11px' }} formatter={v => <span className="text-slate-300">{v}</span>} />
               </PieChart>
             </ResponsiveContainer>
+          </div>
+        </Card>
+
+        {/* Top 5 Usuarios con más solicitudes */}
+        <Card>
+          <h3 className="text-white font-bold mb-4 text-sm">Top 5 Usuarios con Más Solicitudes</h3>
+          <div className="h-56">
+            {top5Users.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart layout="vertical" data={top5Users} margin={{ left: 20 }}>
+                  <XAxis type="number" hide />
+                  <YAxis
+                    dataKey="name"
+                    type="category"
+                    width={110}
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: 'var(--surface)', borderColor: 'var(--border)', borderRadius: '8px', color: 'var(--text)' }}
+                    itemStyle={{ color: 'var(--text)' }}
+                    cursor={{ fill: 'var(--border)', opacity: 0.4 }}
+                    formatter={(value: number) => [`${value} solicitudes`, 'Total']}
+                  />
+                  <Bar dataKey="count" radius={[0, 4, 4, 0]} barSize={22}>
+                    {top5Users.map((_, index) => (
+                      <Cell key={`user-cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex h-full items-center justify-center text-slate-500 text-xs border border-dashed border-slate-800 rounded-xl">
+                Sin datos de solicitudes
+              </div>
+            )}
           </div>
         </Card>
       </div>

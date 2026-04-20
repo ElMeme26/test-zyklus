@@ -1,6 +1,6 @@
 /** Asistente de chat con IA (Gemini) para consultas y gráficas del sistema patrimonial. */
 import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { Bot, Send, X, Loader2, Sparkles, Trash2, Download, Bell } from 'lucide-react';
+import { Bot, Send, X, Loader2, Sparkles, Trash2, Download, Bell, Wrench, Clock, TrendingUp, AlertTriangle, CheckCircle, Info } from 'lucide-react';
 import { useData } from '../../context/DataContext';
 import { useAuth } from '../../context/AuthContext';
 import { Button, Input, Card } from './core';
@@ -9,7 +9,7 @@ import {
   PieChart, Pie, Legend, LineChart, Line,
 } from 'recharts';
 import { apiFetch } from '../../api/client';
-import { semanticSearch, generateAutoAlerts, chatWithLanguage } from '../../api/ai';
+import { semanticSearch, generateAutoAlerts, type AutomaticAlert, type SystemStats } from '../../api/ai';
 
 interface GraphData {
   type: 'bar' | 'pie' | 'line';
@@ -17,10 +17,16 @@ interface GraphData {
   data: Array<{ name: string; value: number }>;
 }
 
+interface AlertsPayload {
+  alerts: AutomaticAlert[];
+  stats: SystemStats;
+}
+
 interface Message {
   role: 'user' | 'bot';
   text: string;
   graph?: GraphData;
+  alerts?: AlertsPayload;
 }
 
 const COLORS = ['#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#ec4899', '#3b82f6', '#14b8a6'];
@@ -182,6 +188,107 @@ function ChartWidget({ graph }: { graph: GraphData }) {
   );
 }
 
+/** Mapa de configuración visual por tipo de alerta */
+const ALERT_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; border: string }> = {
+  MAINTENANCE: {
+    icon: <Wrench size={12} />,
+    color: 'text-amber-300',
+    bg: 'bg-amber-500/10',
+    border: 'border-amber-500/30',
+  },
+  OVERDUE: {
+    icon: <Clock size={12} />,
+    color: 'text-rose-300',
+    bg: 'bg-rose-500/10',
+    border: 'border-rose-500/30',
+  },
+  RECOMMENDATION: {
+    icon: <TrendingUp size={12} />,
+    color: 'text-cyan-300',
+    bg: 'bg-cyan-500/10',
+    border: 'border-cyan-500/30',
+  },
+  ANOMALY: {
+    icon: <AlertTriangle size={12} />,
+    color: 'text-purple-300',
+    bg: 'bg-purple-500/10',
+    border: 'border-purple-500/30',
+  },
+};
+
+const SEVERITY_BADGE: Record<string, string> = {
+  HIGH: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+  MEDIUM: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+  LOW: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
+};
+
+const SEVERITY_LABEL: Record<string, string> = {
+  HIGH: 'Alta', MEDIUM: 'Media', LOW: 'Baja',
+};
+
+function AlertsWidget({ payload }: { payload: AlertsPayload }) {
+  const allOk = payload.alerts.length === 1 && payload.alerts[0].severity === 'LOW' && payload.alerts[0].title === 'Sistema OK';
+
+  return (
+    <div className="mt-1 space-y-2 w-full">
+      {/* Header */}
+      <div className="flex items-center gap-2 pb-1 border-b border-slate-700/60">
+        <Bell size={11} className="text-rose-400" />
+        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">Análisis del Sistema</span>
+        <span className="ml-auto text-[9px] text-slate-500">{payload.alerts.length} alerta{payload.alerts.length !== 1 ? 's' : ''}</span>
+      </div>
+
+      {/* Alerta especial de sistema sano */}
+      {allOk ? (
+        <div className="flex items-center gap-2 px-3 py-2.5 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
+          <CheckCircle size={14} className="text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-[11px] font-semibold text-emerald-300">Sistema operando con normalidad</p>
+            <p className="text-[10px] text-slate-400 mt-0.5">No se detectaron alertas críticas.</p>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-1.5">
+          {payload.alerts.map((alert, i) => {
+            const cfg = ALERT_CONFIG[alert.type] ?? ALERT_CONFIG['ANOMALY'];
+            return (
+              <div key={i} className={`flex gap-2.5 px-3 py-2.5 rounded-xl border ${cfg.bg} ${cfg.border}`}>
+                {/* Icon */}
+                <div className={`mt-0.5 shrink-0 ${cfg.color}`}>{cfg.icon}</div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`text-[10px] font-bold ${cfg.color} truncate`}>{alert.title}</span>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full border font-semibold shrink-0 ${SEVERITY_BADGE[alert.severity]}`}>
+                      {SEVERITY_LABEL[alert.severity] ?? alert.severity}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-0.5 leading-relaxed">{alert.description}</p>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Footer con stats */}
+      <div className="flex gap-3 pt-1.5 border-t border-slate-700/60">
+        <div className="flex items-center gap-1 text-[9px] text-slate-500">
+          <Info size={9} />
+          <span>{payload.stats.totalAssets.toLocaleString()} activos totales</span>
+        </div>
+        <div className="flex items-center gap-1 text-[9px] text-amber-500/80">
+          <Wrench size={9} />
+          <span>{payload.stats.maintenanceNeeded} en mantenimiento</span>
+        </div>
+        <div className="flex items-center gap-1 text-[9px] text-rose-500/80">
+          <Clock size={9} />
+          <span>{payload.stats.overdueRequests} vencidos</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** 
  * Llama al endpoint de chat contextual del backend.
  * El contexto (rol + activos/solicitudes/stats) se inyecta desde el servidor.
@@ -278,28 +385,22 @@ export function ChatAssistant() {
   const handleGenerateAlerts = async () => {
     setIsLoading(true);
     try {
-      const result = await generateAutoAlerts('es');
-      if (result.alerts.length === 0) {
-        setMessages(prev => [...prev, {
-          role: 'bot',
-          text: 'No hay alertas en este momento. Sistema en buen estado.',
-        }]);
-        return;
-      }
-
-      const alertText = result.alerts.map((a, i) =>
-        `${i + 1}. [${a.severity}] **${a.title}**\n   _${a.description}_`
-      ).join('\n\n');
-
+      const result = await generateAutoAlerts('es', user?.role, {
+        stats,
+        availableAssets: assets.filter(a => a.status === 'Disponible').length,
+        activeRequests: requests.filter(r => ['ACTIVE', 'OVERDUE'].includes(r.status)).length
+      });
+      // Guardar como mensaje con payload estructurado de alertas
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: `⚠️ Alertas generadas:\n\n${alertText}\n\n_Stats: Total activos: ${result.stats.totalAssets}, Mantenimiento: ${result.stats.maintenanceNeeded}, Vencidos: ${result.stats.overdueRequests}_`,
+        text: '',
+        alerts: { alerts: result.alerts, stats: result.stats },
       }]);
     } catch (error) {
       console.error('Auto-alerts error:', error);
       setMessages(prev => [...prev, {
         role: 'bot',
-        text: 'Error al generar alertas. Intenta de nuevo.',
+        text: '⚠️ No se pudieron generar las alertas. Intenta de nuevo.',
       }]);
     } finally {
       setIsLoading(false);
@@ -347,9 +448,14 @@ export function ChatAssistant() {
                   <div className={`max-w-[95%] px-4 py-3 shadow-sm ${
                     m.role === 'user'
                       ? 'bg-purple-600 text-white rounded-2xl rounded-tr-sm'
-                      : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl rounded-tl-sm'
+                      : m.alerts
+                        ? 'bg-slate-900 border border-slate-700/80 rounded-2xl rounded-tl-sm w-full max-w-full'
+                        : 'bg-slate-800 text-slate-200 border border-slate-700 rounded-2xl rounded-tl-sm'
                   }`}>
-                    <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                    {m.alerts
+                      ? <AlertsWidget payload={m.alerts} />
+                      : <p className="whitespace-pre-wrap leading-relaxed">{m.text}</p>
+                    }
                     {m.graph && <ChartWidget graph={m.graph} />}
                   </div>
                 </div>

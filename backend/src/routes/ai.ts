@@ -208,8 +208,8 @@ router.post('/semantic-search', authMiddleware, async (req: AuthRequest, res: Re
  * Genera alertas automáticas basadas en estadísticas del sistema.
  */
 router.post('/alerts', authMiddleware, async (req: AuthRequest, res: Response) => {
-  const { language = 'es' } = req.body ?? {};
-  const userRole = req.user?.role as string;
+  const { language = 'es', role, context: bodyContext } = req.body ?? {};
+  const userRole = (role || req.user?.role) as string;
 
   // Solo admins pueden generar alertas
   if (!['ADMIN_PATRIMONIAL', 'AUDITOR', 'LIDER_EQUIPO'].includes(userRole)) {
@@ -219,7 +219,7 @@ router.post('/alerts', authMiddleware, async (req: AuthRequest, res: Response) =
 
   const client = await pool.connect();
   try {
-    // Recopilar estadísticas del sistema
+    // Recopilar estadísticas del sistema si no vienen en el body (o combinarlas)
     const [assetStatsRes, maintenanceRes, overdueRes, topAssetsRes] = await Promise.all([
       client.query(`
         SELECT 
@@ -260,7 +260,24 @@ router.post('/alerts', authMiddleware, async (req: AuthRequest, res: Response) =
       assetsByStatus: {}, // Podría ampliarse con más detalles
       avgBorrowTime: 0, // Podrías calcular este promedio
       topAssets: topAssets || [],
+      ...bodyContext // Combinar con el contexto del frontend si existe
     };
+
+    // Validación de contexto vacío
+    if (stats.totalAssets === 0 && (!bodyContext || Object.keys(bodyContext).length === 0)) {
+      res.json({
+        alerts: [{
+          type: 'ANOMALY',
+          title: 'Sistema sin datos',
+          description: 'No hay suficientes datos registrados (activos o solicitudes) para generar un análisis.',
+          severity: 'LOW'
+        }],
+        stats,
+        language,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
 
     // Generar alertas con Gemini
     const alerts = await generateAutomaticAlerts(stats, language as 'es' | 'en' | 'pt');
@@ -272,8 +289,9 @@ router.post('/alerts', authMiddleware, async (req: AuthRequest, res: Response) =
       timestamp: new Date().toISOString(),
     });
   } catch (error) {
-    console.error('Auto-alerts error:', error);
-    res.status(500).json({ error: error instanceof Error ? error.message : 'Error generando alertas' });
+    const errorDetails = error instanceof Error ? error.message : 'Error desconocido';
+    console.error(`[AI Alerts Error] - Detalle interno:`, error);
+    res.status(500).json({ error: 'Error interno generando alertas', detail: errorDetails });
   } finally {
     client.release();
   }

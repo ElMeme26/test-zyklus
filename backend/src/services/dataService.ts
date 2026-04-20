@@ -53,8 +53,8 @@ export async function getAllData(): Promise<DataPayload> {
          LEFT JOIN assets a ON r.asset_id = a.id
          LEFT JOIN users u ON r.user_id = u.id
          LEFT JOIN institutions i ON r.institution_id = i.id
-         ORDER BY r.created_at DESC
-         LIMIT 50`
+         WHERE r.status = 'OVERDUE' OR r.id IN (SELECT id FROM requests ORDER BY created_at DESC LIMIT 50)
+         ORDER BY r.created_at DESC`
       ),
       client.query('SELECT id, name, contact_name, contact_email, contact_phone, address, created_at FROM institutions ORDER BY id DESC LIMIT 50'),
       client.query('SELECT id, user_id, request_id, asset_id, type, channel, title, message, is_read, created_at FROM notifications ORDER BY created_at DESC LIMIT 100'),
@@ -127,37 +127,97 @@ export interface DataStats {
   assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number };
   requestCounts: { overdue: number; active: number };
   categoryCounts?: Record<string, number>;
+  topAssets?: Array<{ name: string; count: number }>;
+  topUsers?: Array<{ name: string; count: number }>;
+  disciplines?: string[];
+  topAssetsByDiscipline?: Record<string, Array<{ name: string; count: number }>>;
 }
 
-/** Obtiene estadísticas (conteos de activos, solicitudes activas/vencidas, categorías). */
+/** Obtiene estadísticas (conteos de activos, solicitudes activas/vencidas, categorías, y datos para gráficas). */
 export async function getStats(): Promise<DataStats> {
   const client = await pool.connect();
   try {
-    const [assetCountsRes, overdueRes, activeRes, categoryRes] = await Promise.all([
+    const [
+      assetCountsRes, 
+      overdueRes, 
+      activeRes, 
+      categoryRes,
+      topAssetsRes,
+      topUsersRes,
+      disciplinesRes,
+      topAssetsByDiscRes
+    ] = await Promise.all([
       client.query<{ status: string; count: string }>(
         `SELECT status, COUNT(*)::int AS count FROM assets GROUP BY status`
       ),
       client.query<{ count: string }>(`SELECT COUNT(*)::int AS count FROM requests WHERE status = 'OVERDUE'`),
       client.query<{ count: string }>(`SELECT COUNT(*)::int AS count FROM requests WHERE status = 'ACTIVE'`),
       client.query<{ category: string; count: string }>(`SELECT category, COUNT(*)::int AS count FROM assets WHERE category IS NOT NULL AND category != '' GROUP BY category`),
+      client.query<{ name: string; count: number }>(`
+        SELECT TRIM(split_part(COALESCE(a.name, 'Desconocido'), ' ', 1) || ' ' || split_part(COALESCE(a.name, 'Desconocido'), ' ', 2)) as name, 
+               COUNT(r.id)::int as count 
+        FROM requests r 
+        LEFT JOIN assets a ON r.asset_id = a.id 
+        GROUP BY name 
+        ORDER BY count DESC 
+        LIMIT 8
+      `),
+      client.query<{ name: string; count: number }>(`
+        SELECT TRIM(split_part(requester_name, ' ', 1) || ' ' || split_part(requester_name, ' ', 2)) as name, 
+               COUNT(id)::int as count 
+        FROM requests 
+        WHERE requester_name IS NOT NULL 
+        GROUP BY name 
+        ORDER BY count DESC 
+        LIMIT 5
+      `),
+      client.query<{ disciplina: string }>(`
+        SELECT DISTINCT requester_disciplina as disciplina 
+        FROM requests 
+        WHERE requester_disciplina IS NOT NULL AND requester_disciplina != ''
+      `),
+      client.query<{ disciplina: string; name: string; count: number }>(`
+        WITH ranked AS (
+          SELECT r.requester_disciplina as disciplina, 
+                 TRIM(split_part(COALESCE(a.name, 'Desconocido'), ' ', 1) || ' ' || split_part(COALESCE(a.name, 'Desconocido'), ' ', 2)) as name, 
+                 COUNT(r.id)::int as count,
+                 ROW_NUMBER() OVER(
+                   PARTITION BY r.requester_disciplina 
+                   ORDER BY COUNT(r.id) DESC
+                 ) as rn
+          FROM requests r
+          LEFT JOIN assets a ON r.asset_id = a.id
+          WHERE r.requester_disciplina IS NOT NULL AND r.requester_disciplina != ''
+          GROUP BY r.requester_disciplina, name
+        )
+        SELECT disciplina, name, count FROM ranked WHERE rn <= 5
+      `)
     ]);
 
-  const assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number } = { total: 0, disponible: 0, prestada: 0, mantenimiento: 0 };
-  for (const row of assetCountsRes.rows ?? []) {
-    const status = row.status ?? '';
-    const count = Number(row.count ?? 0);
-    assetCounts.total += count;
-    if (status === 'Disponible') assetCounts.disponible = count;
-    else if (status === 'Prestada') assetCounts.prestada = count;
-    else if (status === 'En mantenimiento' || status === 'Requiere Mantenimiento') {
-      assetCounts.mantenimiento = (assetCounts.mantenimiento ?? 0) + count;
+    const assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number } = { total: 0, disponible: 0, prestada: 0, mantenimiento: 0 };
+    for (const row of assetCountsRes.rows ?? []) {
+      const status = row.status ?? '';
+      const count = Number(row.count ?? 0);
+      assetCounts.total += count;
+      if (status === 'Disponible') assetCounts.disponible = count;
+      else if (status === 'Prestada') assetCounts.prestada = count;
+      else if (status === 'En mantenimiento' || status === 'Requiere Mantenimiento') {
+        assetCounts.mantenimiento = (assetCounts.mantenimiento ?? 0) + count;
+      }
     }
-  }
 
-  const categoryCounts: Record<string, number> = {};
-  for (const row of categoryRes.rows ?? []) {
-    categoryCounts[row.category ?? ''] = Number(row.count ?? 0);
-  }
+    const categoryCounts: Record<string, number> = {};
+    for (const row of categoryRes.rows ?? []) {
+      categoryCounts[row.category ?? ''] = Number(row.count ?? 0);
+    }
+
+    const topAssetsByDiscipline: Record<string, Array<{ name: string; count: number }>> = {};
+    for (const row of topAssetsByDiscRes.rows ?? []) {
+      if (!topAssetsByDiscipline[row.disciplina]) {
+        topAssetsByDiscipline[row.disciplina] = [];
+      }
+      topAssetsByDiscipline[row.disciplina].push({ name: row.name, count: row.count });
+    }
 
     return {
       assetCounts,
@@ -166,6 +226,10 @@ export async function getStats(): Promise<DataStats> {
         active: Number(activeRes.rows[0]?.count ?? 0),
       },
       categoryCounts,
+      topAssets: topAssetsRes.rows ?? [],
+      topUsers: topUsersRes.rows ?? [],
+      disciplines: (disciplinesRes.rows ?? []).map(r => r.disciplina).sort(),
+      topAssetsByDiscipline,
     };
   } finally {
     client.release();

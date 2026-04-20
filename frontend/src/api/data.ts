@@ -28,6 +28,10 @@ export interface DataStatsResponse {
   assetCounts: { total: number; disponible: number; prestada: number; mantenimiento: number; [key: string]: number };
   requestCounts: { overdue: number; active: number };
   categoryCounts?: Record<string, number>;
+  topAssets?: Array<{ name: string; count: number }>;
+  topUsers?: Array<{ name: string; count: number }>;
+  disciplines?: string[];
+  topAssetsByDiscipline?: Record<string, Array<{ name: string; count: number }>>;
 }
 
 /** Obtiene estadísticas (conteos de activos, solicitudes, categorías). */

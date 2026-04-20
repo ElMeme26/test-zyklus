@@ -56,7 +56,7 @@ export function useDataProvider() {
       setMaintenanceLogs(data.maintenanceLogs);
       setAuditLogs(data.auditLogs);
       setBundles(data.bundles);
-      setStats({ assetCounts: statsData.assetCounts, requestCounts: statsData.requestCounts, categoryCounts: statsData.categoryCounts });
+      setStats(statsData);
       await apiNotifications.checkOverdue();
     } catch (err) {
       console.error('fetchData:', err);

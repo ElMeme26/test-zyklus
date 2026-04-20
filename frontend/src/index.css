@@ -76,6 +76,11 @@
     border: 1px solid #b45309 !important;
   }
 
+  /* KPI Chips: Texto legible sobre fondo ambar claro */
+  html.light div.bg-amber-500\/10 span.text-amber-400 {
+    color: #b45309 !important;
+  }
+
   /* ESTADO: Fuera de servicio / Dada de baja */
   /* Al usar span.rounded aseguramos que los botones de QR/Editar (que son <button>) no se vean afectados */
   html.light span.text-slate-400.rounded,
@@ -115,18 +120,30 @@
     color: #0f172a !important; 
   }
 
+  html.light .from-slate-900 {
+    background-image: none !important;
+    background-color: var(--surface) !important;
+  }
+
+  html.light .to-cyan-900\/5,
+  html.light .to-purple-900\/10 {
+    /* No op, background is handled by from-slate-900 override */
+  }
+
   html.light .bg-slate-900 {
     background: #ffffff !important;
     border-color: rgba(0,0,0,0.15) !important;
   }
 
-  /* Botones oscuros (Cámara/Escaner) en modo claro */
-  html.light .bg-slate-800 {
+  /* Botones oscuros (Cámara/Escaner/Login) en modo claro */
+  html.light .bg-slate-800,
+  html.light .bg-slate-800\/50 {
     background: #e2e8f0 !important;
     color: #0f172a !important;
     border-color: rgba(0,0,0,0.1) !important;
   }
-  html.light .hover\:bg-slate-700:hover {
+  html.light .hover\:bg-slate-700:hover,
+  html.light .hover\:bg-slate-700\/50:hover {
     background: #cbd5e1 !important;
   }
 
@@ -144,6 +161,27 @@
   html.light .text-slate-400 { color: #475569 !important; }
   html.light .text-slate-500 { color: #64748b !important; }
   html.light .text-slate-300 { color: #334155 !important; }
+
+  /* Recharts Tooltips - Adaptativo a ambos modos usando variables CSS */
+  .recharts-tooltip-wrapper .recharts-default-tooltip {
+    background-color: var(--surface) !important;
+    border-color: var(--border) !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15) !important;
+  }
+  .recharts-tooltip-item,
+  .recharts-tooltip-item-name,
+  .recharts-tooltip-item-value,
+  .recharts-tooltip-label {
+    color: var(--text) !important;
+  }
+  .recharts-tooltip-cursor {
+    fill: var(--border) !important;
+  }
+
+  html.light .recharts-tooltip-wrapper .recharts-default-tooltip {
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05) !important;
+  }
 
   /* .keep-white: en modo claro el texto no pasa a oscuro */
   html.light .text-white:not(.keep-white) {
@@ -191,5 +229,20 @@
   html.light .flex.bg-slate-900.rounded-xl.p-1\.5.border.border-slate-800 button.bg-cyan-500 {
     background-color: #0891b2 !important;
     color: #ffffff !important;
+  }
+
+  /* Tabs de Navegación principal (Admin Dashboard) */
+  html.light .nav-tabs {
+    background-color: #e2e8f0 !important;
+    border-color: rgba(0,0,0,0.1) !important;
+  }
+  html.light .nav-tabs button {
+    color: #475569 !important; /* Inactive text */
+  }
+  html.light .nav-tabs button.bg-slate-700 {
+    background-color: #ffffff !important;
+    color: #0f172a !important; /* Active text */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+    border-color: rgba(0,0,0,0.05) !important;
   }
 }
