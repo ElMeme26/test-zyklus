@@ -35,3 +35,109 @@ export async function notifyByRole(
     await createNotif(u.id, title, message, type, requestId, assetId);
   }
 }
+
+// --- Twilio Configuration ---
+import twilio from 'twilio';
+import webpush from 'web-push';
+import dotenv from 'dotenv';
+dotenv.config();
+
+const accountSid = process.env.TWILIO_ACCOUNT_SID || '';
+const apiKeySid = process.env.TWILIO_API_KEY_SID || '';
+const apiKeySecret = process.env.TWILIO_API_KEY_SECRET || '';
+const twilioNumber = process.env.TWILIO_FROM_NUMBER || '';
+const flowSid = process.env.TWILIO_STUDIO_FLOW_SID || '';
+
+let twilioClient: twilio.Twilio | null = null;
+
+if (apiKeySid && apiKeySecret && accountSid) {
+  try {
+    twilioClient = twilio(apiKeySid, apiKeySecret, { accountSid });
+    console.log('Twilio client initialized with API Key');
+  } catch (error) {
+    console.error('Twilio initialization failed:', error);
+  }
+} else {
+  console.warn('Twilio API Key credentials missing. Voice alerts disabled.');
+}
+
+function formatPhoneNumber(phone: string): string {
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `+52${cleaned}`;
+  }
+  if (!phone.startsWith('+')) {
+    return `+${cleaned}`;
+  }
+  return phone;
+}
+
+export async function triggerVoiceAlert(to: string, nombre: string, mensaje: string): Promise<boolean> {
+  if (!twilioClient || !flowSid) {
+    console.warn(`[Mock Voice] Call to ${to} (Flow ${flowSid}): Nombre=${nombre}, Mensaje="${mensaje}"`);
+    return false;
+  }
+
+  if (!to) return false;
+
+  const formattedTo = formatPhoneNumber(to);
+
+  try {
+    const execution = await twilioClient.studio.v2.flows(flowSid).executions.create({
+      to: formattedTo,
+      from: twilioNumber,
+      parameters: {
+        nombre,
+        mensaje
+      }
+    });
+    console.log(`Studio Flow execution created. SID: ${execution.sid}`);
+    return true;
+  } catch (error) {
+    console.error(`Error triggering Studio Flow for ${formattedTo}:`, error);
+    return false;
+  }
+}
+
+// --- Web Push Configuration ---
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
+const vapidSubject = process.env.WEB_PUSH_CONTACT || process.env.VAPID_SUBJECT || 'mailto:test@example.com';
+
+if (vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+} else {
+  console.warn('VAPID keys not found. Web Push disabled.');
+}
+
+export async function sendPushNotification(userId: string, title: string, body: string, url?: string): Promise<number> {
+  if (!vapidPublicKey || !vapidPrivateKey) {
+    console.warn(`[Mock Push] To ${userId}: ${title} - ${body}`);
+    return 0;
+  }
+
+  try {
+    const res = await query<{ subscription: any }>('SELECT subscription FROM push_subscriptions WHERE user_id = $1', [userId]);
+    const subscriptions = res.rows || [];
+    let successCount = 0;
+
+    const payload = JSON.stringify({ title, body, url: url || '/' });
+
+    for (const sub of subscriptions) {
+      try {
+        await webpush.sendNotification(sub.subscription, payload);
+        successCount++;
+      } catch (error: any) {
+        if (error.statusCode === 410 || error.statusCode === 404) {
+          await query('DELETE FROM push_subscriptions WHERE subscription = $1', [sub.subscription]);
+        } else {
+          console.error('Error sending push notification:', error);
+        }
+      }
+    }
+    return successCount;
+  } catch (error) {
+    console.error('Database error fetching subscriptions:', error);
+    return 0;
+  }
+}

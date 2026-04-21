@@ -1,12 +1,20 @@
 {
   "name": "zyklus-workspace",
   "private": true,
-  "workspaces": ["frontend", "backend"],
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
     "dev": "npm run dev --prefix frontend",
     "dev:frontend": "npm run dev --prefix frontend",
     "dev:backend": "npm run dev --prefix backend",
     "build": "npm run build --prefix frontend && npm run build --prefix backend",
     "preview": "npm run preview --prefix frontend"
+  },
+  "dependencies": {
+    "node-cron": "^4.2.1",
+    "twilio": "^6.0.0",
+    "web-push": "^3.6.7"
   }
 }

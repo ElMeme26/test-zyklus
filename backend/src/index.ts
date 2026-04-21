@@ -56,6 +56,9 @@ app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/users', usersRoutes);
 app.use('/api/ai', aiRoutes);
 
+import { initEscalationCron } from './services/escalationService.js';
+
 app.listen(PORT, () => {
   console.log(`Zyklus API listening on http://localhost:${PORT}`);
+  initEscalationCron();
 });

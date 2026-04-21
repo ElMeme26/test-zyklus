@@ -4,34 +4,18 @@ const pool = new Pool({ connectionString: 'postgresql://postgres.wfieewcjknhrwgb
 
 async function run() {
   try {
-    const resUsers = await pool.query(`
-      SELECT TRIM(split_part(requester_name, ' ', 1) || ' ' || split_part(requester_name, ' ', 2)) as name, 
-             COUNT(id)::int as count 
-      FROM requests 
-      WHERE requester_name IS NOT NULL 
-      GROUP BY name 
-      ORDER BY count DESC 
-      LIMIT 5
+    await pool.query(`ALTER TABLE requests ADD COLUMN IF NOT EXISTS last_voice_alert_at TIMESTAMP;`);
+    console.log('Added last_voice_alert_at to requests');
+    
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id SERIAL PRIMARY KEY,
+        user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+        subscription JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
     `);
-    console.log('USERS:', resUsers.rows);
-
-    const resDisc = await pool.query(`
-      WITH ranked AS (
-        SELECT r.requester_disciplina as disciplina, 
-               TRIM(split_part(COALESCE(a.name, 'Desconocido'), ' ', 1) || ' ' || split_part(COALESCE(a.name, 'Desconocido'), ' ', 2)) as name, 
-               COUNT(r.id)::int as count,
-               ROW_NUMBER() OVER(
-                 PARTITION BY r.requester_disciplina 
-                 ORDER BY COUNT(r.id) DESC
-               ) as rn
-        FROM requests r
-        LEFT JOIN assets a ON r.asset_id = a.id
-        WHERE r.requester_disciplina IS NOT NULL AND r.requester_disciplina != ''
-        GROUP BY r.requester_disciplina, name
-      )
-      SELECT disciplina, name, count FROM ranked WHERE rn <= 5
-    `);
-    console.log('DISC:', resDisc.rows);
+    console.log('push_subscriptions table created');
   } catch(e) {
     console.error('SQL ERROR:', e.message);
   } finally {
