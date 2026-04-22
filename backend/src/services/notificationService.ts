@@ -89,21 +89,42 @@ export async function triggerVoiceAlert(to: string, nombre: string, mensaje: str
 
   const formattedTo = formatPhoneNumber(to);
 
-  try {
-    const execution = await twilioClient.studio.v2.flows(flowSid).executions.create({
-      to: formattedTo,
-      from: twilioNumber,
-      parameters: {
-        nombre,
-        mensaje
+  const attemptExecution = async (): Promise<boolean> => {
+    try {
+      const execution = await twilioClient!.studio.v2.flows(flowSid).executions.create({
+        to: formattedTo,
+        from: twilioNumber,
+        parameters: { nombre, mensaje }
+      });
+      console.log(`Studio Flow execution created. SID: ${execution.sid}`);
+      return true;
+    } catch (error: any) {
+      // 409: Ya existe una ejecución activa para este contacto — la cancelamos y reintentamos
+      if (error?.status === 409 && error?.details?.conflicting_execution_sid) {
+        const conflictSid = error.details.conflicting_execution_sid as string;
+        console.warn(`Active execution conflict (${conflictSid}). Ending it and retrying...`);
+        try {
+          await twilioClient!.studio.v2.flows(flowSid).executions(conflictSid).update({ status: 'ended' });
+          // Pequeña pausa para que Twilio procese la cancelación
+          await new Promise(resolve => setTimeout(resolve, 1500));
+          const retry = await twilioClient!.studio.v2.flows(flowSid).executions.create({
+            to: formattedTo,
+            from: twilioNumber,
+            parameters: { nombre, mensaje }
+          });
+          console.log(`Retry execution created. SID: ${retry.sid}`);
+          return true;
+        } catch (retryError) {
+          console.error(`Error on retry after conflict:`, retryError);
+          return false;
+        }
       }
-    });
-    console.log(`Studio Flow execution created. SID: ${execution.sid}`);
-    return true;
-  } catch (error) {
-    console.error(`Error triggering Studio Flow for ${formattedTo}:`, error);
-    return false;
-  }
+      console.error(`Error triggering Studio Flow for ${formattedTo}:`, error);
+      return false;
+    }
+  };
+
+  return attemptExecution();
 }
 
 // --- Web Push Configuration ---

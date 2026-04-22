@@ -50,25 +50,30 @@ export async function processGuardScan(
         [bundleId]
       );
       reqsToProcess = (result.rows ?? []) as Array<Record<string, unknown>>;
-      if (reqsToProcess.length === 0) return { success: false, message: 'Combo sin solicitudes aprobadas.' };
-      // Verificar si es interno
+      if (reqsToProcess.length === 0) return { success: false, message: 'Kit sin solicitudes aprobadas.' };
+      // Verificar si es interno — los préstamos internos no pasan por caseta
       const firstReq = reqsToProcess[0] as { is_internal?: boolean };
       if (firstReq.is_internal) {
-        return { success: false, message: 'Salida no autorizada: Activo de uso interno exclusivo.' };
+        return { success: false, message: '⚠️ Préstamo Interno: Este activo es de uso exclusivo dentro de las instalaciones. No requiere salida por caseta.' };
       }
     } else {
+      // Validar que reqId sea un número válido antes de usarlo como bigint en la BD
+      const reqIdNum = Number(reqId);
+      if (!reqId || isNaN(reqIdNum) || !Number.isInteger(reqIdNum)) {
+        return { success: false, message: 'QR inválido: el ID de solicitud no es un número válido.' };
+      }
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
          WHERE r.id = $1 AND r.status IN ('APPROVED', 'ACTIVE_INTERNAL') LIMIT 1`,
-        [reqId]
+        [reqIdNum]
       );
       const row = result.rows[0];
       if (!row) return { success: false, message: 'Solicitud no aprobada.' };
-      // Verificar si es interno
+      // Verificar si es interno — los préstamos internos no pasan por caseta
       const req = row as { is_internal?: boolean };
       if (req.is_internal) {
-        return { success: false, message: 'Salida no autorizada: Activo de uso interno exclusivo.' };
+        return { success: false, message: '⚠️ Préstamo Interno: Este activo es de uso exclusivo dentro de las instalaciones. No requiere salida por caseta.' };
       }
       reqsToProcess = [row] as Array<Record<string, unknown>>;
     }
