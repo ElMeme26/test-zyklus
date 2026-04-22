@@ -22,6 +22,7 @@ export function InventoryView({ onPrintSelected, onPrintSingle }: InventoryViewP
   const { addAsset, updateAsset, deleteAsset, importAssets, getNextTag, createBundle } = useData();
   const [search, setSearch] = useState('');
   const [catFilter, setCatFilter] = useState<string>('Todas');
+  const [statusFilter, setStatusFilter] = useState<string>('Todos');
   const [inventoryPage, setInventoryPage] = useState(1);
   const [inventoryAssets, setInventoryAssets] = useState<Asset[]>([]);
   const [inventoryTotal, setInventoryTotal] = useState(0);
@@ -44,6 +45,7 @@ export function InventoryView({ onPrintSelected, onPrintSingle }: InventoryViewP
       const res = await getAssetsPaginated(page, INVENTORY_PAGE_SIZE, {
         search: search || undefined,
         category: catFilter !== 'Todas' ? catFilter : undefined,
+        status: statusFilter !== 'Todos' ? statusFilter : undefined,
         unbundledOnly: false,
       });
       setInventoryAssets(res.assets);
@@ -55,9 +57,9 @@ export function InventoryView({ onPrintSelected, onPrintSingle }: InventoryViewP
     } finally {
       setInventoryLoading(false);
     }
-  }, [search, catFilter]);
+  }, [search, catFilter, statusFilter]);
 
-  useEffect(() => { setInventoryPage(1); }, [search, catFilter]);
+  useEffect(() => { setInventoryPage(1); }, [search, catFilter, statusFilter]);
   useEffect(() => { loadInventory(inventoryPage); }, [loadInventory, inventoryPage]);
 
   const inventoryTotalPages = Math.ceil(inventoryTotal / INVENTORY_PAGE_SIZE) || 1;
@@ -125,20 +127,46 @@ export function InventoryView({ onPrintSelected, onPrintSingle }: InventoryViewP
           </div>
         </div>
 
+        <div className="flex flex-col gap-3">
+        {/* Fila 1: Búsqueda (full width) */}
+        <div className="relative w-full">
+          <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
+          <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800 w-full" />
+        </div>
+
+        {/* Fila 2: Filtros */}
         <div className="flex items-center gap-2 flex-wrap">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-3 top-3 text-slate-500 w-4 h-4" />
-            <Input placeholder="Buscar activo por nombre o tag..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-11 bg-slate-900 border-slate-800" />
+          <div className="flex-1 min-w-[130px]">
+            <CategoryFilter categories={categories} value={catFilter} onChange={setCatFilter} />
           </div>
-          <CategoryFilter categories={categories} value={catFilter} onChange={setCatFilter} />
+          {/* Filtro por Estado */}
+          <select
+            className="flex-1 min-w-[130px] h-11 bg-slate-900 border border-slate-800 text-slate-300 text-sm rounded-xl px-3 focus:outline-none focus:border-primary hover:border-slate-600 transition-colors cursor-pointer"
+            value={statusFilter}
+            onChange={e => setStatusFilter(e.target.value)}
+          >
+            <option value="Todos">Estado: Todos</option>
+            <option value="Disponible">Disponible</option>
+            <option value="Prestada">Prestada</option>
+            <option value="En mantenimiento">En mantenimiento</option>
+            <option value="Requiere Mantenimiento">Requiere Mantenimiento</option>
+            <option value="En trámite">En trámite</option>
+            <option value="Dada de baja">Dada de baja</option>
+            <option value="Fuera de servicio">Fuera de servicio</option>
+          </select>
+        </div>
+
+        {/* Fila 3: Acciones */}
+        <div className="flex items-center gap-2">
           <RefreshButton />
           <button
             onClick={() => setShowBundleManager(true)}
-            className="flex-shrink-0 flex items-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-all border bg-slate-900 text-slate-300 border-slate-700 hover:border-primary/60 hover:text-primary hover:bg-primary/5 active:scale-95"
+            className="flex items-center gap-2 h-11 px-4 rounded-xl text-sm font-bold transition-all border bg-slate-900 text-slate-300 border-slate-700 hover:border-primary/60 hover:text-primary hover:bg-primary/5 active:scale-95"
           >
             <Package size={15} />
-            <span className="hidden xs:inline">Combos</span>
+            <span>Kits</span>
           </button>
+        </div>
         </div>
       </div>
 

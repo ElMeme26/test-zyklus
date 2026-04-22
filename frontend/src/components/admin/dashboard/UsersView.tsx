@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, Plus, Edit, Trash2, X, User as UserIcon } from 'lucide-react';
+import { Search, Plus, Edit, Trash2, X, User as UserIcon, Phone } from 'lucide-react';
 import * as usersApi from '../../../api/users';
 import { Card, Button, Input } from '../../ui/core';
 import { DataLoadingScreen } from '../../ui/DataLoadingScreen';
@@ -23,6 +23,7 @@ export function UsersView() {
     email: '',
     role: 'USUARIO' as UserRole,
     disciplina: '',
+    phone: '',
     password: '',
     passwordConfirm: '',
     manager_id: '',
@@ -31,6 +32,7 @@ export function UsersView() {
     name: '',
     role: 'USUARIO' as UserRole,
     disciplina: '',
+    phone: '',
     password: '',
     passwordConfirm: '',
     manager_id: '',
@@ -93,6 +95,7 @@ export function UsersView() {
         role: createForm.role,
         password: createForm.password,
         disciplina: createForm.disciplina.trim() || undefined,
+        phone: createForm.phone.trim() || undefined,
         ...(createForm.role === 'USUARIO' && { manager_id: createForm.manager_id || undefined }),
       });
       toast.success('Usuario creado');
@@ -102,6 +105,7 @@ export function UsersView() {
         email: '',
         role: 'USUARIO',
         disciplina: '',
+        phone: '',
         password: '',
         passwordConfirm: '',
         manager_id: '',
@@ -118,6 +122,7 @@ export function UsersView() {
       name: u.name,
       role: u.role,
       disciplina: u.disciplina ?? '',
+      phone: u.phone ?? '',
       password: '',
       passwordConfirm: '',
       manager_id: u.manager_id ?? '',
@@ -140,6 +145,7 @@ export function UsersView() {
         name: editForm.name.trim(),
         role: editForm.role,
         disciplina: editForm.disciplina.trim() || undefined,
+        phone: editForm.phone.trim() || undefined,
         ...(editForm.role === 'USUARIO' && { manager_id: editForm.manager_id || undefined }),
         password: editForm.password || undefined,
       });
@@ -212,7 +218,8 @@ export function UsersView() {
                   <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Nombre</th>
                   <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Correo</th>
                   <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Rol</th>
-                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Disciplina</th>
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase hidden md:table-cell">Disciplina</th>
+                  <th className="p-3 text-[10px] font-bold text-slate-500 uppercase hidden lg:table-cell">Teléfono</th>
                   <th className="p-3 text-[10px] font-bold text-slate-500 uppercase w-24">Acciones</th>
                 </tr>
               </thead>
@@ -222,7 +229,14 @@ export function UsersView() {
                     <td className="p-3 text-white font-medium">{u.name}</td>
                     <td className="p-3 text-slate-400 text-sm">{u.email}</td>
                     <td className="p-3"><span className="text-xs font-bold px-2 py-1 rounded bg-slate-800 text-white keep-white border border-slate-600/70">{ROLE_LABELS[u.role]}</span></td>
-                    <td className="p-3 text-slate-400 text-sm">{u.disciplina || '—'}</td>
+                    <td className="p-3 text-slate-400 text-sm hidden md:table-cell">{u.disciplina || '—'}</td>
+                    <td className="p-3 hidden lg:table-cell">
+                      {u.phone ? (
+                        <span className="flex items-center gap-1.5 text-sm text-slate-300">
+                          <Phone size={12} className="text-primary" />{u.phone}
+                        </span>
+                      ) : <span className="text-slate-600 text-xs">—</span>}
+                    </td>
                     <td className="p-3 flex gap-2">
                       <button onClick={() => openEdit(u)} className="p-2 rounded-lg border border-slate-600 text-slate-400 hover:text-primary hover:border-primary/50" title="Editar"><Edit size={14} /></button>
                       <button onClick={() => handleDelete(u)} className="p-2 rounded-lg border border-slate-600 text-slate-400 hover:text-rose-400 hover:border-rose-500/50" title="Eliminar"><Trash2 size={14} /></button>
@@ -257,119 +271,158 @@ export function UsersView() {
 
       {showCreate && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setShowCreate(false)}>
-          <Card className="w-full max-w-md border-slate-700" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <Card className="w-full max-w-lg border-slate-700 p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-slate-800">
               <h3 className="text-white font-bold text-lg">Alta de usuario</h3>
               <button onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <form onSubmit={handleCreate} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre</label>
-                <Input required value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Nombre completo" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Correo</label>
-                <Input type="email" required value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="correo@zf.com" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Rol</label>
-                <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value as UserRole }))} className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm">
-                  {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                </select>
-              </div>
-              {createForm.role === 'USUARIO' && (
+            <div className="overflow-y-auto max-h-[75vh] p-5">
+              <form onSubmit={handleCreate} autoComplete="off" className="space-y-3">
+                {/* Fila 1: Nombre + Correo */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre *</label>
+                    <Input required autoComplete="name" value={createForm.name} onChange={e => setCreateForm(f => ({ ...f, name: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Nombre completo" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Correo *</label>
+                    <Input type="email" required autoComplete="username" value={createForm.email} onChange={e => setCreateForm(f => ({ ...f, email: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="correo@zf.com" />
+                  </div>
+                </div>
+
+                {/* Fila 2: Rol */}
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
-                  <select
-                    value={createForm.manager_id}
-                    onChange={e => setCreateForm(f => ({ ...f, manager_id: e.target.value }))}
-                    className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
-                  >
-                    <option value="">Sin líder asignado</option>
-                    {leaders.map(l => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} ({l.email})
-                      </option>
-                    ))}
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Rol</label>
+                  <select value={createForm.role} onChange={e => setCreateForm(f => ({ ...f, role: e.target.value as UserRole }))} className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm">
+                    {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                   </select>
                 </div>
-              )}
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
-                <Input value={createForm.disciplina} onChange={e => setCreateForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Opcional" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Contraseña</label>
-                <Input type="password" required value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Mínimo 6 caracteres" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Confirmar contraseña</label>
-                <Input type="password" required value={createForm.passwordConfirm} onChange={e => setCreateForm(f => ({ ...f, passwordConfirm: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Repetir contraseña" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button type="submit" className="flex-1">Crear usuario</Button>
-                <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancelar</Button>
-              </div>
-            </form>
+
+                {createForm.role === 'USUARIO' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
+                    <select
+                      value={createForm.manager_id}
+                      onChange={e => setCreateForm(f => ({ ...f, manager_id: e.target.value }))}
+                      className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
+                    >
+                      <option value="">Sin líder asignado</option>
+                      {leaders.map(l => (
+                        <option key={l.id} value={l.id}>{l.name} ({l.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Fila 3: Disciplina + Teléfono */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
+                    <Input autoComplete="organization" value={createForm.disciplina} onChange={e => setCreateForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Opcional" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                      <Phone size={10} /> Teléfono
+                    </label>
+                    <Input autoComplete="tel" value={createForm.phone} onChange={e => setCreateForm(f => ({ ...f, phone: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="+52XXXXXXXXXX" />
+                  </div>
+                </div>
+
+                {/* Fila 4: Contraseñas */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Contraseña *</label>
+                    <Input type="password" required autoComplete="new-password" value={createForm.password} onChange={e => setCreateForm(f => ({ ...f, password: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Mín. 6 caracteres" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Confirmar *</label>
+                    <Input type="password" required autoComplete="new-password" value={createForm.passwordConfirm} onChange={e => setCreateForm(f => ({ ...f, passwordConfirm: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Repetir contraseña" />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" className="flex-1">Crear usuario</Button>
+                  <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>Cancelar</Button>
+                </div>
+              </form>
+            </div>
           </Card>
         </div>
       )}
 
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setEditingUser(null)}>
-          <Card className="w-full max-w-md border-slate-700" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-4">
+          <Card className="w-full max-w-lg border-slate-700 p-0 overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center p-5 border-b border-slate-800">
               <h3 className="text-white font-bold text-lg">Editar usuario</h3>
               <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-white"><X size={20} /></button>
             </div>
-            <form onSubmit={handleEdit} className="space-y-4">
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre</label>
-                <Input required value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Rol</label>
-                <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as UserRole }))} className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm">
-                  {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-                </select>
-              </div>
-              {editForm.role === 'USUARIO' && (
+            <div className="overflow-y-auto max-h-[75vh] p-5">
+              <form onSubmit={handleEdit} autoComplete="off" className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nombre</label>
+                    <Input required autoComplete="name" value={editForm.name} onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" />
+                  </div>
+                </div>
+
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
-                  <select
-                    value={editForm.manager_id}
-                    onChange={e => setEditForm(f => ({ ...f, manager_id: e.target.value }))}
-                    className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
-                  >
-                    <option value="">Sin líder asignado</option>
-                    {leaders.map(l => (
-                      <option key={l.id} value={l.id}>
-                        {l.name} ({l.email})
-                      </option>
-                    ))}
+                  <label className="text-[10px] font-bold text-slate-500 uppercase">Rol</label>
+                  <select value={editForm.role} onChange={e => setEditForm(f => ({ ...f, role: e.target.value as UserRole }))} className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm">
+                    {(Object.keys(ROLE_LABELS) as UserRole[]).map(r => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                   </select>
                 </div>
-              )}
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
-                <Input value={editForm.disciplina} onChange={e => setEditForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Nueva contraseña (opcional)</label>
-                <Input type="password" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Dejar vacío para no cambiar" />
-              </div>
-              <div>
-                <label className="text-[10px] font-bold text-slate-500 uppercase">Confirmar contraseña</label>
-                <Input type="password" value={editForm.passwordConfirm} onChange={e => setEditForm(f => ({ ...f, passwordConfirm: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Solo si cambias contraseña" />
-              </div>
-              <div className="flex gap-2 pt-2">
-                <Button type="submit" className="flex-1">Guardar</Button>
-                <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
-              </div>
-            </form>
+
+                {editForm.role === 'USUARIO' && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Líder / Manager</label>
+                    <select
+                      value={editForm.manager_id}
+                      onChange={e => setEditForm(f => ({ ...f, manager_id: e.target.value }))}
+                      className="mt-1 w-full h-10 rounded-lg border border-slate-700 bg-slate-900 text-white px-3 text-sm"
+                    >
+                      <option value="">Sin líder asignado</option>
+                      {leaders.map(l => (
+                        <option key={l.id} value={l.id}>{l.name} ({l.email})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Disciplina</label>
+                    <Input autoComplete="organization" value={editForm.disciplina} onChange={e => setEditForm(f => ({ ...f, disciplina: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-1">
+                      <Phone size={10} /> Teléfono
+                    </label>
+                    <Input autoComplete="tel" value={editForm.phone} onChange={e => setEditForm(f => ({ ...f, phone: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="+52XXXXXXXXXX" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Nueva contraseña</label>
+                    <Input type="password" autoComplete="new-password" value={editForm.password} onChange={e => setEditForm(f => ({ ...f, password: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Dejar vacío = sin cambio" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 uppercase">Confirmar</label>
+                    <Input type="password" autoComplete="new-password" value={editForm.passwordConfirm} onChange={e => setEditForm(f => ({ ...f, passwordConfirm: e.target.value }))} className="mt-1 bg-slate-900 border-slate-700" placeholder="Solo si cambias" />
+                  </div>
+                </div>
+
+                <div className="flex gap-2 pt-2">
+                  <Button type="submit" className="flex-1">Guardar</Button>
+                  <Button type="button" variant="outline" onClick={() => setEditingUser(null)}>Cancelar</Button>
+                </div>
+              </form>
+            </div>
           </Card>
         </div>
       )}
     </div>
   );
 }
+

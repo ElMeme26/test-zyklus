@@ -29,12 +29,23 @@ export function MyLoansView({ onShowQR, onFeedback }: MyLoansViewProps) {
   const history = userReqs.filter(r => ['RETURNED', 'MAINTENANCE', 'REJECTED', 'CANCELLED'].includes(r.status));
 
   const getRealRequest = (req: Request): Request => {
-    if (req.bundle_group_id) return requests.find(r => r.bundle_group_id === req.bundle_group_id) || req;
+    if (req.bundle_group_id) {
+      // Recoge TODOS los activos del grupo para pasarlos al modal como bundle_assets
+      const siblings = requests.filter(r => r.bundle_group_id === req.bundle_group_id);
+      const representante = siblings[0] || req;
+      const allAssets = siblings
+        .map(r => r.assets)
+        .filter((a): a is NonNullable<typeof a> => a != null);
+      return { ...representante, bundle_assets: allAssets.length > 0 ? allAssets : representante.bundle_assets };
+    }
     return requests.find(r => r.id === req.id) || req;
   };
 
   const getBundleAssets = (bundleGroupId: string) =>
-    requests.filter(r => r.bundle_group_id === bundleGroupId).map(r => r.assets?.name).filter(Boolean);
+    requests
+      .filter(r => r.bundle_group_id === bundleGroupId && r.assets)
+      .map(r => r.assets!)
+      .filter(Boolean);
 
   const handleCancel = async (reqId: number) => {
     await cancelRequest(reqId);
@@ -92,8 +103,13 @@ export function MyLoansView({ onShowQR, onFeedback }: MyLoansViewProps) {
                           <Info size={12} /> {bundleDetailsId === req.bundle_group_id ? 'Ocultar' : `Ver ${req.bundle_items} equipos`}
                         </button>
                         {bundleDetailsId === req.bundle_group_id && req.bundle_group_id && (
-                          <div className="mt-2 bg-slate-950 p-2 rounded border border-slate-800 text-[10px] text-slate-400 space-y-1">
-                            {getBundleAssets(req.bundle_group_id).map((name, i) => <p key={i}>• {name}</p>)}
+                          <div className="mt-2 bg-slate-950 p-2 rounded border border-slate-800 space-y-1.5">
+                            {getBundleAssets(req.bundle_group_id).map((asset, i) => (
+                              <div key={i} className="flex items-center justify-between">
+                                <span className="text-[10px] text-slate-300 truncate">{asset.name}</span>
+                                <span className="text-[10px] font-mono text-primary ml-2 flex-shrink-0">{asset.tag}</span>
+                              </div>
+                            ))}
                           </div>
                         )}
                       </div>
@@ -143,7 +159,7 @@ export function MyLoansView({ onShowQR, onFeedback }: MyLoansViewProps) {
                 <div
                   key={req.id}
                   className="flex items-center justify-between px-4 py-3 bg-slate-900/50 border border-slate-800 rounded-xl cursor-pointer hover:border-slate-700 transition-colors"
-                  onClick={() => setDetailReq(req)}
+                  onClick={() => setDetailReq(getRealRequest(req))}
                 >
                   <div>
                     <p className="text-slate-300 text-sm font-medium">

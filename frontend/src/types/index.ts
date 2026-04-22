@@ -102,6 +102,7 @@ export interface Request {
   bundle_group_id?: string;
   is_bundle?: boolean;
   bundle_items?: number;
+  bundle_assets?: Asset[]; // Todos los activos del kit/carrito agrupado
 
   qr_code?: string;
   qr_expires_at?: string;

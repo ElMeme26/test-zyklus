@@ -8,6 +8,7 @@ import {
   exportRequestsToPDF, 
   exportRequestsToExcel,
   exportInventoryToPDF,
+  exportInventoryToExcel,
   exportAuditLogsToExcel,
   exportRequestsByUser,
   exportMaintenanceReport,
@@ -31,13 +32,13 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
     | 'requests_pdf'
     | 'requests_excel'
     | 'inventory_pdf'
+    | 'inventory_excel'
     | 'audit_excel'
     | 'by_user_excel'
     | 'maintenance_excel';
 
-  /** Carga todos los activos paginando el backend cuando no se pasaron por props. */
+  /** Siempre pagina el backend para obtener TODOS los activos (no solo los cargados en memoria). */
   const fetchAllAssets = async (): Promise<Asset[]> => {
-    if (assets.length > 0) return assets;
     const all: Asset[] = [];
     let page = 1;
     let hasMore = true;
@@ -68,9 +69,17 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
           toast.success('Excel generado correctamente');
           break;
         case 'inventory_pdf': {
+          toast.info('Cargando inventario completo...');
           const assetsToExport = await fetchAllAssets();
           exportInventoryToPDF(assetsToExport);
-          toast.success('Inventario PDF generado');
+          toast.success(`Inventario PDF generado (${assetsToExport.length} activos)`);
+          break;
+        }
+        case 'inventory_excel': {
+          toast.info('Cargando inventario completo...');
+          const assetsToExport = await fetchAllAssets();
+          exportInventoryToExcel(assetsToExport);
+          toast.success(`Inventario Excel generado (${assetsToExport.length} activos)`);
           break;
         }
         case 'audit_excel':
@@ -212,7 +221,19 @@ export function ExportButtons({ requests, assets, auditLogs, maintenanceLogs = [
                   <FileText size={16} className="text-cyan-400" />
                   <div>
                     <p className="font-medium text-white">Inventario PDF</p>
-                    <p className="text-[10px] text-slate-500">{assets.length > 0 ? `${assets.length} activos` : 'Cargará al exportar'}</p>
+                    <p className="text-[10px] text-slate-500">Todos los activos · formato imprimible</p>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleExport('inventory_excel')}
+                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-slate-800 transition-colors flex items-center gap-3 text-sm text-slate-300"
+                  disabled={isExporting}
+                >
+                  <FileSpreadsheet size={16} className="text-cyan-600" />
+                  <div>
+                    <p className="font-medium text-white">Inventario Excel</p>
+                    <p className="text-[10px] text-slate-500">Todos los activos + resumen por estado y categoría</p>
                   </div>
                 </button>
 

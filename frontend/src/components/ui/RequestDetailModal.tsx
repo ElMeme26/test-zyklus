@@ -93,15 +93,35 @@ export function RequestDetailModal({ request: req, onClose }: RequestDetailModal
           {/* Content */}
           <div className="px-5 py-3 space-y-0 max-h-[55vh] overflow-y-auto scrollbar-hide">
 
-            {/* Activo info */}
-            {!isBundle && req.assets && (
+            {/* Activos info */}
+            {isBundle && req.bundle_assets && req.bundle_assets.length > 0 ? (
+              <div className="py-2.5 border-b border-slate-800/60">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-slate-500"><Package size={14} /></span>
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Activos del Kit ({req.bundle_assets.length})</p>
+                </div>
+                <div className="space-y-1.5">
+                  {req.bundle_assets.map((a, i) => (
+                    <div key={a.id ?? i} className="bg-slate-800/40 rounded-lg px-3 py-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-200 font-medium truncate">{a.name}</span>
+                        <span className="text-[10px] font-mono text-primary ml-2 flex-shrink-0">{a.tag}</span>
+                      </div>
+                      {a.category && (
+                        <span className="text-[10px] text-slate-500 mt-0.5 block">{a.category}</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : !isBundle && req.assets ? (
               <>
                 <Field label="Activo" value={req.assets.name} icon={<Package size={14} />} />
                 {req.assets.category && <Field label="Categoría" value={req.assets.category} icon={<Tag size={14} />} />}
                 {req.assets.brand && <Field label="Marca / Modelo" value={`${req.assets.brand}${req.assets.model ? ` — ${req.assets.model}` : ''}`} />}
                 {req.assets.location && <Field label="Ubicación del activo" value={req.assets.location} />}
               </>
-            )}
+            ) : null}
 
             {/* Solicitante */}
             <Field label="Solicitante" value={req.requester_name} icon={<User size={14} />} />

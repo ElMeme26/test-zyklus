@@ -325,8 +325,13 @@ export function useDataProvider() {
     const grouped = new Map<string | number, Request>();
     requests.filter(r => r.users?.manager_id === managerId).forEach(r => {
       if (r.bundle_group_id) {
-        if (!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
-        else grouped.get(r.bundle_group_id)!.bundle_items = (grouped.get(r.bundle_group_id)!.bundle_items || 1) + 1;
+        if (!grouped.has(r.bundle_group_id)) {
+          grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1, bundle_assets: r.assets ? [r.assets] : [] });
+        } else {
+          const g = grouped.get(r.bundle_group_id)!;
+          g.bundle_items = (g.bundle_items || 1) + 1;
+          if (r.assets) g.bundle_assets = [...(g.bundle_assets || []), r.assets];
+        }
       } else grouped.set(r.id, r);
     });
     return Array.from(grouped.values());
@@ -396,8 +401,13 @@ export function useDataProvider() {
     const grouped = new Map<string | number, Request>();
     requests.filter(r => r.user_id === userId).forEach(r => {
       if (r.bundle_group_id) {
-        if (!grouped.has(r.bundle_group_id)) grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1 });
-        else grouped.get(r.bundle_group_id)!.bundle_items = (grouped.get(r.bundle_group_id)!.bundle_items || 1) + 1;
+        if (!grouped.has(r.bundle_group_id)) {
+          grouped.set(r.bundle_group_id, { ...r, is_bundle: true, bundle_items: 1, bundle_assets: r.assets ? [r.assets] : [] });
+        } else {
+          const g = grouped.get(r.bundle_group_id)!;
+          g.bundle_items = (g.bundle_items || 1) + 1;
+          if (r.assets) g.bundle_assets = [...(g.bundle_assets || []), r.assets];
+        }
       } else grouped.set(r.id, r);
     });
     return Array.from(grouped.values());

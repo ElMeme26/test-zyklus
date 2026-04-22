@@ -341,6 +341,73 @@ export const exportAuditLogsToExcel = (logs: AuditLog[]) => {
   XLSX.writeFile(workbook, `zyklus_audit_trail_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
 };
 
+/** Exporta el inventario completo a Excel (todos los activos, incluyendo los 11k+). */
+export const exportInventoryToExcel = (assets: Asset[]) => {
+  const workbook = XLSX.utils.book_new();
+
+  // Hoja 1: Inventario completo
+  const inventarioData = assets.map(a => ({
+    'Tag': a.tag,
+    'Nombre': a.name,
+    'Categoría': a.category ?? '—',
+    'Estado': a.status,
+    'Marca': a.brand ?? '—',
+    'Modelo': a.model ?? '—',
+    'N° Serie': a.serial ?? '—',
+    'Ubicación': a.location ?? '—',
+    'Valor Comercial': a.commercial_value ?? '—',
+    'Usos': a.usage_count ?? 0,
+    'Alerta Mantenimiento': a.maintenance_alert ? 'Sí' : 'No',
+    'Próx. Mantenimiento': a.next_maintenance_date ? safeDate(a.next_maintenance_date) : '—',
+    'Proyecto': a.project ?? '—',
+    'Factura': a.invoice ?? '—',
+    'Número de Parte': a.part_number ?? '—',
+  }));
+
+  const ws1 = XLSX.utils.json_to_sheet(inventarioData);
+  ws1['!cols'] = [
+    { wch: 10 }, { wch: 28 }, { wch: 16 }, { wch: 18 }, { wch: 16 }, { wch: 16 },
+    { wch: 14 }, { wch: 18 }, { wch: 14 }, { wch: 6 }, { wch: 16 }, { wch: 16 },
+    { wch: 14 }, { wch: 14 }, { wch: 16 },
+  ];
+  XLSX.utils.book_append_sheet(workbook, ws1, 'Inventario Completo');
+
+  // Hoja 2: Resumen por Estado
+  const byStatus: Record<string, number> = {};
+  for (const a of assets) {
+    byStatus[a.status] = (byStatus[a.status] ?? 0) + 1;
+  }
+  const statusData = Object.entries(byStatus)
+    .sort((x, y) => y[1] - x[1])
+    .map(([estado, cantidad]) => ({
+      'Estado': estado,
+      'Cantidad': cantidad,
+      'Porcentaje': `${Math.round((cantidad / assets.length) * 100)}%`,
+    }));
+  const ws2 = XLSX.utils.json_to_sheet(statusData);
+  ws2['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(workbook, ws2, 'Por Estado');
+
+  // Hoja 3: Resumen por Categoría
+  const byCat: Record<string, number> = {};
+  for (const a of assets) {
+    const cat = a.category ?? 'Sin categoría';
+    byCat[cat] = (byCat[cat] ?? 0) + 1;
+  }
+  const catData = Object.entries(byCat)
+    .sort((x, y) => y[1] - x[1])
+    .map(([categoria, cantidad]) => ({
+      'Categoría': categoria,
+      'Cantidad': cantidad,
+      'Porcentaje': `${Math.round((cantidad / assets.length) * 100)}%`,
+    }));
+  const ws3 = XLSX.utils.json_to_sheet(catData);
+  ws3['!cols'] = [{ wch: 22 }, { wch: 10 }, { wch: 12 }];
+  XLSX.utils.book_append_sheet(workbook, ws3, 'Por Categoría');
+
+  XLSX.writeFile(workbook, `zyklus_inventario_completo_${format(new Date(), 'yyyy-MM-dd')}.xlsx`);
+};
+
 /** Descarga un archivo en el navegador. */
 function downloadFile(content: string, filename: string, mimeType: string) {
   const blob = new Blob([content], { type: mimeType });
