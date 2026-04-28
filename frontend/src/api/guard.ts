@@ -19,7 +19,7 @@ export interface GuardScanResponse {
 export async function guardScan(
   qrData: string,
   type: 'CHECKOUT' | 'CHECKIN',
-  options?: { signature?: string; isDamaged?: boolean; damageNotes?: string }
+  options?: { signature?: string; isDamaged?: boolean; damageNotes?: string; termsAccepted?: boolean }
 ): Promise<GuardScanResponse> {
   return apiFetch<GuardScanResponse>('/api/guard/scan', {
     method: 'POST',
@@ -29,6 +29,7 @@ export async function guardScan(
       signature: options?.signature,
       isDamaged: options?.isDamaged,
       damageNotes: options?.damageNotes,
+      termsAccepted: options?.termsAccepted,
     }),
   });
 }

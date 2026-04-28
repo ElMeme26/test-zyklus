@@ -420,3 +420,97 @@ function downloadFile(content: string, filename: string, mimeType: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+/** Genera el Comprobante de Resguardo en PDF con Firma Digital. */
+export const generateResponsibilityVoucher = (request: Request) => {
+  const doc = new jsPDF();
+  
+  // Membrete Corporativo
+  doc.setFontSize(22);
+  doc.setTextColor(6, 182, 212); // Primary color
+  doc.text('ZF Engineering', 105, 20, { align: 'center' });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(51, 65, 85);
+  doc.text('Comprobante de Resguardo de Activo', 105, 30, { align: 'center' });
+  
+  doc.setFontSize(10);
+  doc.setTextColor(100, 116, 139);
+  doc.text(`Folio de Solicitud: #${request.id}`, 105, 38, { align: 'center' });
+
+  // Línea separadora
+  doc.setDrawColor(226, 232, 240);
+  doc.line(14, 45, 196, 45);
+
+  // Sección: Datos del Empleado
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Datos del Empleado', 14, 55);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(71, 81, 103);
+  doc.text(`Nombre: ${request.requester_name}`, 14, 63);
+  doc.text(`ID Empleado: ${request.user_id?.split('-')[0].toUpperCase()}`, 14, 70);
+  doc.text(`Disciplina: ${request.requester_disciplina ?? 'N/A'}`, 14, 77);
+
+  // Sección: Datos del Activo
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Datos del Activo', 14, 90);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(71, 81, 103);
+  doc.text(`Nombre: ${request.assets?.name ?? request.asset_id}`, 14, 98);
+  doc.text(`Marca/Modelo: ${request.assets?.brand ?? 'N/A'} / ${request.assets?.model ?? 'N/A'}`, 14, 105);
+  doc.text(`Categoría: ${request.assets?.category ?? 'N/A'}`, 14, 112);
+  doc.text(`Número de Serie: ${request.assets?.serial ?? 'N/A'}`, 14, 119);
+  doc.text(`Tag ZF: ${request.assets?.tag ?? 'N/A'}`, 14, 126);
+
+  // Fechas del Préstamo
+  doc.setFontSize(12);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Condiciones del Préstamo', 14, 140);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(71, 81, 103);
+  doc.text(`Fecha de Retiro: ${safeDate(request.checkout_at)}`, 14, 148);
+  doc.text(`Fecha Esperada de Devolución: ${safeDate(request.expected_return_date)}`, 14, 155);
+
+  // Términos y Condiciones
+  doc.setFontSize(11);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Términos y Condiciones Aceptados', 14, 170);
+
+  doc.setFontSize(9);
+  doc.setTextColor(100, 116, 139);
+  const termsText = "Al firmar y marcar la casilla de aceptación, el empleado reconoce recibir el activo en condiciones óptimas de operación. Se compromete a su custodia y devolución en la fecha pactada. En caso de pérdida, robo por negligencia o daño malintencionado, el empleado acepta la responsabilidad financiera y administrativa conforme al reglamento interno de ZF Engineering.";
+  const splitTerms = doc.splitTextToSize(termsText, 180);
+  doc.text(splitTerms, 14, 178);
+
+  // Firma
+  const signatureY = 220;
+  doc.setDrawColor(148, 163, 184);
+  doc.line(60, signatureY, 150, signatureY);
+  
+  doc.setFontSize(10);
+  doc.setTextColor(15, 23, 42);
+  doc.text('Firma Digital del Empleado', 105, signatureY + 8, { align: 'center' });
+
+  if (request.digital_signature) {
+    // Insert base64 image (assuming it's a PNG data URL)
+    try {
+      doc.addImage(request.digital_signature, 'PNG', 65, signatureY - 30, 80, 25);
+    } catch (e) {
+      console.error('Error adding signature image to PDF:', e);
+    }
+  }
+
+  // Sello de tiempo de la firma
+  doc.setFontSize(8);
+  doc.setTextColor(148, 163, 184);
+  const timestamp = request.signature_date ? format(new Date(request.signature_date), "dd/MM/yyyy HH:mm:ss") : 'No registrada';
+  doc.text(`Firmado digitalmente el ${timestamp}`, 105, signatureY + 16, { align: 'center' });
+
+  // Guardar PDF
+  doc.save(`ZF_Resguardo_${request.id}_${request.requester_name.replace(/\s+/g, '_')}.pdf`);
+};
