@@ -12,3 +12,4 @@ CREATE INDEX IF NOT EXISTS idx_requests_created_at ON requests(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON requests(status);
 CREATE INDEX IF NOT EXISTS idx_requests_user_id ON requests(user_id);
 CREATE INDEX IF NOT EXISTS idx_requests_asset_id ON requests(asset_id);
+CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read);

@@ -1,0 +1,45 @@
+/** URL base del backend. */
+const BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000';
+
+function getToken(): string | null {
+  return localStorage.getItem('zf_token');
+}
+
+/** Petición HTTP autenticada con JWT. Lanza error si la respuesta no es ok. */
+export async function apiFetch<T = unknown>(
+  path: string,
+  options: RequestInit & { timeout?: number } = {}
+): Promise<T> {
+  const token = getToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+    ...(options.headers as Record<string, string>),
+  };
+  if (token) {
+    (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
+  }
+
+  const { timeout, ...fetchOptions } = options;
+  let signal = fetchOptions.signal;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  if (timeout && !signal) {
+    const controller = new AbortController();
+    signal = controller.signal;
+    timeoutId = setTimeout(() => controller.abort(), timeout);
+  }
+
+  try {
+    const res = await fetch(`${BASE_URL}${path}`, { ...fetchOptions, headers, signal });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = (data as { error?: string })?.error ?? res.statusText;
+      throw new Error(message);
+    }
+    return data as T;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}

@@ -28,7 +28,8 @@ export async function processGuardScan(
   type: 'CHECKOUT' | 'CHECKIN',
   signature?: string,
   isDamaged?: boolean,
-  damageNotes?: string
+  damageNotes?: string,
+  termsAccepted?: boolean
 ): Promise<GuardScanResult> {
   let parsed: Record<string, unknown>;
   try {
@@ -46,20 +47,35 @@ export async function processGuardScan(
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
-         WHERE r.bundle_group_id = $1 AND r.status = 'APPROVED'`,
+         WHERE r.bundle_group_id = $1 AND r.status IN ('APPROVED', 'ACTIVE_INTERNAL')`,
         [bundleId]
       );
       reqsToProcess = (result.rows ?? []) as Array<Record<string, unknown>>;
-      if (reqsToProcess.length === 0) return { success: false, message: 'Combo sin solicitudes aprobadas.' };
+      if (reqsToProcess.length === 0) return { success: false, message: 'Kit sin solicitudes aprobadas.' };
+      // Verificar si es interno — los préstamos internos no pasan por caseta
+      const firstReq = reqsToProcess[0] as { is_internal?: boolean };
+      if (firstReq.is_internal) {
+        return { success: false, message: '⚠️ Préstamo Interno: Este activo es de uso exclusivo dentro de las instalaciones. No requiere salida por caseta.' };
+      }
     } else {
+      // Validar que reqId sea un número válido antes de usarlo como bigint en la BD
+      const reqIdNum = Number(reqId);
+      if (!reqId || isNaN(reqIdNum) || !Number.isInteger(reqIdNum)) {
+        return { success: false, message: 'QR inválido: el ID de solicitud no es un número válido.' };
+      }
       const result = await query(
         `SELECT r.*, row_to_json(a) AS assets FROM requests r
          LEFT JOIN assets a ON r.asset_id = a.id
-         WHERE r.id = $1 AND r.status = 'APPROVED' LIMIT 1`,
-        [reqId]
+         WHERE r.id = $1 AND r.status IN ('APPROVED', 'ACTIVE_INTERNAL') LIMIT 1`,
+        [reqIdNum]
       );
       const row = result.rows[0];
       if (!row) return { success: false, message: 'Solicitud no aprobada.' };
+      // Verificar si es interno — los préstamos internos no pasan por caseta
+      const req = row as { is_internal?: boolean };
+      if (req.is_internal) {
+        return { success: false, message: '⚠️ Préstamo Interno: Este activo es de uso exclusivo dentro de las instalaciones. No requiere salida por caseta.' };
+      }
       reqsToProcess = [row] as Array<Record<string, unknown>>;
     }
     if (signature) {
@@ -71,8 +87,8 @@ export async function processGuardScan(
         const threshold = (assets.maintenance_usage_threshold as number) ?? 10;
         const newUsage = usage + 1;
         await query(
-          `UPDATE requests SET status = 'ACTIVE', checkout_at = $1, digital_signature = $2 WHERE id = $3`,
-          [now, signature, r.id]
+          `UPDATE requests SET status = 'ACTIVE', checkout_at = $1, digital_signature = $2, terms_accepted = $3, signature_date = $4 WHERE id = $5`,
+          [now, signature, termsAccepted ?? false, now, r.id]
         );
         await query(
           `UPDATE assets SET status = 'Prestada', usage_count = $1, maintenance_alert = $2 WHERE id = $3`,
@@ -99,7 +115,7 @@ export async function processGuardScan(
   const reqResult = await query(
     `SELECT r.*, row_to_json(a) AS assets FROM requests r
      LEFT JOIN assets a ON r.asset_id = a.id
-     WHERE r.asset_id = $1 AND r.status IN ('ACTIVE', 'OVERDUE')
+     WHERE r.asset_id = $1 AND r.status IN ('ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE')
      ORDER BY r.checkout_at DESC LIMIT 1`,
     [assetId]
   );
@@ -112,7 +128,7 @@ export async function processGuardScan(
     const allResult = await query(
       `SELECT r.*, row_to_json(a) AS assets FROM requests r
        LEFT JOIN assets a ON r.asset_id = a.id
-       WHERE r.bundle_group_id = $1 AND r.status IN ('ACTIVE', 'OVERDUE')`,
+       WHERE r.bundle_group_id = $1 AND r.status IN ('ACTIVE', 'ACTIVE_INTERNAL', 'OVERDUE')`,
       [reqRow.bundle_group_id]
     );
     const allReqs = (allResult.rows ?? []) as Array<{ id: number; asset_id: string; user_id: string; assets?: { name?: string; tag?: string } }>;
@@ -170,8 +186,31 @@ async function doCheckin(
       `UPDATE requests SET status = $1, checkin_at = $2, is_damaged = $3, damage_notes = $4, return_condition = $5 WHERE id = $6`,
       [newReqStatus, now, isDamaged, damageNotes || null, isDamaged ? 'DAÑADO' : 'BUENO', r.id]
     );
-    await query(`UPDATE assets SET status = $1 WHERE id = $2`, [newAssetStatus, r.asset_id]);
-    await logAudit('CHECKIN', 'guard', 'Guardia', String(r.id), 'REQUEST', `Devolución: ${r.assets?.name ?? ''}`);
+
+    // Obtener datos actuales del asset para verificar mantenimiento preventivo
+    const assetResult = await query(
+      `SELECT usage_count, maintenance_usage_threshold, name FROM assets WHERE id = $1`,
+      [r.asset_id]
+    );
+    const asset = assetResult.rows[0] as { usage_count?: number; maintenance_usage_threshold?: number; name?: string };
+    const currentUsage = (asset.usage_count ?? 0);
+    const newUsage = currentUsage + 1;
+    const threshold = asset.maintenance_usage_threshold ?? 100;
+    const needsMaintenance = newUsage >= threshold;
+
+    // Actualizar asset con nuevo status y usage_count
+    const finalAssetStatus = isDamaged || needsMaintenance ? 'En mantenimiento' : 'Disponible';
+    await query(
+      `UPDATE assets SET status = $1, usage_count = $2, maintenance_alert = $3 WHERE id = $4`,
+      [finalAssetStatus, newUsage, needsMaintenance, r.asset_id]
+    );
+
+    await logAudit('CHECKIN', 'guard', 'Guardia', String(r.id), 'REQUEST', `Devolución: ${asset.name ?? ''}`);
+
+    // Si requiere mantenimiento preventivo, registrar en audit_logs
+    if (needsMaintenance && !isDamaged) {
+      await logAudit('MAINTENANCE', 'system', 'Sistema', r.asset_id, 'ASSET', `Mantenimiento preventivo automático alcanzado (${newUsage}/${threshold})`);
+    }
   }
 
   if (isDamaged) {

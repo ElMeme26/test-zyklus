@@ -7,7 +7,7 @@ const router = Router();
 router.get('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
     const page = Math.max(1, parseInt(String(req.query.page), 10) || 1);
-    const limit = Math.min(req.query.export === 'true' ? 10000 : 100, Math.max(1, parseInt(String(req.query.limit), 10) || 24));
+    const limit = Math.min(req.query.export === 'true' ? 50000 : 100, Math.max(1, parseInt(String(req.query.limit), 10) || 24));
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : undefined;
     const category = typeof req.query.category === 'string' ? req.query.category : undefined;
     const status = typeof req.query.status === 'string' ? req.query.status : undefined;

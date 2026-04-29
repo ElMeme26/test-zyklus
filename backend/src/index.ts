@@ -14,6 +14,7 @@ import guardRoutes from './routes/guard.js';
 import notificationsRoutes from './routes/notifications.js';
 import maintenanceRoutes from './routes/maintenance.js';
 import usersRoutes from './routes/users.js';
+import aiRoutes from './routes/ai.js';
 
 const app = express();
 const PORT = process.env.PORT ?? 3000;
@@ -53,7 +54,11 @@ app.use('/api/guard', guardRoutes);
 app.use('/api/notifications', notificationsRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/users', usersRoutes);
+app.use('/api/ai', aiRoutes);
+
+import { initEscalationCron } from './services/escalationService.js';
 
 app.listen(PORT, () => {
   console.log(`Zyklus API listening on http://localhost:${PORT}`);
+  initEscalationCron();
 });

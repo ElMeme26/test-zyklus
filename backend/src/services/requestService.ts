@@ -24,8 +24,9 @@ export async function createRequest(body: {
   motive?: string;
   institutionId?: number;
   autoApprove?: boolean;
+  isInternal?: boolean;
 }): Promise<{ id: number }> {
-  const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = body;
+  const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = body;
   const assetResult = await query(
     `SELECT id, name, status, maintenance_alert FROM assets WHERE id = $1`,
     [assetId]
@@ -35,12 +36,13 @@ export async function createRequest(body: {
   if (asset.status === 'Requiere Mantenimiento' || asset.maintenance_alert) throw new Error('Requiere mantenimiento.');
   if (asset.status !== 'Disponible') throw new Error(`No disponible (${asset.status})`);
   const returnDate = toReturnDate(days);
-  const status = autoApprove ? 'APPROVED' : 'PENDING';
+  const status = autoApprove ? (isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED') : 'PENDING';
   const approvedAt = autoApprove ? new Date().toISOString() : null;
+  const checkoutAt = autoApprove && isInternal ? approvedAt : null;
   const result = await query(
-    `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, expected_return_date)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
-    [assetId, userId, institutionId ?? null, userName, userDisciplina, days, motive ?? '', status, approvedAt, returnDate]
+    `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, checkout_at, expected_return_date, is_internal)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) RETURNING id`,
+    [assetId, userId, institutionId ?? null, userName, userDisciplina, days, motive ?? '', status, approvedAt, checkoutAt, returnDate, isInternal ?? false]
   );
   const row = result.rows[0] as { id: number };
   await query(`UPDATE assets SET status = $1 WHERE id = $2`, [autoApprove ? 'Prestada' : 'En trámite', assetId]);
@@ -63,14 +65,16 @@ export async function createBatchRequest(body: {
   motive?: string;
   institutionId?: number;
   autoApprove?: boolean;
+  isInternal?: boolean;
 }): Promise<void> {
-  const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = body;
+  const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = body;
   if (assetIds.length === 0) throw new Error('No hay activos');
   const returnDate = toReturnDate(days);
   const cartGroupId = `CART-${Date.now()}`;
   const groupedMotive = (motive?.trim() ? `[CARRITO] ${motive}` : '[CARRITO] Solicitud desde carrito');
-  const status = autoApprove ? 'APPROVED' : 'PENDING';
+  const status = autoApprove ? (isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED') : 'PENDING';
   const approvedAt = autoApprove ? new Date().toISOString() : null;
+  const checkoutAt = autoApprove && isInternal ? approvedAt : null;
   for (const assetId of assetIds) {
     const ar = await query(`SELECT status, maintenance_alert, name FROM assets WHERE id = $1`, [assetId]);
     const a = ar.rows[0] as { status: string; maintenance_alert?: boolean; name: string } | undefined;
@@ -78,9 +82,9 @@ export async function createBatchRequest(body: {
   }
   for (const assetId of assetIds) {
     await query(
-      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, expected_return_date, bundle_group_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
-      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, groupedMotive, status, approvedAt, returnDate, cartGroupId]
+      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, checkout_at, expected_return_date, bundle_group_id, is_internal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, groupedMotive, status, approvedAt, checkoutAt, returnDate, cartGroupId, isInternal ?? false]
     );
   }
   for (const aid of assetIds) {
@@ -105,15 +109,18 @@ export async function createBundleRequest(body: {
   managerId?: string;
   days: number;
   motive: string;
+  institutionId?: number;
   autoApprove?: boolean;
+  isInternal?: boolean;
 }): Promise<void> {
-  const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, autoApprove } = body;
+  const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = body;
   if (assetIds.length === 0) throw new Error('Kit sin activos');
   const returnDate = toReturnDate(days);
   const bundleGroupId = `BNDL-${Date.now()}`;
-  const status = autoApprove ? 'APPROVED' : 'PENDING';
+  const status = autoApprove ? (isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED') : 'PENDING';
   const approvedAt = autoApprove ? new Date().toISOString() : null;
-  const motiveText = `[COMBO: ${bundleName}] ${motive}`;
+  const checkoutAt = autoApprove && isInternal ? approvedAt : null;
+  const motiveText = `[KIT: ${bundleName}] ${motive}`;
   for (const assetId of assetIds) {
     const ar = await query(`SELECT status FROM assets WHERE id = $1`, [assetId]);
     const a = ar.rows[0] as { status: string } | undefined;
@@ -121,9 +128,9 @@ export async function createBundleRequest(body: {
   }
   for (const assetId of assetIds) {
     await query(
-      `INSERT INTO requests (asset_id, user_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, expected_return_date, bundle_group_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-      [assetId, userId, userName, userDisciplina, days, motiveText, status, approvedAt, returnDate, bundleGroupId]
+      `INSERT INTO requests (asset_id, user_id, institution_id, requester_name, requester_disciplina, days_requested, motive, status, approved_at, checkout_at, expected_return_date, bundle_group_id, is_internal)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
+      [assetId, userId, institutionId ?? null, userName, userDisciplina, days, motiveText, status, approvedAt, checkoutAt, returnDate, bundleGroupId, isInternal ?? false]
     );
   }
   for (const assetId of assetIds) {
@@ -148,11 +155,35 @@ export async function approveRequest(
 ): Promise<void> {
   const now = new Date().toISOString();
   if (bundleGroupId) {
-    await query(`UPDATE requests SET status = 'APPROVED', approved_at = $1 WHERE bundle_group_id = $2`, [now, bundleGroupId]);
-    await logAudit('APPROVE', approverId, approverName, bundleGroupId, 'REQUEST', 'Combo aprobado');
+    // Verificar si es interno para el combo
+    const comboResult = await query(`SELECT is_internal FROM requests WHERE bundle_group_id = $1 LIMIT 1`, [bundleGroupId]);
+    const isInternal = (comboResult.rows[0] as { is_internal?: boolean })?.is_internal ?? false;
+    const newStatus = isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED';
+    const updateFields = isInternal ? 'status = $1, approved_at = $2, checkout_at = $2' : 'status = $1, approved_at = $2';
+    const params = isInternal ? [newStatus, now, bundleGroupId] : [newStatus, now, bundleGroupId];
+    await query(`UPDATE requests SET ${updateFields} WHERE bundle_group_id = $3`, params);
+    if (isInternal) {
+      await query(
+        `UPDATE assets SET status = 'Prestada' WHERE id IN (SELECT asset_id FROM requests WHERE bundle_group_id = $1)`,
+        [bundleGroupId]
+      );
+    }
+    await logAudit('APPROVE', approverId, approverName, bundleGroupId, 'REQUEST', `Combo aprobado (${isInternal ? 'interno' : 'normal'})`);
   } else {
-    await query(`UPDATE requests SET status = 'APPROVED', approved_at = $1 WHERE id = $2`, [now, reqId]);
-    await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado: ${assetName ?? reqId}`);
+    // Verificar si es interno para solicitud individual
+    const reqResult = await query(`SELECT is_internal FROM requests WHERE id = $1`, [reqId]);
+    const isInternal = (reqResult.rows[0] as { is_internal?: boolean })?.is_internal ?? false;
+    const newStatus = isInternal ? 'ACTIVE_INTERNAL' : 'APPROVED';
+    const updateFields = isInternal ? 'status = $1, approved_at = $2, checkout_at = $2' : 'status = $1, approved_at = $2';
+    const params = isInternal ? [newStatus, now, reqId] : [newStatus, now, reqId];
+    await query(`UPDATE requests SET ${updateFields} WHERE id = $3`, params);
+    if (isInternal) {
+      await query(
+        `UPDATE assets SET status = 'Prestada' WHERE id = (SELECT asset_id FROM requests WHERE id = $1)`,
+        [reqId]
+      );
+    }
+    await logAudit('APPROVE', approverId, approverName, String(reqId), 'REQUEST', `Aprobado (${isInternal ? 'interno' : 'normal'}): ${assetName ?? reqId}`);
   }
   if (userId) await createNotif(userId, 'Solicitud Aprobada', `"${assetName ?? 'equipo'}" aprobado por ${approverName}. Preséntate al guardia.`, 'INFO', reqId);
 }

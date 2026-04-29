@@ -6,7 +6,7 @@ const router = Router();
 
 router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = req.body ?? {};
+    const { assetId, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = req.body ?? {};
     if (!assetId || !userId || userName == null) {
       res.status(400).json({ error: 'assetId, userId, userName required' });
       return;
@@ -21,6 +21,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
       motive,
       institutionId,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     });
     res.status(201).json(id);
   } catch (err) {
@@ -30,7 +31,7 @@ router.post('/', authMiddleware, async (req: AuthRequest, res: Response) => {
 
 router.post('/batch', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove } = req.body ?? {};
+    const { assetIds, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = req.body ?? {};
     if (!Array.isArray(assetIds) || !userId || userName == null) {
       res.status(400).json({ error: 'assetIds (array), userId, userName required' });
       return;
@@ -45,6 +46,7 @@ router.post('/batch', authMiddleware, async (req: AuthRequest, res: Response) =>
       motive,
       institutionId,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     });
     res.status(201).json({ ok: true });
   } catch (err) {
@@ -54,7 +56,7 @@ router.post('/batch', authMiddleware, async (req: AuthRequest, res: Response) =>
 
 router.post('/bundle', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, autoApprove } = req.body ?? {};
+    const { bundleId, assetIds, bundleName, userId, userName, userDisciplina, managerId, days, motive, institutionId, autoApprove, isInternal } = req.body ?? {};
     if (!bundleId || !Array.isArray(assetIds) || !bundleName || !userId || userName == null) {
       res.status(400).json({ error: 'bundleId, assetIds, bundleName, userId, userName required' });
       return;
@@ -69,7 +71,9 @@ router.post('/bundle', authMiddleware, async (req: AuthRequest, res: Response) =
       managerId,
       days: Number(days) ?? 0,
       motive: motive ?? '',
+      institutionId,
       autoApprove: Boolean(autoApprove),
+      isInternal: Boolean(isInternal),
     });
     res.status(201).json({ ok: true });
   } catch (err) {
