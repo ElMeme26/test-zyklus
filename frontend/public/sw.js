@@ -4,7 +4,19 @@
 const CACHE_NAME = 'zyklus-v14'; // Cambiar el nombre para invalidar cache en nuevas versiones
 
 self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()));
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys().then(cacheNames => {
+      return Promise.all(
+        cacheNames.map(cacheName => {
+          if (cacheName !== CACHE_NAME && cacheName.startsWith('zyklus-')) {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    }).then(() => self.clients.claim())
+  );
+});
 
 // Recibir mensaje del cliente y mostrar notificación nativa del SO
 self.addEventListener('message', event => {

@@ -256,6 +256,16 @@ export function AuditorOverview() {
                       </td>
                       <td className="p-3 text-slate-300 align-top">{log.actor_name ?? log.actor_id}</td>
                       <td className="p-3 text-slate-400 min-w-[200px] whitespace-normal leading-relaxed break-words align-top">
+                        {log.target_type === 'ASSET' && (
+                          <div className="text-[10px] font-bold text-emerald-400 mb-0.5">
+                            Activo: {assets.find(a => a.id === log.target_id)?.name ?? `ID: ${log.target_id}`}
+                          </div>
+                        )}
+                        {log.target_type === 'REQUEST' && relatedReq?.assets?.name && (
+                          <div className="text-[10px] font-bold text-cyan-400 mb-0.5">
+                            Solicitud para: {relatedReq.assets.name}
+                          </div>
+                        )}
                         {log.details ?? '—'}
                       </td>
                       <td className="p-3 align-top text-center">
