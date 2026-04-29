@@ -16,6 +16,7 @@ export interface AIContext {
   globalStats?: { assetCounts: Record<string, number>; requestCounts: { overdue: number; active: number } };
   categoryDistribution?: Record<string, number>;
   maintenanceAlerts?: number;
+  detailedRequests?: Array<{ status: string; asset_name?: string; user_name?: string }>;
   language?: 'es' | 'en' | 'pt';
 }
 
@@ -116,7 +117,7 @@ CONTEXTO DE BD:
 - Solicitudes activas: ${context.globalStats?.requestCounts['active'] || 0}
 
 REGLAS DE RESPUESTA:
-1. Cero texto de relleno: usa viñetas, métricas crudas y números
+1. Cero texto de relleno: usa viñetas, métricas crudas y números.
 2. **IMPORTANTE - Si pide GRÁFICA o CHART**: RESPONDE SOLO CON EL JSON en este formato exacto:
 \`\`\`json
 {
@@ -131,12 +132,10 @@ REGLAS DE RESPUESTA:
 \`\`\`
 Luego agrega máximo 2 líneas de conclusión.
 
-3. Si NO pide gráfica: responde con análisis en viñetas:
-  - Patrones observados
-  - Predicción para próximos 30 días
-  - Recomendación de acción
+3. Si hace una pregunta directa (ej. "¿quién tiene equipos vencidos?"), responde de forma natural, directa y conversacional utilizando el contexto detallado provisto (nombres de activos y usuarios).
+4. SOLO utiliza el formato estricto de análisis (Patrones observados, Predicción a 30 días, Recomendación de acción) si el usuario pide explícitamente un "análisis", "reporte predictivo" o "resumen global".
 
-4. Responde SIEMPRE en español. Sin relleno.`;
+5. Responde SIEMPRE en español. Sin relleno.`;
   }
 
   const userContextStr = JSON.stringify(context, null, 2);
@@ -376,7 +375,7 @@ export function getLocalizedSystemInstruction(
 REGLA: Recomienda SOLO activos disponibles que resuelvan su problema. Si pide algo indisponible, no ofrezcas equipos sin relación. Ultra conciso: nombre, TAG y por qué.`,
       ADMIN: `Eres un Analista de Datos Senior. Genera análisis precisos y gráficos bajo demanda.
 - Total activos: ${contextStats.totalAssets || 0}
-REGLA: Cero relleno. Viñetas y métricas crudas. Gráficos en JSON.`,
+REGLA: Responde de forma directa a preguntas simples. Usa formato estricto de viñetas (Patrones/Predicción) SOLO cuando te pidan un análisis. Gráficos en JSON.`,
     },
     en: {
       USUARIO: `You are ZF Halo's Intelligent Assistant. Help users find the right tools.
@@ -385,7 +384,7 @@ REGLA: Cero relleno. Viñetas y métricas crudas. Gráficos en JSON.`,
 RULE: Recommend ONLY available assets that solve their problem. If they ask for unavailable items, do not offer unrelated assets. Ultra-concise: name, TAG, and why.`,
       ADMIN: `You are a Senior Data Analyst. Generate precise analysis and charts on demand.
 - Total assets: ${contextStats.totalAssets || 0}
-RULE: Zero filler. Bullets and raw metrics. Charts in JSON format.`,
+RULE: Answer simple questions directly. Use strict bullet format (Patterns/Predictions) ONLY when asked for an analysis. Charts in JSON format.`,
     },
     pt: {
       USUARIO: `Você é o Assistente Inteligente do ZF Halo. Ajude o usuário a encontrar as ferramentas certas.
@@ -394,7 +393,7 @@ RULE: Zero filler. Bullets and raw metrics. Charts in JSON format.`,
 REGRA: Recomende APENAS ativos disponíveis que resolvam o problema. Se pedir algo indisponível, não ofereça itens sem relação. Ultra-conciso: nome, TAG e por quê.`,
       ADMIN: `Você é um Analista de Dados Sênior. Gere análises precisas e gráficos sob demanda.
 - Total de ativos: ${contextStats.totalAssets || 0}
-REGRA: Sem preenchimento. Marcadores e métricas brutas. Gráficos em JSON.`,
+REGRA: Responda perguntas simples de forma direta. Use o formato de tópicos (Padrões/Previsões) APENAS quando solicitado um análise. Gráficos em JSON.`,
     }
   };
 
