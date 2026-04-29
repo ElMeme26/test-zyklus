@@ -6,7 +6,7 @@ const router = Router();
 
 router.post('/scan', authMiddleware, async (req: AuthRequest, res: Response) => {
   try {
-    const { qrData, type, signature, isDamaged, damageNotes } = req.body ?? {};
+    const { qrData, type, signature, isDamaged, damageNotes, termsAccepted } = req.body ?? {};
     if (!qrData || !type || (type !== 'CHECKOUT' && type !== 'CHECKIN')) {
       res.status(400).json({ error: 'qrData and type (CHECKOUT|CHECKIN) required' });
       return;
@@ -16,7 +16,8 @@ router.post('/scan', authMiddleware, async (req: AuthRequest, res: Response) => 
       type,
       signature,
       isDamaged,
-      damageNotes
+      damageNotes,
+      termsAccepted
     );
     res.json(result);
   } catch (err) {

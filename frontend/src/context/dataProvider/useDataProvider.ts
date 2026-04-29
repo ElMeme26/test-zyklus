@@ -415,10 +415,10 @@ export function useDataProvider() {
 
   const processGuardScan = async (
     qrData: string, type: 'CHECKOUT' | 'CHECKIN',
-    signature = '', isDamaged = false, damageNotes = ''
+    signature = '', isDamaged = false, damageNotes = '', termsAccepted = false
   ): Promise<{ success: boolean; message: string; data?: unknown; comboState?: ComboCheckinState }> => {
     try {
-      const result = await apiGuard.guardScan(qrData, type, { signature, isDamaged, damageNotes });
+      const result = await apiGuard.guardScan(qrData, type, { signature, isDamaged, damageNotes, termsAccepted });
       if (!result.success) return result;
       if (result.message?.includes('Salida confirmada') || result.message?.startsWith('Devuelto')) {
         if (result.message.startsWith('Devuelto')) {

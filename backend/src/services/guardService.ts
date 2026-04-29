@@ -28,7 +28,8 @@ export async function processGuardScan(
   type: 'CHECKOUT' | 'CHECKIN',
   signature?: string,
   isDamaged?: boolean,
-  damageNotes?: string
+  damageNotes?: string,
+  termsAccepted?: boolean
 ): Promise<GuardScanResult> {
   let parsed: Record<string, unknown>;
   try {
@@ -86,8 +87,8 @@ export async function processGuardScan(
         const threshold = (assets.maintenance_usage_threshold as number) ?? 10;
         const newUsage = usage + 1;
         await query(
-          `UPDATE requests SET status = 'ACTIVE', checkout_at = $1, digital_signature = $2 WHERE id = $3`,
-          [now, signature, r.id]
+          `UPDATE requests SET status = 'ACTIVE', checkout_at = $1, digital_signature = $2, terms_accepted = $3, signature_date = $4 WHERE id = $5`,
+          [now, signature, termsAccepted ?? false, now, r.id]
         );
         await query(
           `UPDATE assets SET status = 'Prestada', usage_count = $1, maintenance_alert = $2 WHERE id = $3`,

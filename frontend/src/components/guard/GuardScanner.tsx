@@ -39,6 +39,9 @@ export function GuardScanner() {
   const [doneMode, setDoneMode] = useState<ScanMode>('CHECKOUT');
   const [doneDamaged, setDoneDamaged] = useState(false);
 
+  const [isTermsAccepted, setIsTermsAccepted] = useState(false);
+  const [isTermsModalOpen, setIsTermsModalOpen] = useState(false);
+
   const reset = useCallback(() => {
     setStep('idle');
     setScanning(false);
@@ -52,6 +55,8 @@ export function GuardScanner() {
     setDoneMessage('');
     setDoneMode('CHECKOUT');
     setDoneDamaged(false);
+    setIsTermsAccepted(false);
+    setIsTermsModalOpen(false);
     sigRef.current?.clear();
   }, []);
 
@@ -150,9 +155,10 @@ export function GuardScanner() {
   }, [comboState]);
 
   const handleCheckoutConfirm = async () => {
+    if (!isTermsAccepted) { toast.error('Debes aceptar los Términos y Condiciones'); return; }
     if (!sigRef.current || sigRef.current.isEmpty()) { toast.error('Firma digital requerida'); return; }
     const sig = sigRef.current.toDataURL();
-    const result = await processGuardScan(rawQR, 'CHECKOUT', sig);
+    const result = await processGuardScan(rawQR, 'CHECKOUT', sig, false, '', isTermsAccepted);
     if (result.success) {
       setDoneMode('CHECKOUT');
       setDoneDamaged(false);
@@ -341,15 +347,45 @@ export function GuardScanner() {
                 penColor="#06b6d4"
               />
             </Card>
+
+            <div className="flex items-start gap-3 py-2 px-1">
+              <div className="pt-1">
+                <input
+                  type="checkbox"
+                  id="terms-checkbox"
+                  checked={isTermsAccepted}
+                  onChange={(e) => setIsTermsAccepted(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-primary focus:ring-primary focus:ring-offset-slate-950 cursor-pointer"
+                />
+              </div>
+              <label htmlFor="terms-checkbox" className="text-xs text-slate-400 leading-relaxed cursor-pointer select-none">
+                He leído y acepto los{' '}
+                <button
+                  type="button"
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); setIsTermsModalOpen(true); }}
+                  className="text-primary hover:text-cyan-400 hover:underline font-bold"
+                >
+                  Términos y Condiciones
+                </button>
+                {' '}de resguardo de activos ZF.
+              </label>
+            </div>
+
             <div className="flex gap-3">
-              <button onClick={() => sigRef.current?.clear()} className="flex-1 py-3 rounded-xl border border-slate-700 text-slate-400 text-sm font-bold flex items-center justify-center gap-2">
+              <button onClick={() => sigRef.current?.clear()} className="flex-1 py-3 rounded-xl border border-slate-700 text-slate-400 text-sm font-bold flex items-center justify-center gap-2 active:scale-95 transition-all">
                 <RefreshCcw size={14} /> Borrar
               </button>
-              <button onClick={handleCheckoutConfirm} className="flex-1 py-3 rounded-xl bg-emerald-600 text-white text-sm font-black flex items-center justify-center gap-2">
+              <button 
+                onClick={handleCheckoutConfirm} 
+                disabled={!isTermsAccepted}
+                className={`flex-1 py-3 rounded-xl text-white text-sm font-black flex items-center justify-center gap-2 transition-all ${
+                  !isTermsAccepted ? 'bg-slate-800 text-slate-500 cursor-not-allowed border border-slate-700' : 'bg-emerald-600 hover:bg-emerald-500 active:scale-95 shadow-lg shadow-emerald-500/20'
+                }`}
+              >
                 <Check size={16} /> Confirmar Salida
               </button>
             </div>
-            <button onClick={reset} className="w-full text-xs text-slate-600 py-1">Cancelar</button>
+            <button onClick={reset} className="w-full text-xs text-slate-600 hover:text-slate-400 py-1 transition-colors">Cancelar</button>
           </div>
         )}
 
@@ -532,6 +568,35 @@ export function GuardScanner() {
           </div>
         )}
       </main>
+
+      {isTermsModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col max-h-[85vh]">
+            <div className="flex items-center justify-between p-4 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <AlertTriangle size={18} className="text-primary" />
+                Términos y Condiciones
+              </h3>
+              <button onClick={() => setIsTermsModalOpen(false)} className="text-slate-400 hover:text-white p-1 rounded-lg hover:bg-slate-800 transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-5 overflow-y-auto flex-1 text-sm text-slate-300 space-y-4 leading-relaxed">
+              <p>
+                Al firmar y marcar la casilla de aceptación, el empleado reconoce recibir el activo en condiciones óptimas de operación. Se compromete a su custodia y devolución en la fecha pactada. En caso de pérdida, robo por negligencia o daño malintencionado, el empleado acepta la responsabilidad financiera y administrativa conforme al reglamento interno de ZF Engineering.
+              </p>
+            </div>
+            <div className="p-4 border-t border-slate-800 flex justify-end">
+              <button
+                onClick={() => setIsTermsModalOpen(false)}
+                className="px-6 py-2 bg-primary text-black font-bold rounded-xl hover:bg-cyan-400 active:scale-95 transition-all"
+              >
+                Entendido
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

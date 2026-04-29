@@ -1,7 +1,8 @@
 /** Modal con detalle de una solicitud. */
 import React from 'react';
-import { X, Package, Clock, User, Building2, Tag, Calendar, Hash, CheckCircle, AlertCircle, RotateCcw, XCircle, Hourglass } from 'lucide-react';
+import { X, Package, Clock, User, Building2, Tag, Calendar, Hash, CheckCircle, AlertCircle, RotateCcw, XCircle, Hourglass, FileDown } from 'lucide-react';
 import { Card } from './core';
+import { generateResponsibilityVoucher } from '../../lib/exportUtils';
 import type { Request } from '../../types';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
@@ -204,7 +205,15 @@ export function RequestDetailModal({ request: req, onClose }: RequestDetailModal
           </div>
 
           {/* Footer */}
-          <div className="px-5 py-4 border-t border-slate-800">
+          <div className="px-5 py-4 border-t border-slate-800 space-y-2">
+            {req.digital_signature && (
+              <button
+                onClick={() => generateResponsibilityVoucher(req)}
+                className="w-full flex items-center justify-center gap-2 py-2.5 text-xs font-bold text-black bg-cyan-500 hover:bg-cyan-400 rounded-xl transition-all shadow-lg shadow-cyan-500/20"
+              >
+                <FileDown size={14} /> Descargar Comprobante de Resguardo
+              </button>
+            )}
             <button
               onClick={onClose}
               className="w-full py-2.5 text-xs font-bold text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-xl transition-all"

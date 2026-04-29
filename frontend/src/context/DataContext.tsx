@@ -61,7 +61,8 @@ interface DataContextType {
     type: 'CHECKOUT' | 'CHECKIN',
     signature?: string,
     isDamaged?: boolean,
-    damageNotes?: string
+    damageNotes?: string,
+    termsAccepted?: boolean
   ) => Promise<{ success: boolean; message: string; data?: unknown; comboState?: ComboCheckinState }>;
 
   confirmComboCheckin: (
