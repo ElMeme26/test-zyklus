@@ -38,9 +38,9 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-// Cache básico para funcionar offline.
-// IMPORTANTE: Solo cachea GET y solo si la respuesta es exitosa.
-// Nunca intercepta peticiones a la API de Supabase para evitar datos stale.
+// Cache Network-First para funcionar offline sin mostrar contenido stale.
+// ESTRATEGIA: Siempre intenta la red primero. Si falla (offline), usa caché.
+// Nunca intercepta peticiones a la API de Supabase.
 self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
 
@@ -57,9 +57,8 @@ self.addEventListener('fetch', event => {
   }
 
   event.respondWith(
-    caches.match(event.request).then(cached => {
-      if (cached) return cached;
-      return fetch(event.request).then(response => {
+    fetch(event.request)
+      .then(response => {
         // Solo cachear respuestas válidas de origen propio
         if (
           response.ok &&
@@ -72,7 +71,11 @@ self.addEventListener('fetch', event => {
           });
         }
         return response;
-      }).catch(() => cached || new Response('Offline', { status: 503 }));
-    })
+      })
+      .catch(() => {
+        // Solo si la red falla (offline), intenta servir desde caché
+        return caches.match(event.request)
+          .then(cached => cached || new Response('Offline', { status: 503 }));
+      })
   );
 });
