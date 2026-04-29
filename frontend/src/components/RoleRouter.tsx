@@ -1,7 +1,7 @@
 import { useAuth } from '../context/AuthContext';
 import { AdminDashboard } from './admin/AdminDashboard';
 import { ManagerInbox } from './manager/ManagerInbox';
-import { GuardScanner } from './guard/GuardScanner';
+import { GuardExperience } from './guard/GuardExperience';
 import { AuditorOverview } from './auditor/AuditorOverview';
 import { UserHome } from './user/UserHome';
 import { LoginScreen } from './LoginScreen';
@@ -29,7 +29,7 @@ export default function RoleRouter() {
     case 'LIDER_EQUIPO':
       return <ManagerInbox />;
     case 'GUARDIA':
-      return <GuardScanner />;
+      return <GuardExperience />;
     case 'AUDITOR':
       return <AuditorOverview />;
     case 'USUARIO':
