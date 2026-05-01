@@ -6,7 +6,8 @@ import type { Asset } from '../../types';
 import { Card, Button } from '../ui/core';
 import {
   LogOut, Database, Search, LayoutGrid, Building2, ScanLine, Wrench,
-  ShieldCheck, BrainCircuit, Loader2, Flame, FileDown
+  ShieldCheck, BrainCircuit, Loader2, Flame, FileDown,
+  PieChart, UserIcon, X, Package, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { ChatAssistant } from '../ui/ChatAssistant';
 import { InstitutionsManager } from './InstitutionsManager';
@@ -36,7 +37,7 @@ import {
 /** Panel principal de administración: inventario, analíticas, mantenimiento, usuarios y externos. */
 export function AdminDashboard() {
   const { user, logout } = useAuth();
-  const { processQRScan, requests, auditLogs, stats, isLoading } = useData();
+  const { processQRScan, requests, auditLogs, stats, isLoading, assets } = useData();
   const [currentView, setCurrentView] = useState<'inventory' | 'analytics' | 'external' | 'maintenance' | 'users'>('inventory');
 
   const [scannedInfo, setScannedInfo] = useState<{ asset?: Asset; request?: { requester_name: string; status: string; expected_return_date?: string } } | null>(null);
@@ -339,6 +340,16 @@ export function AdminDashboard() {
                           </td>
                           <td className="p-3 text-slate-300 align-top">{log.actor_name ?? log.actor_id}</td>
                           <td className="p-3 text-slate-400 min-w-[200px] whitespace-normal leading-relaxed break-words align-top">
+                            {log.target_type === 'ASSET' && (
+                              <div className="text-[10px] font-bold text-emerald-400 mb-0.5">
+                                Activo: {assets.find(a => a.id === log.target_id)?.name ?? `ID: ${log.target_id}`}
+                              </div>
+                            )}
+                            {log.target_type === 'REQUEST' && relatedReq?.assets?.name && (
+                              <div className="text-[10px] font-bold text-cyan-400 mb-0.5">
+                                Solicitud para: {relatedReq.assets.name}
+                              </div>
+                            )}
                             {log.details ?? '—'}
                           </td>
                           <td className="p-3 align-top text-center">

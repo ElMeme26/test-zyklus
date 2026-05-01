@@ -113,13 +113,21 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
       }, {});
 
       // Solicitudes activas y vencidas
-      const [reqStatsRes] = await Promise.all([
+      const [reqStatsRes, detailedReqRes] = await Promise.all([
         client.query(`
           SELECT 
             COUNT(*) FILTER (WHERE status IN ('ACTIVE', 'ACTIVE_INTERNAL')) as active,
             COUNT(*) FILTER (WHERE status = 'OVERDUE') as overdue
           FROM requests`
         ),
+        client.query(`
+          SELECT r.status, a.name as asset_name, r.requester_name as user_name
+          FROM requests r
+          LEFT JOIN assets a ON r.asset_id = a.id
+          WHERE r.status IN ('OVERDUE', 'ACTIVE', 'ACTIVE_INTERNAL')
+          ORDER BY r.status DESC, r.created_at DESC
+          LIMIT 30
+        `)
       ]);
 
       const reqStats = reqStatsRes.rows[0] as { active: number; overdue: number };
@@ -128,6 +136,11 @@ router.post('/chat', authMiddleware, async (req: AuthRequest, res: Response) => 
         assetCounts,
         requestCounts: { overdue: reqStats.overdue || 0, active: reqStats.active || 0 },
       };
+      context.detailedRequests = detailedReqRes.rows.map(r => ({
+        status: r.status,
+        asset_name: r.asset_name,
+        user_name: r.user_name
+      }));
       context.categoryDistribution = categoryDist;
       context.maintenanceAlerts = maintenanceAlerts;
     }
