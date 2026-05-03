@@ -22,7 +22,12 @@ const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN ?? 'http://localhost:5173';
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin || origin.endsWith('.netlify.app') || origin === FRONTEND_ORIGIN) {
+    if (
+      !origin ||
+      origin.endsWith('.netlify.app') ||
+      origin.endsWith('.up.railway.app') ||
+      origin === FRONTEND_ORIGIN
+    ) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
